@@ -27,6 +27,91 @@ var (
 // that were actually added (values already present, and duplicates within vals, are skipped).
 // An empty or whitespace-only doc is treated as {}.
 func AppendStrings(doc []byte, path []string, vals []string) (out []byte, added []string, err error) {
+	return appendGeneric(doc, path, vals, genericOps{
+		render: func(_ style, _ int, v string) (string, error) { return quote(v), nil },
+		existingKey: func(e gjson.Result) (string, error) {
+			if e.Type != gjson.String {
+				return "", fmt.Errorf("%w: array contains a non-string element", ErrWrongType)
+			}
+			return e.String(), nil
+		},
+		newKey: func(v string) (string, error) { return v, nil },
+	})
+}
+
+// AppendRaw is AppendStrings for arbitrary JSON values (objects, arrays, numbers...). Each element of
+// raws must be valid JSON. Elements are compared by their compacted text, so an element that is already
+// present (byte-for-byte after compaction) is skipped. New elements are indented to match the document.
+// Use it for structured entries such as Claude Code hook definitions.
+func AppendRaw(doc []byte, path []string, raws []string) (out []byte, added []string, err error) {
+	return appendGeneric(doc, path, raws, genericOps{
+		render:      func(st style, level int, v string) (string, error) { return formatRaw(st, level, v) },
+		existingKey: func(e gjson.Result) (string, error) { return compact(e.Raw) },
+		newKey:      compact,
+	})
+}
+
+// ReadRaw returns the compacted text of every element of the array at path (missing path: nil).
+func ReadRaw(doc []byte, path []string) ([]string, error) {
+	if len(bytes.TrimSpace(doc)) == 0 {
+		return nil, nil
+	}
+	if !gjson.ValidBytes(doc) {
+		return nil, ErrInvalidJSON
+	}
+	r := lookup(doc, path)
+	if !r.Exists() {
+		return nil, nil
+	}
+	if !r.IsArray() {
+		return nil, fmt.Errorf("%w: %s is not an array", ErrWrongType, strings.Join(path, "."))
+	}
+	var out []string
+	for _, e := range r.Array() {
+		c, err := compact(e.Raw)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func compact(raw string) (string, error) {
+	var b bytes.Buffer
+	if err := json.Compact(&b, []byte(raw)); err != nil {
+		return "", fmt.Errorf("jsonedit: value is not valid JSON: %w", err)
+	}
+	return b.String(), nil
+}
+
+// formatRaw renders a JSON value for insertion as an array element at nesting `level`: compact for
+// compact documents, otherwise indented with the document's own unit.
+func formatRaw(st style, level int, raw string) (string, error) {
+	c, err := compact(raw)
+	if err != nil {
+		return "", err
+	}
+	if st.compact {
+		return c, nil
+	}
+	var b bytes.Buffer
+	if err := json.Indent(&b, []byte(c), st.indent(level), st.unit); err != nil {
+		return "", err
+	}
+	// json.Indent applies the prefix to every line after the first (the caller places the first line)
+	// and always emits "\n"; translate to the document's own line ending. A compacted JSON value
+	// contains no literal newline (they are escaped inside strings), so this cannot alter content.
+	return strings.ReplaceAll(b.String(), "\n", st.eol), nil
+}
+
+type genericOps struct {
+	render      func(st style, level int, v string) (string, error) // element text for insertion
+	existingKey func(e gjson.Result) (string, error)                // identity of an existing element
+	newKey      func(v string) (string, error)                      // identity of a value to add
+}
+
+func appendGeneric(doc []byte, path []string, vals []string, ops genericOps) (out []byte, added []string, err error) {
 	if len(path) == 0 {
 		return nil, nil, fmt.Errorf("jsonedit: empty path")
 	}
@@ -41,19 +126,49 @@ func AppendStrings(doc []byte, path []string, vals []string) (out []byte, added 
 	}
 	st := detectStyle(doc)
 
+	// de-duplicate the values to add (by identity), preserving order
+	var uniq []string
+	seenNew := map[string]bool{}
+	for _, v := range vals {
+		k, err := ops.newKey(v)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !seenNew[k] {
+			seenNew[k] = true
+			uniq = append(uniq, v)
+		}
+	}
+	renderAll := func(level int, vs []string) ([]string, error) {
+		out := make([]string, len(vs))
+		for i, v := range vs {
+			r, err := ops.render(st, level, v)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = r
+		}
+		return out, nil
+	}
+
 	// Walk down as far as the document already goes.
 	prefix := []string{}
 	for k := 0; k < len(path)-1; k++ {
 		child := lookup(doc, append(prefix, path[k]))
 		if !child.Exists() {
 			// Missing from here on down: build the whole remaining branch and insert it as one member.
-			todo := dedupe(vals)
-			if len(todo) == 0 {
+			if len(uniq) == 0 {
 				return doc, nil, nil
 			}
-			raw := buildBranch(st, len(prefix)+1, path[k+1:], todo)
+			// elements of the innermost array sit at level (len(prefix)+1) + (remaining keys) + 1
+			elemLevel := len(prefix) + 1 + len(path[k+1:]) + 1
+			rendered, err := renderAll(elemLevel, uniq)
+			if err != nil {
+				return nil, nil, err
+			}
+			raw := buildBranch(st, len(prefix)+1, path[k+1:], rendered)
 			out, err := insertMember(doc, st, prefix, path[k], raw)
-			return out, todo, err
+			return out, uniq, err
 		}
 		if !child.IsObject() {
 			return nil, nil, fmt.Errorf("%w: %s is not an object", ErrWrongType, strings.Join(append(prefix, path[k]), "."))
@@ -64,33 +179,42 @@ func AppendStrings(doc []byte, path []string, vals []string) (out []byte, added 
 	last := path[len(path)-1]
 	arr := lookup(doc, append(prefix, last))
 	if !arr.Exists() {
-		todo := dedupe(vals)
-		if len(todo) == 0 {
+		if len(uniq) == 0 {
 			return doc, nil, nil
 		}
-		raw := buildArray(st, len(prefix)+1, todo)
+		rendered, err := renderAll(len(prefix)+2, uniq)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw := buildArray(st, len(prefix)+1, rendered)
 		out, err := insertMember(doc, st, prefix, last, raw)
-		return out, todo, err
+		return out, uniq, err
 	}
 	if !arr.IsArray() {
 		return nil, nil, fmt.Errorf("%w: %s is not an array", ErrWrongType, strings.Join(append(prefix, last), "."))
 	}
 	have := map[string]bool{}
 	for _, e := range arr.Array() {
-		if e.Type != gjson.String {
-			return nil, nil, fmt.Errorf("%w: %s contains a non-string element", ErrWrongType, strings.Join(append(prefix, last), "."))
+		k, err := ops.existingKey(e)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", strings.Join(append(prefix, last), "."), err)
 		}
-		have[e.String()] = true
+		have[k] = true
 	}
-	for _, v := range dedupe(vals) {
-		if !have[v] {
+	for _, v := range uniq {
+		k, _ := ops.newKey(v)
+		if !have[k] {
 			added = append(added, v)
 		}
 	}
 	if len(added) == 0 {
 		return doc, nil, nil
 	}
-	out, err = appendToArray(doc, st, len(prefix)+1, arr, added)
+	rendered, err := renderAll(len(prefix)+2, added)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err = appendToArray(doc, st, len(prefix)+1, arr, rendered)
 	return out, added, err
 }
 
@@ -180,7 +304,7 @@ func buildArray(st style, level int, vals []string) string {
 	var b strings.Builder
 	b.WriteString("[" + st.eol)
 	for i, v := range vals {
-		b.WriteString(st.indent(level+1) + quote(v))
+		b.WriteString(st.indent(level+1) + v)
 		if i < len(vals)-1 {
 			b.WriteString(",")
 		}
@@ -277,7 +401,7 @@ func appendToArray(doc []byte, st style, level int, arr gjson.Result, vals []str
 	case p == open: // [\n  \n]
 		b.Write(doc[:open+1])
 		for i, v := range vals {
-			b.WriteString(st.eol + st.indent(level+1) + quote(v))
+			b.WriteString(st.eol + st.indent(level+1) + v)
 			if i < len(vals)-1 {
 				b.WriteString(",")
 			}
@@ -290,7 +414,7 @@ func appendToArray(doc []byte, st style, level int, arr gjson.Result, vals []str
 			sep = ", "
 		}
 		for _, v := range vals {
-			b.WriteString(sep + quote(v))
+			b.WriteString(sep + v)
 		}
 		b.Write(doc[p+1:])
 	default: // one element per line: reuse the last element's own indentation
@@ -298,7 +422,7 @@ func appendToArray(doc []byte, st style, level int, arr gjson.Result, vals []str
 		ind := leadingSpace(doc[lineStart:])
 		b.Write(doc[:p+1])
 		for _, v := range vals {
-			b.WriteString("," + st.eol + ind + quote(v))
+			b.WriteString("," + st.eol + ind + v)
 		}
 		b.Write(doc[p+1:])
 	}
@@ -312,7 +436,7 @@ func joinInline(st style, vals []string) string {
 	}
 	q := make([]string, len(vals))
 	for i, v := range vals {
-		q[i] = quote(v)
+		q[i] = v
 	}
 	return strings.Join(q, sep)
 }

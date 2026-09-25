@@ -204,7 +204,12 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	if res.BackupPath != "" {
 		fmt.Fprintf(e.out, "backup: %s\n", res.BackupPath)
 	}
-	fmt.Fprintf(e.out, "applied %d change(s) to %s\n", len(plan.Adds), res.Path)
+	runID, err := w.Commit("apply claude permissions from " + *rig)
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	fmt.Fprintf(e.out, "applied %d change(s) to %s (run %s)\n", len(plan.Adds), res.Path, runID)
 	return 0
 }
 

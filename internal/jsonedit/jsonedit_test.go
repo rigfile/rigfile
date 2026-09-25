@@ -288,3 +288,148 @@ func contains(s []string, v string) bool {
 	}
 	return false
 }
+
+// --- AppendRaw / ReadRaw (structured entries such as Claude Code hooks) ------------------------------
+
+const hookEntry = `{"matcher":"Bash","hooks":[{"type":"command","command":"rigfile","args":["hook","run","guard"]}]}`
+
+func TestAppendRawCreatesNestedBranchWithMatchingLayout(t *testing.T) {
+	doc := "{\n  \"model\": \"sonnet\"\n}\n"
+	out, added, err := AppendRaw([]byte(doc), []string{"hooks", "PreToolUse"}, []string{hookEntry})
+	if err != nil || len(added) != 1 {
+		t.Fatalf("%v %v", err, added)
+	}
+	want := `{
+  "model": "sonnet",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rigfile",
+            "args": [
+              "hook",
+              "run",
+              "guard"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+`
+	if string(out) != want {
+		t.Fatalf("layout:\n%s\nwant:\n%s", out, want)
+	}
+	if !json.Valid(out) {
+		t.Fatal("invalid JSON")
+	}
+}
+
+func TestAppendRawAppendsToExistingAndDeduplicates(t *testing.T) {
+	doc := `{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mine.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+`
+	out, added, err := AppendRaw([]byte(doc), []string{"hooks", "PreToolUse"}, []string{hookEntry, hookEntry})
+	if err != nil || len(added) != 1 {
+		t.Fatalf("duplicates within one call must collapse: %v %v", err, added)
+	}
+	if !strings.HasPrefix(string(out), doc[:strings.LastIndex(doc, "      }\n    ]")+len("      }")]) {
+		t.Fatalf("user's existing hook changed:\n%s", out)
+	}
+	var m map[string]any
+	_ = json.Unmarshal(out, &m)
+	if n := len(m["hooks"].(map[string]any)["PreToolUse"].([]any)); n != 2 {
+		t.Fatalf("want 2 entries, got %d\n%s", n, out)
+	}
+	// second run: nothing to add, byte-identical, even though the stored entry was pretty-printed
+	again, added2, err := AppendRaw(out, []string{"hooks", "PreToolUse"}, []string{hookEntry})
+	if err != nil || len(added2) != 0 || !bytes.Equal(again, out) {
+		t.Fatalf("not idempotent: %v %v", err, added2)
+	}
+}
+
+func TestAppendRawLayoutStyles(t *testing.T) {
+	for name, doc := range map[string]string{
+		"4 spaces": "{\n    \"a\": 1\n}\n",
+		"tab":      "{\n\t\"a\": 1\n}\n",
+		"compact":  `{"a":1}`,
+		"crlf":     "{\r\n  \"a\": 1\r\n}\r\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, _, err := AppendRaw([]byte(doc), []string{"hooks", "Stop"}, []string{`{"hooks":[{"type":"command","command":"x"}]}`})
+			if err != nil || !json.Valid(out) {
+				t.Fatalf("%v\n%s", err, out)
+			}
+			s := string(out)
+			switch name {
+			case "compact":
+				if strings.Contains(s, "\n") {
+					t.Fatalf("compact doc got newlines: %q", s)
+				}
+			case "crlf":
+				if strings.Contains(strings.ReplaceAll(s, "\r\n", ""), "\n") {
+					t.Fatalf("bare LF in CRLF doc: %q", s)
+				}
+			case "tab":
+				if !strings.Contains(s, "\n\t\t\"Stop\"") {
+					t.Fatalf("tab indentation not followed: %q", s)
+				}
+			case "4 spaces":
+				if !strings.Contains(s, "\n        \"Stop\"") {
+					t.Fatalf("4-space indentation not followed: %q", s)
+				}
+			}
+		})
+	}
+}
+
+func TestReadRaw(t *testing.T) {
+	doc := `{"hooks": {"Stop": [ {"a": 1,  "b": [1, 2]}, "s", 3 ]}}`
+	got, err := ReadRaw([]byte(doc), []string{"hooks", "Stop"})
+	if err != nil || len(got) != 3 || got[0] != `{"a":1,"b":[1,2]}` || got[1] != `"s"` || got[2] != "3" {
+		t.Fatalf("%v %v", got, err)
+	}
+	if got, err := ReadRaw([]byte(doc), []string{"hooks", "Nope"}); got != nil || err != nil {
+		t.Fatalf("missing path: %v %v", got, err)
+	}
+	if _, err := ReadRaw([]byte(`{"hooks":"x"}`), []string{"hooks"}); err == nil {
+		t.Fatal("non-array must be an error")
+	}
+	if got, err := ReadRaw(nil, []string{"a"}); got != nil || err != nil {
+		t.Fatal("empty doc")
+	}
+}
+
+func TestAppendRawRejectsInvalidValuesAndShapes(t *testing.T) {
+	if _, _, err := AppendRaw([]byte(`{}`), []string{"a", "b"}, []string{`{not json`}); err == nil {
+		t.Fatal("invalid JSON value must be rejected")
+	}
+	if _, _, err := AppendRaw([]byte(`{"a": {"b": "x"}}`), []string{"a", "b"}, []string{`1`}); !errors.Is(err, ErrWrongType) {
+		t.Fatalf("target not an array: %v", err)
+	}
+	if _, _, err := AppendRaw([]byte(`{"a": 1}`), []string{"a", "b"}, []string{`1`}); !errors.Is(err, ErrWrongType) {
+		t.Fatalf("parent not an object: %v", err)
+	}
+	// mixed element types are fine for raw arrays
+	out, _, err := AppendRaw([]byte(`{"a": ["x", 2]}`), []string{"a"}, []string{`{"k": true}`})
+	if err != nil || !json.Valid(out) {
+		t.Fatalf("%v %s", err, out)
+	}
+}

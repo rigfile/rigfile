@@ -96,7 +96,7 @@ func TestPlanApplyEndToEnd(t *testing.T) {
 	// the backup holds the ORIGINAL bytes
 	var backup string
 	_ = filepath.Walk(filepath.Join(home, ".rigfile", "backups"), func(p string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
+		if err == nil && !info.IsDir() && strings.Contains(p, string(filepath.Separator)+"files"+string(filepath.Separator)) {
 			backup = p
 		}
 		return nil
