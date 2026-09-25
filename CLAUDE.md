@@ -2,7 +2,18 @@
 
 Master plan: `RIGFILE_PLAN.md`. Read it before starting work. Current stage and progress: `docs/STATUS.md`.
 
-**Current stage: Stage 0 (research & spec freeze). No CLI code. Use public documentation only — never read the developer's real `~/.claude`, `~/.codex`, or other config folders.**
+**Current stage: Stage 1 (local CLI, Claude Code only, macOS + Linux; Windows is Stage 3). Language: Go (ADR 0001). The build is complete on branch `stage-1`; see `docs/STATUS.md` for what awaits owner sign-off.**
+
+Never read or copy from the developer's real `~/.claude`, `~/.codex` or other config folders yourself. The only exception is a capture the owner runs (`rigfile init`, read-only) into a scratch dir, reviewed by the owner before anything enters the repo. Vendor formats still come from official docs.
+
+## Working in this repo
+
+- Go toolchain: `export PATH=/opt/homebrew/bin:$PATH` if `go` is not found. Before committing: `gofmt -l .` (must print nothing), `go vet ./...`, `go test -race ./...`. Also `GOOS=windows go vet ./...` (Windows must keep compiling).
+- Layout: `cmd/rigfile` (CLI), `internal/{manifest,merge,layers,lock,state,apply,engine,session,adapters/claudecode,tools,secrets,execshim,hook,scan,platform,splice,jsonedit,hashing}`, `catalog/`, `schema/`, `e2e/` (container tests: `e2e/run.sh`), `docs/`.
+- Tests use a temp `$HOME` and injected fakes (`env` in `cmd/rigfile`, `MCPClient`, `tools.Host`); never touch the real machine, keychain or package managers.
+- The `claude` CLI's output formats are undocumented (ADR 0002): keep that logic behind `MCPClient`.
+- Commits: conventional (`feat(mN):`, `fix(...)`), end with the Co-Authored-By line the harness gives. Commit only when asked. The global gitleaks hook runs on commit; do not bypass it.
+- Do not work around permission or classifier denials; report them and let the owner run the command.
 
 ## Working agreements (RIGFILE_PLAN.md §16)
 
@@ -16,7 +27,7 @@ Master plan: `RIGFILE_PLAN.md`. Read it before starting work. Current stage and 
 8. **Small PRs**, conventional commits, update `docs/STATUS.md` at the end of each session.
 9. **Dogfood:** Rigfile's own repo uses `rigfile/base-secure` from Stage 2 onward.
 
-## Stage 0 additions
+## Stage 0 rules (still apply to research and docs)
 
 - Research output must cite an official source link and the date checked. Where docs are unclear or disagree with the plan, write **UNVERIFIED** or **CONFLICT** — do not guess.
-- No git commits unless the owner asks.
+- No git commits unless the owner asks (this holds in every stage).
