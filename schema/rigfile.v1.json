@@ -178,7 +178,12 @@
       "description": "Path to a file INSIDE the rig, relative to the rig root. Forward slashes only; no absolute paths, drive letters, `~`, or `..`.",
       "minLength": 1,
       "maxLength": 240,
-      "pattern": "^(?!/)(?!~)(?![A-Za-z]:)(?!.*\\\\)(?!(?:.*/)?\\.\\.(?:/|$)).+$"
+      "$comment": "Expressed as allOf/not (no lookaheads) so RE2-based validators, e.g. Go, can compile this schema. Rules: not absolute, not ~, not a drive letter, no backslash, no .. segment.",
+      "allOf": [
+        { "not": { "pattern": "^(?:/|~|[A-Za-z]:)" } },
+        { "not": { "pattern": "\\\\" } },
+        { "not": { "pattern": "(?:^|/)\\.\\.(?:/|$)" } }
+      ]
     },
 
     "hostPath": {
@@ -186,7 +191,11 @@
       "description": "Path or glob that refers to the USER'S MACHINE (permissions, cwd). Forward slashes only. Start with ${HOME}/, ${CONFIG_DIR}/, ${APP_DATA}/, `~/`, a system absolute path such as /etc/..., or be project-relative (no prefix, `./`, or `**/`). Hard-coded user homes (/Users/..., /home/..., C:\\...) are rejected. The platform layer expands per OS; per-tool syntax is applied by adapters (docs/platforms.md §4).",
       "minLength": 1,
       "maxLength": 240,
-      "pattern": "^(?!/Users/)(?!/home/)(?![A-Za-z]:)(?!.*\\\\).+$"
+      "$comment": "Expressed as allOf/not (no lookaheads) for RE2 compatibility. Rules: no /Users/ or /home/ prefix, no drive letter, no backslash.",
+      "allOf": [
+        { "not": { "pattern": "^(?:/Users/|/home/|[A-Za-z]:)" } },
+        { "not": { "pattern": "\\\\" } }
+      ]
     },
 
     "hostPattern": {
