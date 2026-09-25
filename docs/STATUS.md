@@ -1,7 +1,7 @@
 # Rigfile status
 
 **Current stage: Stage 1 — build complete and merged to `main` (fast-forward of `stage-1`, 2026-09-25; CI green); owner checks below still open.**
-**Next: Stage 2 (`rigfile/base-secure`) — plan drafted in `docs/stage-2-plan.md` on branch `stage-2`, awaiting owner approval; no Stage 2 code started.**
+**Next: Stage 2 (`rigfile/base-secure`) — plan drafted in `docs/stage-2-plan.md` on branch `stage-2`, S2-M0 (verify first) done 2026-09-25 (`docs/targets/{claude-code §12,git}.md`, `docs/adr/0003-scanner.md`); awaiting owner decisions O1–O8; no Stage 2 code started.**
 **Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
 Last updated: 2026-09-25 (end of Stage 1 build session)
 

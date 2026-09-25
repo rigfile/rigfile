@@ -254,3 +254,43 @@ Source: https://code.claude.com/docs/en/authentication#credential-management · 
 3. Verify whether a subagent can be routed to a different endpoint than the main session.
 4. Confirm `%USERPROFILE%\.claude.json` location on Windows.
 5. Feature-detect version-gated behavior (AGENTS.md ≥ 2.1.277, `managedMcpServers` ≥ 2.1.259, `${VAR}` display ≥ 2.1.268).
+
+---
+
+## 12. Stage 2 verification (base-secure), checked 2026-09-25
+
+Method: official pages fetched as markdown (`code.claude.com/docs/en/{hooks,permissions,permission-modes,sandboxing}.md`); answers were extracted by a summarising fetch, so quoted text is as returned and the **hooks page excerpt was truncated**: items marked **TEST** must be confirmed against a real Claude Code (S2-M7 live procedure) before we claim them in user-facing text. Nothing was read from any real `~/.claude`.
+
+### 12.1 Can a hook redact tool output? (question S2-M0(a))
+
+**Yes for built-in tools.** PostToolUse supports `updatedToolOutput`, `updatedMCPToolOutput`, `additionalContext`, `systemMessage`, `terminalSequence`. Quote: *"For all tools except MCP tools, `updatedToolOutput` replaces the tool's text output before it reaches the model. For MCP tools, use `updatedMCPToolOutput` instead."* `updatedMCPToolOutput` needs v2.1.256+. **UNVERIFIED:** the minimum version for `updatedToolOutput`, and whether the on-disk transcript (`~/.claude/projects/**/*.jsonl`, §10) stores the original or the replaced output. **TEST** both. PostToolUseFailure cannot rewrite output (context/message only).
+Consequence: the plan's §8.2 "redact secret-looking strings before they enter the model context" is feasible for Bash/Read/etc.; keep the `redact` hook in S2-M5, feature-detect by version, and say on the plan screen if the transcript still holds the raw text.
+
+### 12.2 PreToolUse contract
+
+Output: `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow|deny|ask|defer","permissionDecisionReason":"…"}}`, or exit 2 + stderr. Exit 2 blocks and overrides JSON; other non-zero exits do not block for most events (so **malformed/crashing hooks fail open unless they exit 2**; the Stage 1 guard already exits 2 on malformed input). `updatedInput` may rewrite any tool's input. Hooks also run inside subagents (`agent_id`, `agent_type` in the payload). `permission_mode` is in the payload (`default|plan|acceptEdits|auto|dontAsk|bypassPermissions`).
+Tool inputs (as returned by the summary; **TEST** the Write/Edit field names, they differ from the ones our guard reads today): Bash `{command, description, timeout, run_in_background}`; Write `{file_path, file_text}`; Edit `{file_path, old_str, new_str}`; Read `{file_path}`.
+`if`: exactly one permission rule per handler (no `&&`/`||`), only on tool events, "best-effort"; docs say to use permissions rather than hooks for hard allow/deny.
+**Hooks can be turned off:** `disableAllHooks: true` in any settings file or `--settings` on the command line; managed hooks are immune unless disabled at managed level. So a user-level hook is a *guardrail against agent mistakes*, not a control against a determined local user.
+
+### 12.3 Permissions: what a deny actually covers
+
+- Order deny → ask → allow; a deny beats a more specific allow ("An allow rule can't carve an exception out of a deny rule").
+- Bash rules match the command text after splitting compound commands (`&&`, `||`, `;`, `|`, `|&`, `&`, newline); **deny and ask apply if any subcommand matches, including inside subshells, `$(…)` and loop bodies**. A fixed set of wrappers is stripped before matching (`timeout`, `time`, `nice`, `nohup`, `stdbuf`, `command`, `builtin`, `noglob`; bare `xargs`); `npx`, `docker exec`, `env`-style runners are not. Deny also matches past leading `VAR=x` assignments.
+- **Documented gaps** (docs' own table): `Bash(curl *)` does not stop `/usr/bin/curl …` or `sh -c 'curl …'`; `Bash(rm *)` does not stop `/bin/rm` or `bash -c 'rm …'`; `Bash(git push *)` does not stop `git -C . push`, `git -c push.default=current push`, `git 'push'`. The docs call these rules "not a security boundary around the program". → **base-secure denies must be written with the variants, and the PreToolUse guard (which sees the full text) must parse `git -C/-c` and path-qualified programs; hooks are the second layer, the sandbox the third.**
+- `Bash(command:rm *)` style rules are ignored with a warning (bypassable), use `Bash(rm *)`.
+- Read/Edit deny applies to built-in file tools, to recognised Bash file commands (`cat head tail sed tee`) and redirect targets, best-effort to Grep/Glob, `@file` mentions and IDE context. It does **not** apply to `grep -r` run in the directory holding the file, or to scripts that open files themselves (python/node). OS-level enforcement = the sandbox.
+- Paths in user settings: `/x` means `~/.claude/x`; use `~/` or `//abs` (already handled by the adapter).
+- `Bash(*)`/bare `Bash` as a deny removes the tool. `Bash(dangerouslyDisableSandbox:true)` can be given an **ask** rule so unsandboxed retries always prompt.
+
+### 12.4 Protected paths (agent cannot silently edit these)
+
+Never auto-approved for writes (prompted in `default`/`acceptEdits`, classifier in `auto`, denied in `dontAsk`, **allowed in `bypassPermissions`**), and settings `allow` rules do not pre-approve them: dirs `.git`, `.config/git`, `.vscode`, `.idea`, `.husky`, `.cargo`, `.devcontainer`, `.yarn`, `.mvn`, `.claude` (except `.claude/worktrees`); files `.gitconfig`, `.gitmodules`, shell rc files (`.bashrc .zshrc .profile .envrc …`), `.npmrc`, `.pre-commit-config.yaml`, `lefthook*.yml`, `.mcp.json`, `.claude.json`, and more.
+**Consequences for Rigfile:** (1) `~/.gitconfig` and `~/.config/git/**` (the owner's current hooks dir) are protected, which helps; (2) **Rigfile's own dirs (`~/.config/rigfile/**`, `~/.rigfile/**`) are NOT on the list**, so base-secure must add `Edit(~/.config/rigfile/**)`, `Edit(~/.rigfile/**)` and `Read(~/.rigfile/secrets*)` to its deny list; (3) `bypassPermissions` skips protected-path prompts, so base-secure should set `permissions.disableBypassPermissionsMode: "disable"` (it can be set in user settings; **TEST** that user scope is honoured and whether this is too heavy-handed, see plan decision O8). `rm`/`rmdir` on "critical paths" (root, home, cwd and parents…) can never be approved by an allow rule or hook; a deny still blocks.
+
+### 12.5 The sandbox is a bigger lever than the plan assumed (**new finding**)
+
+Sandbox: OS-enforced filesystem and network isolation for Bash/PowerShell/Monitor commands and their children; macOS (Seatbelt, nothing to install), Linux and WSL2 (needs `bubblewrap` + `socat`-style packages; see the page), **not native Windows**. Configurable in **user settings**: `sandbox.enabled`, `sandbox.failIfUnavailable` (default: warns and runs *unsandboxed* if it cannot start), `sandbox.allowUnsandboxedCommands: false` (disables the `dangerouslyDisableSandbox` retry), `sandbox.filesystem.{allowWrite,denyWrite,allowRead,denyRead}` (narrower path wins; wildcard deny holds inside a wider allow), `sandbox.network.allowedDomains`, and `sandbox.credentials.files` / env-var `mask` entries with an injecting proxy (only honoured from user/managed/`--settings`, never from repo settings).
+**Impact on the plan:** the OS-level layer that §8.2/§11 defer to Stage 7 (egress allowlist, secret surrogates) partly exists in the vendor product for Claude Code. **Not verified:** exact enforcement gaps, Linux dependencies on a stock Ubuntu/Fedora, interaction with MCP servers and hooks (hooks are not sandboxed Bash). Recommendation in `docs/stage-2-plan.md` (O7): research and prototype in Stage 2 as an *optional, plan-screen-visible* layer of base-secure on macOS/Linux; do not depend on it for exit criteria.
+
+Sources: https://code.claude.com/docs/en/hooks · /permissions · /permission-modes · /sandboxing (2026-09-25)

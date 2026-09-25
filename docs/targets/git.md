@@ -1,0 +1,32 @@
+# Target: git (host module for base-secure)
+
+**Date checked:** 2026-09-25. Official git documentation via git-scm.com and the `git/git` repository (`Documentation/githooks.adoc`, `Documentation/config/core.adoc`). Summarising fetches; behaviour marked **TEST** must be confirmed with real `git` in temp repos (S2-M3/M4 tests do this).
+
+## Hooks
+
+| Fact | Source text (as returned) | Status |
+|---|---|---|
+| `core.hooksPath` points git at another hooks directory | "By default Git will look for your hooks in the `$GIT_DIR/hooks` directory. Set this to different path, e.g. `/etc/git/hooks`, and Git will try to find your hooks in that directory." | Global. Docs imply **replacement** (repo-local `.git/hooks/*` stop running) but do not say so outright: **TEST**. Rigfile's shims therefore chain to the repo's own hook. |
+| Relative `core.hooksPath` | "interpreted as relative to the directory where hooks are executed" | Rigfile writes an **absolute** path. |
+| `~` in `core.hooksPath` | Not stated for hooksPath (stated for excludesFile) | **UNVERIFIED**; use absolute. |
+| Disable all hooks | "set this to `/dev/null`" | A human or agent can do `git -c core.hooksPath=/dev/null …`: base-secure denies/asks on `git -c core.hooksPath` and `git config core.hooksPath` (§8.2) but a local user can always bypass. |
+| `pre-commit` | no args; non-zero aborts the commit; "can be bypassed with the `--no-verify` option" | |
+| `commit-msg`, `pre-merge-commit` | also bypassable with `--no-verify` | |
+| `prepare-commit-msg` | "not suppressed by the `--no-verify` option" | Not useful for scanning content (runs before the message is final, tree already staged: could still scan the index; **TEST**). |
+| `pre-push` | args: remote name, remote URL; stdin lines `<local-ref> <local-oid> <remote-ref> <remote-oid>`; new remote branch → remote oid all zeros; deletion → local ref `(delete)` and zero local oid | |
+| **`git push --no-verify`** | "Toggle the pre-push hook … With `--no-verify`, the hook is bypassed completely." | **CONFLICT with plan §8.1c**: pre-push does *not* catch a `--no-verify` commit if the pusher also passes `--no-verify` to push. |
+| **`reference-transaction`** | "invoked by any Git command that performs reference updates … preparing, prepared, committed or aborted"; stdin `<old> <new> <ref>`; "In [preparing/prepared] states, a non-zero exit status will cause the transaction to be aborted"; not affected by `--no-verify` | **NEW OPTION:** a `--no-verify`-proof local gate: in `prepared` state, scan the new commit(s) of `refs/heads/*` updates and abort on a finding. Costs: runs for every ref update (fetch, rebase, gc…), so it must be fast and skip quickly (only scan when `<new>` is a commit reachable from local work and the ref is a branch/tag being created or advanced; skip remote-tracking refs). **TEST** performance and semantics in S2-M3 spike. |
+| Env for hooks | `GIT_DIR`, `GIT_WORK_TREE` etc. exported | For `pre-commit`, scan the **index** (`git diff --cached`), not the working tree. |
+
+## Config
+
+| Fact | Detail |
+|---|---|
+| `core.excludesFile` | "pathname to the file that contains patterns … not meant to be tracked, in addition to `.gitignore` and `.git/info/exclude`"; default `$XDG_CONFIG_HOME/git/ignore`, falling back to `$HOME/.config/git/ignore`; `~` expanded. A single value: git has one global excludes file, so a user's existing one is spliced (marked block), not replaced. |
+| Global config location | `--global` writes `~/.gitconfig`, or `$XDG_CONFIG_HOME/git/config` if that exists and `~/.gitconfig` does not. |
+| Test isolation | `GIT_CONFIG_GLOBAL=<file>` "take the configuration from the given files instead from global or system-level configuration" → all Stage 2 tests run with a temp `HOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM=/dev/null`. |
+| Reading/restoring previous values | `git config --global --get <key>` (exit 1 if absent), `--show-origin` to see which file; `git config unset <key>` (the `--unset` form is deprecated in current docs; support both, prefer whichever the installed git accepts). `include.path` exists but is not used. |
+| Protected by Claude Code | `.gitconfig` and `.config/git` are on Claude Code's protected-path list (see `claude-code.md` §12.4). |
+
+## Not covered here (Stage 3)
+Git for Windows' bundled `sh` running hooks, GitHub Desktop / VS Code / JetBrains invocation quirks, and case-insensitive file-system behaviour are research items for Stage 3; the matcher is built case-insensitive and CRLF-safe from the start.
