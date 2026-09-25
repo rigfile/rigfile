@@ -501,3 +501,56 @@ func TestExecInjectsSecretsIntoChildOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestInitCapturesAndTheResultAppliesCleanly(t *testing.T) {
+	src := newMachine(t)
+	cd := filepath.Join(src.home, ".claude")
+	put(t, cd, "CLAUDE.md", "# Mine\nbe terse\n", 0o644)
+	put(t, cd, "skills/pdf/SKILL.md", "---\nname: pdf\ndescription: PDFs\n---\nbody\n", 0o644)
+	put(t, cd, "agents/reviewer.md", "---\nname: reviewer\ndescription: r\n---\nx\n", 0o644)
+	put(t, cd, "settings.json", `{"permissions":{"deny":["Read(~/.ssh/**)"],"ask":["Bash(git push*)"]}}`, 0o644)
+	put(t, src.home, ".claude.json", `{"mcpServers":{"alpaca":{"type":"stdio","command":"npx","args":["-y","alpaca-mcp@1.4.2"],"env":{"ALPACA_API_KEY":"sk-ant-TESTTESTTESTTESTTEST"}}}}`, 0o600)
+	before := mustRead(t, filepath.Join(cd, "settings.json"))
+
+	out := filepath.Join(t.TempDir(), "rig")
+	r := src.run("", "init", "--out", out, "--name", "jia/captured")
+	if r.code != 0 || !strings.Contains(r.out, "Captured (") || !strings.Contains(r.out, "Secrets: values NOT captured") || !strings.Contains(r.out, "Next:") {
+		t.Fatalf("%+v", r)
+	}
+	if strings.Contains(r.out+r.err, "TESTTEST") {
+		t.Fatal("init printed a secret value")
+	}
+	if string(mustRead(t, filepath.Join(cd, "settings.json"))) != string(before) {
+		t.Fatal("init modified the source config")
+	}
+	for _, f := range []string{"rigfile.yaml", "instructions/claude-md.md", "skills/pdf/SKILL.md", "agents/reviewer.md"} {
+		if _, err := os.Stat(filepath.Join(out, f)); err != nil {
+			t.Fatalf("missing %s", f)
+		}
+	}
+	if strings.Contains(string(mustRead(t, filepath.Join(out, "rigfile.yaml"))), "TESTTEST") {
+		t.Fatal("manifest holds a secret")
+	}
+	// refuses a non-empty target
+	if r := src.run("", "init", "--out", out); r.code != 1 || !strings.Contains(r.err, "already has files") {
+		t.Fatalf("%+v", r)
+	}
+	// the captured rig validates and applies on a fresh machine
+	dst := newMachine(t)
+	if r := dst.run("", "validate", out); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r := dst.run("", "apply", out, "--yes"); r.code != 0 || !strings.Contains(r.out, "SECRET NEEDED  alpaca/alpaca_api_key") {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(dst.mcp.servers["alpaca"], "ALPACA_API_KEY=alpaca/alpaca_api_key") {
+		t.Fatalf("%v", dst.mcp.servers)
+	}
+	// once applied, re-capturing on that machine leaves what Rigfile manages out
+	out2 := filepath.Join(t.TempDir(), "rig2")
+	r = dst.run("", "init", "--out", out2)
+	y := string(mustRead(t, filepath.Join(out2, "rigfile.yaml")))
+	if r.code != 0 || !strings.Contains(r.out, "already managed by Rigfile") || strings.Contains(y, "skills:") || strings.Contains(y, "agents:") {
+		t.Fatalf("%+v\n%s", r, y)
+	}
+}

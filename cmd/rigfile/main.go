@@ -1,5 +1,6 @@
 // Command rigfile is the Rigfile CLI (Stage 1: local rigs, Claude Code target, macOS + Linux).
 //
+//	rigfile init     [--out DIR]             capture your current Claude Code setup into a new rig
 //	rigfile validate <rig-dir|rigfile.yaml>
 //	rigfile plan     [<rig-dir>] [flags]     show what would change; change nothing
 //	rigfile apply    [<rig-dir>] [flags]     apply it (review screen, backup first)
@@ -61,6 +62,8 @@ func run(args []string, e env) int {
 	case "version", "--version":
 		fmt.Fprintln(e.out, "rigfile", version)
 		return 0
+	case "init":
+		return cmdInit(rest, e)
 	case "validate":
 		return cmdValidate(rest, e)
 	case "plan", "apply":
@@ -91,6 +94,7 @@ func run(args []string, e env) int {
 func usage(w io.Writer) {
 	fmt.Fprint(w, `usage: rigfile <command> [args]
 
+  init [--out DIR] [--name o/n]      capture your current Claude Code setup into a new rig (read-only)
   validate <rig-dir|file>            check a rig against the schema and its own consistency rules
   plan  [<rig-dir>]                  show what would change (nothing is written)
   apply [<rig-dir>]                  apply the rig to Claude Code (review, confirm, backup first)

@@ -270,3 +270,41 @@ func scan(lines [][]byte, st Style) ([]Region, error) {
 	}
 	return regs, nil
 }
+
+// StripAll returns doc without any Rigfile-managed regions (markers included) and the ids removed.
+// Text outside the regions is untouched, except that the blank separator left behind is collapsed.
+func StripAll(doc []byte, st Style) ([]byte, []string, error) {
+	lines := splitLines(doc)
+	regs, err := scan(lines, st)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(regs) == 0 {
+		return doc, nil, nil
+	}
+	drop := map[int]bool{}
+	var ids []string
+	for _, r := range regs {
+		ids = append(ids, r.ID)
+		for i := r.begin; i <= r.end; i++ {
+			drop[i] = true
+		}
+	}
+	var out []byte
+	blank := false
+	for i, l := range lines {
+		if drop[i] {
+			continue
+		}
+		if len(bytes.TrimSpace(l)) == 0 {
+			if blank || len(out) == 0 {
+				continue // collapse runs of blank lines and drop leading ones
+			}
+			blank = true
+		} else {
+			blank = false
+		}
+		out = append(out, l...)
+	}
+	return bytes.TrimRight(out, "\r\n \t"), ids, nil
+}
