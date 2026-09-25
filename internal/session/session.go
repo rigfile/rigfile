@@ -260,20 +260,36 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 	}
 	res := &Result{Applied: p.Plan.Changes(), Refused: len(p.Plan.Conflicts())}
 
+	// Fail BEFORE touching the machine if rigfile.lock cannot be written next to the rig.
+	needLock := !p.HasLock || len(p.LockDiffs) > 0
+	if needLock {
+		if f, err := os.CreateTemp(filepath.Dir(p.LockPath), ".rigfile-probe-*"); err != nil {
+			return nil, fmt.Errorf("cannot write %s: %w\n(the rig directory must be writable so the lockfile can live next to it)", p.LockPath, err)
+		} else {
+			f.Close()
+			_ = os.Remove(f.Name())
+		}
+	}
+
 	ts := p.State.Target(Target)
 	if err := p.Plan.Apply(&engine.Exec{W: w}, ts); err != nil {
 		// whatever already happened is journaled: commit it so `rollback` can undo the partial run
 		_, _ = w.Commit("FAILED: " + x.Note)
 		return nil, err
 	}
-	lockBytes, err := p.Lock.Marshal()
-	if err != nil {
+	// From here on the machine has changed: any failure must still commit the journal so `rollback` works.
+	fail := func(err error) (*Result, error) {
+		_, _ = w.Commit("FAILED: " + x.Note)
 		return nil, err
 	}
-	if !p.HasLock || len(p.LockDiffs) > 0 {
+	lockBytes, err := p.Lock.Marshal()
+	if err != nil {
+		return fail(err)
+	}
+	if needLock {
 		lr, err := w.WriteFileMode(p.LockPath, lockBytes, 0o644)
 		if err != nil {
-			return nil, err
+			return fail(err)
 		}
 		res.LockWritten = lr.Changed
 	}
@@ -287,10 +303,10 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 	}
 	sb, err := p.State.Marshal()
 	if err != nil {
-		return nil, err
+		return fail(err)
 	}
 	if _, err := w.WriteFileMode(filepath.Join(p.StateDir, state.FileName), sb, 0o600); err != nil {
-		return nil, err
+		return fail(err)
 	}
 	res.RunID, err = w.Commit(x.Note)
 	return res, err

@@ -1,0 +1,9 @@
+FROM fedora:41
+RUN useradd -m dev
+COPY build/rigfile /usr/local/bin/rigfile
+COPY fake-claude /usr/local/bin/claude
+COPY --chown=dev rig /rig
+COPY scenario.sh /scenario.sh
+USER dev
+ENV HOME=/home/dev
+CMD ["/bin/sh", "/scenario.sh"]

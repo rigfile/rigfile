@@ -71,3 +71,4 @@ dist/
 # Editor / OS
 .vscode/
 .idea/
+e2e/build/

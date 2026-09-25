@@ -678,3 +678,22 @@ func TestApplyEndsWithABatchedSecretsPrompt(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestUnwritableRigDirFailsBeforeAnythingIsWritten(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX permissions and a non-root user")
+	}
+	m := newMachine(t)
+	rig := newRig(t)
+	if err := os.Chmod(rig, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(rig, 0o755)
+	r := m.run("", "apply", rig, "--yes")
+	if r.code != 1 || !strings.Contains(r.err, "rig directory must be writable") {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".claude")); !os.IsNotExist(err) {
+		t.Fatal("machine was modified even though the lockfile could not be written")
+	}
+}

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Stand-in for the `claude` CLI inside test containers: implements only `claude mcp add-json|get|remove`.
+# The real CLI's output formats are undocumented (ADR 0002); this fake records servers as files.
+d="$HOME/.fake-claude-mcp"; mkdir -p "$d"
+[ "$1" = "mcp" ] || { echo "fake claude 0.0.0"; exit 0; }
+case "$2" in
+  add-json) printf '%s' "$4" > "$d/$3.json" ;;
+  get)      [ -f "$d/$3.json" ] || exit 1 ;;
+  remove)   rm -f "$d/$3.json" ;;
+  *)        exit 0 ;;
+esac

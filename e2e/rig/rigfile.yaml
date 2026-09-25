@@ -1,0 +1,26 @@
+apiVersion: rigfile.dev/v1
+name: e2e/rig
+version: 1.0.0
+description: End-to-end rig used by e2e/run.sh (fake values only)
+instructions:
+  - {id: style, file: instructions/style.md}
+skills:
+  - {path: skills/pdf}
+agents:
+  - {path: agents/reviewer.md}
+commands:
+  - {path: commands/hi.md}
+hooks:
+  - {id: guard, event: pre_tool_use, match: {tool: bash}, run: 'builtin:guard'}
+mcp_servers:
+  demo:
+    command: npx
+    args: ['-y', 'demo-mcp@1.0.0']
+    env: {DEMO_API_KEY: 'secret://demo/api_key', DEMO_MODE: paper}
+permissions:
+  deny: [{read: '~/.ssh/**'}, {bash: 'rm -rf *'}]
+  ask: [{bash: 'git push*'}]
+secrets:
+  demo/api_key: {description: Demo key (fake), obtain_url: 'https://example.test/keys'}
+tools:
+  common: [jq]

@@ -1,0 +1,2 @@
+# Style
+- be terse
