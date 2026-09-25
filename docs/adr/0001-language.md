@@ -117,13 +117,13 @@ Adopt **Go** for the `rigfile` CLI, hooks, scanner and platform layer.
 - If, after the Stage-1 spike, the owner finds reviewing the Go code impractical, switch to **Python with a PyInstaller `--onedir` bundle** and move the hot-path hooks to a tiny separate native helper, accepting a two-language build. (Not `--onefile`, per the measurement.)
 - If a maintained, comment-preserving Go TOML editor appears, D5 stops being a Go weakness (it is only a mitigation today).
 
-### Stage-1 spike (2–3 days, before committing)
-Implement one vertical slice in Go: `plan` for a Claude Code `settings.json` permissions merge; keychain set/get on macOS + Linux (desktop keyring and headless age fallback); a `rigfile hook pre-tool-use` shim, with latency measured on macOS, Ubuntu and Windows; a marker-splice edit of a TOML file with comments. The owner reviews the diff. **Go/no-go on the ADR happens at the end of the spike.**
+### Stage-1 spike (2–3 days, before committing) — EXECUTED 2026-09-25, results in `docs/spike-report.md`; go/no-go pending the owner's review
+Implement one vertical slice in Go: `plan` for a Claude Code `settings.json` permissions merge; keychain set/get on macOS + Linux (desktop keyring and headless age fallback); a `rigfile hook pre-tool-use` shim, with latency measured on macOS, Ubuntu and Windows; a marker-splice edit of a TOML file with comments. The owner reviews the diff. **Go/no-go on the ADR happens at the end of the spike.** *Outcome:* all four slices built and tested (hook ≈ 5 ms; binaries 4.7–5.8 MB on four targets; 12 linked modules); recommendation stays Go; owner review outstanding.
 
 ## 8. Open items
-1. Windows and Linux start-up numbers (not measured).
+1. Windows and Linux start-up numbers (not measured; the spike measured macOS only: hook ≈ 5 ms; all four targets cross-build).
 2. GoReleaser Scoop / Homebrew-formula pages: confirm current names and features.
-3. JSON key-order preservation approach in Go.
+3. ~~JSON key-order preservation approach in Go.~~ **Resolved:** gjson to locate + text splicing (`internal/jsonedit`), no ordered-map library.
 4. `gitleaks/detect` as an importable library: API stability and licence terms for embedding.
 5. Cause of the 4.6 s PyInstaller one-file start-up (informational; does not change the decision).
 

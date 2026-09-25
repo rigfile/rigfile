@@ -1,6 +1,6 @@
 # Rigfile status
 
-**Current stage: Stage 1 — Local CLI, Claude Code only, no network, macOS + Linux — IN PROGRESS (spike phase)**
+**Current stage: Stage 1 — Local CLI, Claude Code only, no network, macOS + Linux — IN PROGRESS (spike built; awaiting the owner's go/no-go)**
 **Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
 Last updated: 2026-09-25
 
@@ -25,6 +25,11 @@ Sign-off terms: the owner accepted the schema and the seven merge-semantics deci
 - Q2 business model, Q5 private memory sync (default: defer to Stage 8), Q6 domains/names (schema `$id` is a placeholder), Q7 targets after Claude Code (Stage 3), Q9 WSL, Q10 code-signing, Q11 local-model scope.
 - Plan corrections found in Stage 0 that the owner has not yet folded into `RIGFILE_PLAN.md` (see the "Summary of plan corrections" tables in `docs/targets/*.md` and `docs/platforms.md` §7): notably §9.5 local-model wiring, Codex hook trust, Codex/Claude Code permission syntax, `${CONFIG_DIR}`, credential files in the deny list.
 - Not done in Stage 0: Cursor / Gemini CLI / Claude Desktop target docs (Stage 3); sanitized fixture of the owner's own setup (needs an export from the owner).
+
+## Stage 1 spike — result (branch `stage-1-spike`, not merged)
+
+Built and tested 2026-09-25: manifest validation, marker-splice editing, JSON layout-preserving edits, platform layer, Claude Code permissions adapter with backup-first writes, secrets (keychain + age fallback), exec shim, PreToolUse guard, CLI. 179 tests, race-clean, no skips on macOS. Hook ≈ 5 ms/call; release binaries 4.7–5.8 MB on darwin/arm64, linux/amd64, linux/arm64, windows/amd64. Details, findings and the not-verified list: `docs/spike-report.md`.
+**Waiting on the owner:** review the code (guide in the report §7) and confirm Go / no-go. Also open: real-Keychain and real-Linux checks, Linux/Windows latency, file-store lock.
 
 ## Stage 1 — plan of record
 
