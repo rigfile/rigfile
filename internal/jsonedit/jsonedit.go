@@ -347,3 +347,29 @@ func insertCompact(doc []byte, st style, open, close int, member string) []byte 
 	b.Write(doc[p+1:])
 	return b.Bytes()
 }
+
+// ReadStrings returns the string elements of the array at path. A missing path yields (nil, nil);
+// a value of the wrong type is an error.
+func ReadStrings(doc []byte, path []string) ([]string, error) {
+	if len(bytes.TrimSpace(doc)) == 0 {
+		return nil, nil
+	}
+	if !gjson.ValidBytes(doc) {
+		return nil, ErrInvalidJSON
+	}
+	r := lookup(doc, path)
+	if !r.Exists() {
+		return nil, nil
+	}
+	if !r.IsArray() {
+		return nil, fmt.Errorf("%w: %s is not an array", ErrWrongType, strings.Join(path, "."))
+	}
+	var out []string
+	for _, e := range r.Array() {
+		if e.Type != gjson.String {
+			return nil, fmt.Errorf("%w: %s contains a non-string element", ErrWrongType, strings.Join(path, "."))
+		}
+		out = append(out, e.String())
+	}
+	return out, nil
+}

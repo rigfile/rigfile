@@ -161,3 +161,25 @@ func TestWritePrivate(t *testing.T) {
 		t.Fatalf("temp files left behind: %v", ents)
 	}
 }
+
+func TestSafeRelative(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		got, err := SafeRelative(`C:\Users\test\.claude\settings.json`)
+		if err != nil || got != `C_\Users\test\.claude\settings.json` {
+			t.Fatalf("got %q err=%v", got, err)
+		}
+	} else {
+		got, err := SafeRelative("/Users/test/.claude/settings.json")
+		if err != nil || got != "Users/test/.claude/settings.json" {
+			t.Fatalf("got %q err=%v", got, err)
+		}
+		// Cleaning removes traversal before it can escape a backup root.
+		got, err = SafeRelative("/a/b/../../c")
+		if err != nil || got != "c" {
+			t.Fatalf("got %q err=%v", got, err)
+		}
+	}
+	if _, err := SafeRelative("relative/path"); err == nil {
+		t.Fatal("relative paths must be rejected")
+	}
+}
