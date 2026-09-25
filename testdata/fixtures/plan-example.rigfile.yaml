@@ -1,0 +1,121 @@
+# Fixture: the example manifest from RIGFILE_PLAN.md §6.1 + §9.5, adapted so it validates
+# against schema/rigfile.v1.json. ALL VALUES ARE ILLUSTRATIVE. No real secrets. The MCP package
+# name below is a placeholder, not a real package.
+apiVersion: rigfile.dev/v1
+name: jiaxu/data-science
+version: 1.2.0
+description: Python/data-science rig with trading MCP, job-search skills, strict git hygiene
+license: MIT
+from:
+  - rigfile/base-secure@^1
+  - jiaxu/python-dev@^2
+
+targets:
+  include: [claude-code, codex, cursor, gemini-cli]
+
+instructions:
+  - id: coding-style
+    file: instructions/coding-style.md
+    scope: user
+    merge: section
+
+skills:
+  - path: skills/job-pipeline
+  - ref: skills.sh/anthropics/pdf@1.0.3
+
+agents:
+  - path: agents/code-reviewer.md
+    targets: [claude-code]
+
+commands:
+  - path: commands/ship.md
+
+mcp_servers:
+  alpaca:
+    transport: stdio
+    command: npx
+    args: ["-y", "@example/alpaca-mcp-server@1.4.2"]
+    env:
+      ALPACA_API_KEY: secret://alpaca/api_key
+      ALPACA_SECRET_KEY: secret://alpaca/secret_key
+      ALPACA_PAPER: "true"
+    network:
+      allow: ["paper-api.alpaca.markets", "data.alpaca.markets"]
+  github:
+    transport: http
+    url: https://mcp.example.test/mcp
+    auth: oauth
+
+hooks:
+  - id: block-large-files
+    event: pre_tool_use
+    match: { tool: bash, command: "git commit*" }
+    run: builtin:block-large-files
+    targets: [claude-code]
+  - id: notify-on-finish
+    event: stop
+    run: { macos: hooks/notify.sh, linux: hooks/notify.sh, windows: hooks/notify.ps1 }
+
+permissions:
+  deny:
+    - read: "**/secrets/**"
+    - read: "~/.ssh/**"
+    - read: "~/.claude/.credentials.json"
+  ask:
+    - bash: "git push*"
+
+tools:
+  common: [gh, uv, jq, git, node]
+  npm: []
+  pipx: [ruff]
+  macos: { brew: [coreutils] }
+  linux: { apt: [build-essential], dnf: [gcc] }
+  windows: { winget: [Microsoft.PowerShell], scoop: [] }
+
+secrets:
+  alpaca/api_key:
+    description: "Alpaca API key (paper)"
+    obtain_url: "https://app.alpaca.markets/paper/dashboard/overview"
+    hosts: ["*.alpaca.markets"]
+  alpaca/secret_key:
+    description: "Alpaca secret key (paper)"
+    hosts: ["*.alpaca.markets"]
+
+logins:
+  - provider: github
+    reason: GitHub MCP server
+  - provider: claude-code
+    method: vendor-cli
+
+models:
+  local-coder:
+    role: local-coder
+    purpose: [summaries, commit-messages, simple-subagents, fallback]
+    serve: { host: 127.0.0.1, port: 8080, api: openai, autostart: true }
+    variants:
+      - when: { os: macos, arch: arm64, min_memory_gb: 16 }
+        engine: mlx-lm
+        engine_version: "0.31.3"
+        model: mlx-community/Qwen3-8B-4bit
+        revision: 545dc4251c05440727734bcd94334791f6ab0192
+        weights_format: mlx-safetensors
+        args: { prompt-cache-size: 1, prompt-cache-bytes: 1073741824 }
+      - when: {}
+        engine: ollama
+        model: "qwen3:8b"
+    license_ack: Apache-2.0
+
+gateways:
+  anthropic-bridge:
+    engine: litellm
+    expose: anthropic-messages
+    listen: "127.0.0.1:4000"
+    routes: { local-coder: "http://127.0.0.1:8080/v1" }
+
+routing:
+  default: cloud
+  local_for: [commit-messages, summaries, "subagent:quick-search"]
+  fallback_on_limit: local-coder
+
+private:
+  - memory/

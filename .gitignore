@@ -1,0 +1,73 @@
+# --- Base-secure rules (RIGFILE_PLAN.md §8.1a) -----------------------------
+# Secrets and credentials must never be committed. Force-add (`git add -f`)
+# only after review; the pre-commit scanner (Stage 2) still applies.
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.ppk
+credentials.json
+*credentials*.json
+service-account*.json
+*-sa.json
+*adminsdk*.json
+client_secret*.json
+token.json
+.npmrc
+.pypirc
+.netrc
+.htpasswd
+.aws/
+.gcp/
+.azure/
+kubeconfig
+*.kubeconfig
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.example.tfvars
+secrets.y*ml
+*.secret
+*.sqlite
+*.db
+.DS_Store
+
+# Rigfile local state / backups (never commit)
+.rigfile/
+
+# Exception: the secrets corpus holds OBVIOUSLY FAKE values (e.g.
+# sk-ant-TESTTESTTEST...) used to test the scanner. Never put a real value here.
+!testdata/secrets-corpus/
+!testdata/secrets-corpus/**
+
+# --- Python (pre-existing scaffold) -----------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+.htmlcov/
+
+# Editor / OS
+.vscode/
+.idea/

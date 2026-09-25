@@ -1,0 +1,753 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rigfile.dev/schema/rigfile.v1.json",
+  "$comment": "DRAFT for Stage 0 review. $id is a placeholder: the rigfile.dev domain is not yet claimed (RIGFILE_PLAN.md §17 Q6). Source of truth for structure: RIGFILE_PLAN.md §6 and §9.5. Items marked 'PROPOSED' are additions not present in the plan; each is listed in docs/merge-semantics.md under 'Proposed schema changes'. JSON Schema cannot express cross-field or cross-file rules (pinning of free-form args, model-name references, layer merging, real secret detection); those are listed as validator rules in docs/merge-semantics.md.",
+  "title": "Rigfile manifest (rigfile.yaml), apiVersion rigfile.dev/v1",
+  "description": "Declarative description of an AI working environment. Contains no secret values, ever.",
+  "type": "object",
+  "required": ["apiVersion", "name", "version"],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x-": {
+      "description": "Vendor/tooling extension keys. Ignored by Rigfile. Must still not contain secrets (enforced by the validator, not this schema)."
+    }
+  },
+  "properties": {
+    "apiVersion": { "const": "rigfile.dev/v1" },
+    "name": { "$ref": "#/$defs/rigName" },
+    "version": { "$ref": "#/$defs/semver" },
+    "description": { "$ref": "#/$defs/plainText", "maxLength": 500 },
+    "license": {
+      "type": "string",
+      "description": "SPDX license identifier or expression, e.g. MIT, Apache-2.0.",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "from": {
+      "type": "array",
+      "description": "Layers this rig inherits, in order (earlier = lower layer). rigfile/base-secure is always implied and is applied first; listing it only pins its version. It cannot be removed (see docs/merge-semantics.md).",
+      "items": { "$ref": "#/$defs/rigRef" },
+      "uniqueItems": true
+    },
+    "targets": {
+      "type": "object",
+      "description": "Which AI tools this rig supports. Targets outside `include` (or inside `exclude`) get a warning, not an error.",
+      "additionalProperties": false,
+      "properties": {
+        "include": { "$ref": "#/$defs/targetList" },
+        "exclude": { "$ref": "#/$defs/targetList" }
+      }
+    },
+    "instructions": {
+      "type": "array",
+      "description": "Markdown instruction sections, written to CLAUDE.md / AGENTS.md / GEMINI.md / .cursor/rules depending on target.",
+      "items": { "$ref": "#/$defs/instruction" }
+    },
+    "skills": {
+      "type": "array",
+      "description": "SKILL.md folders (Agent Skills format). Claude Code reads ~/.claude/skills, Codex reads ~/.agents/skills; the adapter writes to each.",
+      "items": { "$ref": "#/$defs/skill" }
+    },
+    "agents": {
+      "type": "array",
+      "description": "Subagents. Claude Code uses Markdown+frontmatter; Codex uses TOML. Portable definition in the rig is Markdown; adapters convert or skip with a note.",
+      "items": { "$ref": "#/$defs/agent" }
+    },
+    "commands": {
+      "type": "array",
+      "description": "Slash commands / reusable prompts. Codex has deprecated custom prompts, so the Codex adapter maps commands to skills.",
+      "items": { "$ref": "#/$defs/command" }
+    },
+    "mcp_servers": {
+      "type": "object",
+      "description": "MCP servers keyed by name. Executable servers must be version-pinned (validator rule, docs/merge-semantics.md).",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/mcpServer" }
+    },
+    "hooks": {
+      "type": "array",
+      "description": "Lifecycle hooks. Prefer builtin: hooks (native binary, identical on every OS).",
+      "items": { "$ref": "#/$defs/hook" }
+    },
+    "permissions": { "$ref": "#/$defs/permissions" },
+    "tools": { "$ref": "#/$defs/tools" },
+    "secrets": {
+      "type": "object",
+      "description": "Declarations only, never values. Key = secret ref path without the secret:// scheme.",
+      "propertyNames": { "$ref": "#/$defs/secretPath" },
+      "additionalProperties": { "$ref": "#/$defs/secretDecl" }
+    },
+    "logins": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/login" }
+    },
+    "models": {
+      "type": "object",
+      "description": "Local LLMs (RIGFILE_PLAN.md §9.5).",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/model" }
+    },
+    "gateways": {
+      "type": "object",
+      "description": "Local protocol bridges, e.g. to expose an OpenAI-style server to a client that needs a different API.",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/gateway" }
+    },
+    "routing": { "$ref": "#/$defs/routing" },
+    "overrides": {
+      "type": "object",
+      "description": "Per-target replacements/additions. Keys are target names.",
+      "propertyNames": { "$ref": "#/$defs/target" },
+      "additionalProperties": { "$ref": "#/$defs/overrideBlock" }
+    },
+    "private": {
+      "type": "array",
+      "description": "Paths that are never published and only synced between the owner's own machines.",
+      "items": { "$ref": "#/$defs/rigPath" }
+    }
+  },
+
+  "$defs": {
+
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+
+    "rigName": {
+      "type": "string",
+      "description": "owner/name, lowercase (RIGFILE_PLAN.md §10.3).",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38})/[a-z0-9](?:[a-z0-9._-]{0,62})$"
+    },
+
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+
+    "rigRef": {
+      "type": "string",
+      "description": "owner/name with an optional version or range: jiaxu/python-dev@^2, rigfile/base-secure@1.0.0",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38})/[a-z0-9](?:[a-z0-9._-]{0,62})(?:@(?:[\\^~]?(?:0|[1-9][0-9]*)(?:\\.(?:0|[1-9][0-9]*)){0,2}(?:-[0-9A-Za-z.-]+)?))?$"
+    },
+
+    "os": {
+      "type": "array",
+      "description": "Restrict an item to these operating systems. Omitted = all. `wsl` is a detected sub-case of `linux` and is not a separate value (RIGFILE_PLAN.md §4).",
+      "items": { "enum": ["macos", "linux", "windows"] },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+
+    "target": {
+      "enum": ["claude-code", "codex", "cursor", "gemini-cli", "claude-desktop", "windsurf"]
+    },
+
+    "targetList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/target" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+
+    "plainText": {
+      "type": "string",
+      "description": "Free text that must not look like a secret. This is a cheap floor, not the scanner: the real check is the `scan` module (RIGFILE_PLAN.md §5.2, §8.1b).",
+      "not": { "$ref": "#/$defs/secretLooking" }
+    },
+
+    "secretLooking": {
+      "$comment": "Known secret shapes (RIGFILE_PLAN.md §8.1b). Also matches obviously-fake corpus values such as sk-ant-TESTTESTTEST..., by design.",
+      "pattern": "(sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|sk_live_[A-Za-z0-9]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|://[^/\\s:@]+:[^/\\s@]+@)"
+    },
+
+    "secretRef": {
+      "type": "string",
+      "description": "Pointer resolved only at runtime on the user's machine, e.g. secret://alpaca/api_key",
+      "pattern": "^secret://[a-z0-9_-]+(?:/[a-z0-9_-]+)+$"
+    },
+
+    "secretPath": {
+      "type": "string",
+      "description": "A secret ref path without the scheme, e.g. alpaca/api_key",
+      "pattern": "^[a-z0-9_-]+(?:/[a-z0-9_-]+)+$"
+    },
+
+    "rigPath": {
+      "type": "string",
+      "description": "Path to a file INSIDE the rig, relative to the rig root. Forward slashes only; no absolute paths, drive letters, `~`, or `..`.",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^(?!/)(?!~)(?![A-Za-z]:)(?!.*\\\\)(?!(?:.*/)?\\.\\.(?:/|$)).+$"
+    },
+
+    "hostPath": {
+      "type": "string",
+      "description": "Path or glob that refers to the USER'S MACHINE (permissions, cwd). Forward slashes only. Start with ${HOME}/, ${CONFIG_DIR}/, ${APP_DATA}/, `~/`, a system absolute path such as /etc/..., or be project-relative (no prefix, `./`, or `**/`). Hard-coded user homes (/Users/..., /home/..., C:\\...) are rejected. The platform layer expands per OS; per-tool syntax is applied by adapters (docs/platforms.md §4).",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^(?!/Users/)(?!/home/)(?![A-Za-z]:)(?!.*\\\\).+$"
+    },
+
+    "hostPattern": {
+      "type": "string",
+      "description": "Hostname, optionally with a leading wildcard label and optional port: api.example.com, *.example.com, data.example.com:443",
+      "pattern": "^(?:\\*\\.)?[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?(?::[0-9]{1,5})?$"
+    },
+
+    "itemMeta": {
+      "$comment": "Properties common to items that can be restricted. Repeated per item via allOf because JSON Schema cannot share a property set without unevaluatedProperties.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "os": { "$ref": "#/$defs/os" },
+        "targets": { "$ref": "#/$defs/targetList" }
+      }
+    },
+
+    "instruction": {
+      "type": "object",
+      "required": ["id", "file"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "file": { "$ref": "#/$defs/rigPath" },
+        "scope": { "enum": ["user", "project"], "default": "user" },
+        "merge": {
+          "enum": ["section"],
+          "default": "section",
+          "description": "Inserted as a marked section; never replaces user content. Other strategies (e.g. a Rigfile-owned file imported via @) are an open design question, see docs/targets/claude-code.md §3."
+        },
+        "os": { "$ref": "#/$defs/os" },
+        "targets": { "$ref": "#/$defs/targetList" }
+      }
+    },
+
+    "skill": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["path"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/identifier" },
+            "path": { "$ref": "#/$defs/rigPath" },
+            "os": { "$ref": "#/$defs/os" },
+            "targets": { "$ref": "#/$defs/targetList" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["ref"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/identifier" },
+            "ref": {
+              "type": "string",
+              "description": "External skill, e.g. skills.sh/anthropics/pdf@1.0.3. Must be pinned to publish publicly (validator rule).",
+              "pattern": "^[a-z0-9.-]+/[A-Za-z0-9._/-]+(?:@[0-9A-Za-z.+-]+)?$"
+            },
+            "os": { "$ref": "#/$defs/os" },
+            "targets": { "$ref": "#/$defs/targetList" }
+          }
+        }
+      ]
+    },
+
+    "agent": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "path": { "$ref": "#/$defs/rigPath" },
+        "os": { "$ref": "#/$defs/os" },
+        "targets": { "$ref": "#/$defs/targetList" }
+      }
+    },
+
+    "command": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "path": { "$ref": "#/$defs/rigPath" },
+        "os": { "$ref": "#/$defs/os" },
+        "targets": { "$ref": "#/$defs/targetList" }
+      }
+    },
+
+    "envName": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+    },
+
+    "envMap": {
+      "type": "object",
+      "description": "Environment for a server process. Values are literals or secret refs. Variables whose NAME looks credential-like MUST be secret refs.",
+      "propertyNames": { "$ref": "#/$defs/envName" },
+      "patternProperties": {
+        "(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|AUTH|APIKEY|key|token|secret|password|passwd|credentials?|auth|apikey)(?:_|$)": {
+          "$ref": "#/$defs/secretRef"
+        }
+      },
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "#/$defs/secretRef" },
+          { "$ref": "#/$defs/plainText", "maxLength": 1024 }
+        ]
+      }
+    },
+
+    "network": {
+      "type": "object",
+      "description": "Declared egress. Enforced from Stage 7 (RIGFILE_PLAN.md §7.2).",
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/hostPattern" },
+          "uniqueItems": true
+        }
+      }
+    },
+
+    "mcpServer": {
+      "oneOf": [
+        {
+          "title": "stdio server",
+          "type": "object",
+          "required": ["command"],
+          "additionalProperties": false,
+          "properties": {
+            "transport": { "const": "stdio", "default": "stdio" },
+            "command": { "$ref": "#/$defs/plainText", "minLength": 1, "maxLength": 240 },
+            "args": {
+              "type": "array",
+              "description": "The package version MUST be pinned inside args (e.g. pkg@1.4.2). The schema cannot verify this; the validator does.",
+              "items": { "$ref": "#/$defs/plainText", "maxLength": 1024 }
+            },
+            "env": { "$ref": "#/$defs/envMap" },
+            "cwd": { "$ref": "#/$defs/hostPath" },
+            "network": { "$ref": "#/$defs/network" },
+            "os": { "$ref": "#/$defs/os" },
+            "targets": { "$ref": "#/$defs/targetList" }
+          }
+        },
+        {
+          "title": "remote (streamable HTTP) server",
+          "type": "object",
+          "required": ["transport", "url"],
+          "additionalProperties": false,
+          "properties": {
+            "transport": { "const": "http" },
+            "url": {
+              "type": "string",
+              "description": "Remote MCP servers must use HTTPS (RIGFILE_PLAN.md §8.3). No credentials in the URL.",
+              "pattern": "^https://[^\\s/@]+(?:/[^\\s]*)?$",
+              "not": { "$ref": "#/$defs/secretLooking" }
+            },
+            "auth": {
+              "enum": ["oauth", "bearer", "none"],
+              "default": "none",
+              "description": "`oauth` triggers the guided login (RIGFILE_PLAN.md §7.4). `bearer` is PROPOSED (not in the plan's §6.1): requires `bearer_token`. Codex maps it to bearer_token_env_var / http_headers_helper; Claude Code to a header."
+            },
+            "bearer_token": { "$ref": "#/$defs/secretRef" },
+            "headers": {
+              "type": "object",
+              "description": "Static headers. Credential-like header names must be secret refs.",
+              "propertyNames": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$" },
+              "patternProperties": {
+                "^(?:[Aa]uthorization|[Pp]roxy-[Aa]uthorization|[Xx]-.*(?:[Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]).*|.*(?:[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]).*)$": {
+                  "$ref": "#/$defs/secretRef"
+                }
+              },
+              "additionalProperties": { "$ref": "#/$defs/plainText", "maxLength": 1024 }
+            },
+            "network": { "$ref": "#/$defs/network" },
+            "os": { "$ref": "#/$defs/os" },
+            "targets": { "$ref": "#/$defs/targetList" }
+          },
+          "if": { "properties": { "auth": { "const": "bearer" } }, "required": ["auth"] },
+          "then": { "required": ["bearer_token"] },
+          "else": { "not": { "required": ["bearer_token"] } }
+        }
+      ]
+    },
+
+    "hookEvent": {
+      "description": "Canonical event names. Mapping to native names and per-target support: docs/targets/*.md. Events a target lacks are skipped with a visible note.",
+      "enum": [
+        "pre_tool_use",
+        "post_tool_use",
+        "permission_request",
+        "user_prompt_submit",
+        "session_start",
+        "session_end",
+        "stop",
+        "subagent_start",
+        "subagent_stop",
+        "pre_compact",
+        "post_compact",
+        "notification"
+      ]
+    },
+
+    "hookRunOne": {
+      "description": "Either a built-in (code inside the rigfile binary, identical on every OS) or a path to a script inside the rig.",
+      "anyOf": [
+        { "type": "string", "pattern": "^builtin:[a-z0-9][a-z0-9-]{0,63}$" },
+        { "$ref": "#/$defs/rigPath" }
+      ]
+    },
+
+    "hook": {
+      "type": "object",
+      "required": ["id", "event", "run"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "event": { "$ref": "#/$defs/hookEvent" },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tool": {
+              "type": "string",
+              "description": "Canonical tool name: bash, powershell, read, edit, write, glob, grep, web_fetch, web_search, agent, mcp, mcp:<server>, mcp:<server>:<tool>, or *.",
+              "pattern": "^(?:\\*|bash|powershell|read|edit|write|glob|grep|web_fetch|web_search|agent|mcp(?::[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?)?)$"
+            },
+            "command": { "$ref": "#/$defs/plainText", "description": "Glob against the shell command, e.g. 'git commit*'.", "maxLength": 240 },
+            "path": { "$ref": "#/$defs/hostPath" }
+          }
+        },
+        "run": {
+          "oneOf": [
+            { "$ref": "#/$defs/hookRunOne" },
+            {
+              "type": "object",
+              "description": "Per-OS script. A missing OS means the hook is skipped on that OS and flagged on the plan screen.",
+              "minProperties": 1,
+              "propertyNames": { "enum": ["macos", "linux", "windows"] },
+              "additionalProperties": { "$ref": "#/$defs/hookRunOne" }
+            }
+          ]
+        },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "os": { "$ref": "#/$defs/os" },
+        "targets": { "$ref": "#/$defs/targetList" }
+      }
+    },
+
+    "permissionRule": {
+      "type": "object",
+      "description": "Exactly one of read / edit / bash / web_fetch / mcp, plus optional reason/os/targets.",
+      "additionalProperties": false,
+      "properties": {
+        "read": { "$ref": "#/$defs/hostPath" },
+        "edit": { "$ref": "#/$defs/hostPath" },
+        "bash": {
+          "$ref": "#/$defs/plainText",
+          "description": "Command prefix/glob, e.g. 'git push*'. Argument-constraining patterns are fragile in Claude Code (see docs/targets/claude-code.md §8).",
+          "maxLength": 240
+        },
+        "web_fetch": {
+          "type": "string",
+          "description": "Domain, e.g. example.com",
+          "pattern": "^[a-z0-9.-]+$"
+        },
+        "mcp": {
+          "type": "string",
+          "description": "server or server:tool",
+          "pattern": "^[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?$"
+        },
+        "reason": { "$ref": "#/$defs/plainText", "maxLength": 240 },
+        "os": { "$ref": "#/$defs/os" },
+        "targets": { "$ref": "#/$defs/targetList" }
+      },
+      "oneOf": [
+        { "required": ["read"] },
+        { "required": ["edit"] },
+        { "required": ["bash"] },
+        { "required": ["web_fetch"] },
+        { "required": ["mcp"] }
+      ]
+    },
+
+    "permissions": {
+      "type": "object",
+      "description": "Canonical allow/ask/deny. Deny always wins across layers and cannot be removed by a later layer (docs/merge-semantics.md). Adapters translate to each tool's native syntax; note that Codex `allow` runs commands outside its sandbox.",
+      "additionalProperties": false,
+      "properties": {
+        "deny": { "type": "array", "items": { "$ref": "#/$defs/permissionRule" } },
+        "ask": { "type": "array", "items": { "$ref": "#/$defs/permissionRule" } },
+        "allow": { "type": "array", "items": { "$ref": "#/$defs/permissionRule" } }
+      }
+    },
+
+    "packageRef": {
+      "type": "string",
+      "description": "Package name with optional version pin (name or name@version). Includes scoped npm names.",
+      "pattern": "^@?[A-Za-z0-9][A-Za-z0-9._+/~-]*(?:@[A-Za-z0-9._+~^<>=*-]+)?$"
+    },
+
+    "packageList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/packageRef" },
+      "uniqueItems": true
+    },
+
+    "tools": {
+      "type": "object",
+      "description": "Host tools to install. `common` uses logical names resolved via catalog/tools.yaml. The per-OS blocks are the escape hatch when the catalog has no mapping.",
+      "additionalProperties": false,
+      "properties": {
+        "common": { "$ref": "#/$defs/packageList" },
+        "npm": { "$ref": "#/$defs/packageList" },
+        "pipx": { "$ref": "#/$defs/packageList" },
+        "uv": { "$ref": "#/$defs/packageList" },
+        "cargo": { "$ref": "#/$defs/packageList" },
+        "go": { "$ref": "#/$defs/packageList" },
+        "macos": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "brew": { "$ref": "#/$defs/packageList" },
+            "cask": { "$ref": "#/$defs/packageList" }
+          }
+        },
+        "linux": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apt": { "$ref": "#/$defs/packageList" },
+            "dnf": { "$ref": "#/$defs/packageList" },
+            "pacman": { "$ref": "#/$defs/packageList" },
+            "zypper": { "$ref": "#/$defs/packageList" },
+            "brew": { "$ref": "#/$defs/packageList" }
+          }
+        },
+        "windows": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "winget": { "$ref": "#/$defs/packageList" },
+            "scoop": { "$ref": "#/$defs/packageList" },
+            "choco": { "$ref": "#/$defs/packageList" }
+          }
+        }
+      }
+    },
+
+    "secretDecl": {
+      "type": "object",
+      "required": ["description"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "$ref": "#/$defs/plainText", "maxLength": 240 },
+        "obtain_url": {
+          "type": "string",
+          "description": "Where the user creates/rotates this secret.",
+          "pattern": "^https://[^\\s@]+$"
+        },
+        "hosts": {
+          "type": "array",
+          "description": "Owner host binding (RIGFILE_PLAN.md §7.3 rule 3, §7.2 Level 2): the only destinations this secret may be sent to. PROPOSED as a manifest field; the plan says the binding is 'declared in the manifest' but §6.1 shows no field for it.",
+          "items": { "$ref": "#/$defs/hostPattern" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "optional": { "type": "boolean", "default": false }
+      }
+    },
+
+    "login": {
+      "type": "object",
+      "required": ["provider"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "$ref": "#/$defs/identifier" },
+        "reason": { "$ref": "#/$defs/plainText", "maxLength": 240 },
+        "method": { "enum": ["oauth", "vendor-cli", "api-key"], "description": "Defaults are provider-specific; `vendor-cli` runs the vendor's own login command (RIGFILE_PLAN.md §7.4)." },
+        "os": { "$ref": "#/$defs/os" }
+      }
+    },
+
+    "modelApi": {
+      "description": "Wire protocol a server speaks or a gateway exposes. `openai` is the plan's name and is an alias of `openai-chat`. Research showed the distinction matters: Codex custom providers accept only the Responses API (docs/targets/codex.md §9), Claude Code needs Anthropic Messages (docs/targets/claude-code.md §9), and mlx_lm.server speaks only OpenAI chat completions.",
+      "enum": ["openai", "openai-chat", "openai-responses", "anthropic-messages"]
+    },
+
+    "loopbackHost": {
+      "description": "Model servers and gateways bind to loopback only (RIGFILE_PLAN.md §9.5 security rules).",
+      "enum": ["127.0.0.1", "::1", "localhost"]
+    },
+
+    "modelWhen": {
+      "type": "object",
+      "description": "Hardware/OS selector. All present keys must match; `{}` matches anything.",
+      "additionalProperties": false,
+      "properties": {
+        "os": { "enum": ["macos", "linux", "windows"] },
+        "arch": { "enum": ["arm64", "amd64"] },
+        "gpu": { "enum": ["nvidia", "amd", "apple", "none"] },
+        "min_memory_gb": { "type": "number", "minimum": 1 },
+        "min_vram_gb": { "type": "number", "minimum": 1 },
+        "min_free_disk_gb": { "type": "number", "minimum": 1 }
+      }
+    },
+
+    "modelVariant": {
+      "type": "object",
+      "required": ["when", "engine", "model"],
+      "additionalProperties": false,
+      "properties": {
+        "when": { "$ref": "#/$defs/modelWhen" },
+        "engine": { "enum": ["mlx-lm", "ollama", "llama.cpp", "vllm"] },
+        "engine_version": {
+          "type": "string",
+          "description": "Pinned engine version. The validator requires it for public rigs.",
+          "pattern": "^[0-9A-Za-z.+-]+$"
+        },
+        "model": {
+          "type": "string",
+          "description": "Hugging Face repo id (org/name) or an Ollama tag (name:tag). Publisher org is shown on the plan screen (typosquat defense).",
+          "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*|[a-z0-9][a-z0-9._-]*:[A-Za-z0-9._-]+)$"
+        },
+        "revision": {
+          "type": "string",
+          "description": "Source revision: 40-hex commit SHA for Hugging Face repos. Downloads are pinned and hash-verified. The validator requires it for HF-hosted models on public rigs.",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "weights_format": {
+          "enum": ["safetensors", "gguf", "mlx-safetensors"],
+          "description": "Only safe formats are allowed (RIGFILE_PLAN.md §9.5). Pickle-based formats and trust_remote_code are deliberately not expressible in a rig; opting in is a local, per-model user decision."
+        },
+        "args": {
+          "type": "object",
+          "description": "Engine flags without the leading `--`, e.g. prompt-cache-size. Host, port and model are structured elsewhere and may not appear here.",
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "not": { "enum": ["host", "port", "model", "trust-remote-code", "adapter-path"] }
+          },
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
+          }
+        }
+      }
+    },
+
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["role"] },
+        { "required": ["variants"] }
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "Logical role resolved via catalog/models.yaml for this machine, e.g. local-coder. Explicit `variants` (if present) take precedence.",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "purpose": {
+          "type": "array",
+          "description": "What the rig uses this model for, e.g. summaries, commit-messages, simple-subagents, fallback.",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+          "uniqueItems": true
+        },
+        "serve": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "host": { "$ref": "#/$defs/loopbackHost", "default": "127.0.0.1" },
+            "port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+            "api": { "$ref": "#/$defs/modelApi" },
+            "autostart": {
+              "type": "boolean",
+              "default": false,
+              "description": "Run as a per-user service (launchd / systemd --user / Windows task). Requires the user's explicit approval on the plan screen."
+            }
+          }
+        },
+        "variants": {
+          "type": "array",
+          "description": "First match for this machine wins; the user can override on the plan screen.",
+          "items": { "$ref": "#/$defs/modelVariant" },
+          "minItems": 1
+        },
+        "license_ack": {
+          "type": "string",
+          "description": "SPDX id shown on the plan screen. Weights are downloaded from the source and never re-hosted.",
+          "pattern": "^[A-Za-z0-9.+-]+$"
+        }
+      }
+    },
+
+    "gateway": {
+      "type": "object",
+      "required": ["listen", "routes"],
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "enum": ["litellm"],
+          "default": "litellm",
+          "description": "Only litellm is named in the plan. NOTE: Anthropic states it does not support routing Claude Code to non-Claude models through any gateway (docs/targets/claude-code.md §9); rigs using this for Claude Code are experimental."
+        },
+        "expose": {
+          "$ref": "#/$defs/modelApi",
+          "description": "PROPOSED: the API this gateway presents to clients (e.g. anthropic-messages for Claude Code, openai-responses for Codex). Not in the plan's §9.5 example."
+        },
+        "listen": {
+          "type": "string",
+          "pattern": "^(?:127\\.0\\.0\\.1|localhost|\\[::1\\]):(?:[1-9][0-9]{3,4})$"
+        },
+        "routes": {
+          "type": "object",
+          "description": "model name -> loopback upstream URL",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^http://(?:127\\.0\\.0\\.1|localhost|\\[::1\\])(?::[0-9]{2,5})?(?:/[^\\s]*)?$"
+          }
+        }
+      }
+    },
+
+    "routing": {
+      "type": "object",
+      "description": "Translated per target where the tool supports it. Cross-references (fallback_on_limit must name a key of `models`) are checked by the validator.",
+      "additionalProperties": false,
+      "properties": {
+        "default": { "enum": ["cloud", "local"], "default": "cloud" },
+        "local_for": {
+          "type": "array",
+          "description": "Task classes routed to the local model: commit-messages, summaries, subagent:<name>, ...",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(?::[A-Za-z0-9_-]+)?$" },
+          "uniqueItems": true
+        },
+        "fallback_on_limit": { "$ref": "#/$defs/identifier" }
+      }
+    },
+
+    "overrideBlock": {
+      "type": "object",
+      "description": "Per-target additions/replacements. Same content categories as the root, without identity fields. Layer/override precedence: docs/merge-semantics.md.",
+      "additionalProperties": false,
+      "properties": {
+        "instructions": { "type": "array", "items": { "$ref": "#/$defs/instruction" } },
+        "skills": { "type": "array", "items": { "$ref": "#/$defs/skill" } },
+        "agents": { "type": "array", "items": { "$ref": "#/$defs/agent" } },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/command" } },
+        "mcp_servers": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/mcpServer" }
+        },
+        "hooks": { "type": "array", "items": { "$ref": "#/$defs/hook" } },
+        "permissions": { "$ref": "#/$defs/permissions" }
+      }
+    }
+  }
+}

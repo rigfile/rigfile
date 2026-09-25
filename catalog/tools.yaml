@@ -1,0 +1,175 @@
+# Rigfile tool catalog — DRAFT (Stage 0)
+# Maps a logical tool name (as used in `tools.common:` of a rigfile) to per-OS packages.
+# Spec: RIGFILE_PLAN.md §9.4 ("Tool catalog"). Format below is a proposal for review.
+#
+# Every mapping carries:
+#   status: verified   — the package/ID was confirmed to exist in the named public index on `checked`
+#   status: unverified — carried from general knowledge or the plan; test before relying on it
+# `observed` versions are informational snapshots, NOT pins and NOT normative: they go stale.
+# Nothing here is signed yet (signing arrives with Stage 6).
+#
+# Policy notes for the installer (Stage 1):
+#   * No implicit sudo/UAC (plan §9.4). Entries that need root are marked `needs_admin: true`.
+#   * Adding a third-party package repository is a separate, explicit, plan-screen item (`repo_setup`).
+#   * `pipe_to_shell` entries are last resorts, never auto-selected (plan §8.2 asks before `curl | sh`).
+apiVersion: rigfile.dev/catalog/v1
+kind: tools
+checked: 2026-09-25
+sources:
+  brew: https://formulae.brew.sh/api/formula/<name>.json
+  scoop: https://github.com/ScoopInstaller/Main/tree/master/bucket
+  winget: https://github.com/microsoft/winget-pkgs/tree/master/manifests
+  arch: https://archlinux.org/packages/
+  fedora: https://packages.fedoraproject.org/
+  debian: https://sources.debian.org/
+  ubuntu: https://launchpad.net/ubuntu/+source/<name>
+  pypi: https://pypi.org/pypi/<name>/json
+
+tools:
+
+  # ------------------------------------------------------------------ gh
+  gh:
+    description: GitHub command-line client
+    homepage: https://cli.github.com
+    license: MIT
+    detect: { command: gh, args: [--version] }
+    observed: { brew: "2.101.0", arch: "2.101.0", ubuntu-resolute: "2.46.0-4", debian-bookworm: "2.23.0+dfsg1-1" }
+    install:
+      macos:
+        - { manager: brew, package: gh, status: verified }
+      linux:
+        - { manager: apt, package: gh, status: verified,
+            notes: "Distro package exists but lags far behind (Ubuntu 2.46.0, Debian bookworm 2.23.0 vs 2.101.0 upstream). GitHub documents an official apt repository." }
+        - { manager: apt, package: gh, status: verified, repo_setup: gh-official-apt, needs_admin: true,
+            notes: "Requires adding cli.github.com apt repo + keyring; see repo_setups.gh-official-apt." }
+        - { manager: dnf, package: gh, status: verified }
+        - { manager: pacman, package: github-cli, status: verified }
+      windows:
+        - { manager: winget, package: GitHub.cli, status: verified }
+        - { manager: scoop, package: gh, status: verified }
+    logins: [{ provider: github, method: vendor-cli, command: [gh, auth, login] }]   # status: unverified command
+
+  # ------------------------------------------------------------------ uv
+  uv:
+    description: Fast Python package and project manager (Astral)
+    homepage: https://docs.astral.sh/uv/
+    license: "Apache-2.0 OR MIT"
+    detect: { command: uv, args: [--version] }
+    observed: { brew: "0.12.19", arch: "0.12.19", pypi: "0.12.19", ubuntu-dev-series-only: "0.9.17+ds1-6" }
+    install:
+      macos:
+        - { manager: brew, package: uv, status: verified }
+      linux:
+        # Not in current Ubuntu series except the development series; Debian has it only in sid/forky.
+        - { manager: dnf, package: uv, status: verified }
+        - { manager: pacman, package: uv, status: verified }
+        - { manager: pipx, package: uv, status: verified,
+            notes: "Cross-distro fallback (PyPI package `uv` exists). Needs pipx itself." }
+        - { manager: apt, package: uv, status: unverified,
+            notes: "Only found in Debian sid/forky and Ubuntu's development series on 2026-09-25; do not rely on it for LTS/stable." }
+      windows:
+        - { manager: winget, package: astral-sh.uv, status: verified }
+        - { manager: scoop, package: uv, status: verified }
+        - { manager: pipx, package: uv, status: verified }
+    notes: "Astral also ships a curl|sh installer; deliberately not listed (pipe_to_shell policy)."
+
+  # ------------------------------------------------------------------ jq
+  jq:
+    description: Command-line JSON processor
+    homepage: https://jqlang.github.io/jq/
+    license: MIT
+    detect: { command: jq, args: [--version] }
+    observed: { brew: "1.8.2", arch: "1.8.2" }
+    install:
+      macos:
+        - { manager: brew, package: jq, status: verified }
+      linux:
+        - { manager: apt, package: jq, status: verified }
+        - { manager: dnf, package: jq, status: verified }
+        - { manager: pacman, package: jq, status: verified }
+      windows:
+        - { manager: winget, package: jqlang.jq, status: verified }
+        - { manager: scoop, package: jq, status: verified }
+    notes: "Claude Code hook examples in the vendor docs use jq; base-secure hooks should not depend on it (they run as `rigfile hook …`)."
+
+  # ------------------------------------------------------------------ git
+  git:
+    description: Distributed version control
+    homepage: https://git-scm.com
+    license: "GPL-2.0-only AND GPL-2.0-or-later AND LGPL-2.1-or-later AND BSD-3-Clause AND MIT"   # as listed by Homebrew
+    detect: { command: git, args: [--version] }
+    observed: { brew: "2.55.0", arch: "2.55.0" }
+    install:
+      macos:
+        - { manager: brew, package: git, status: verified,
+            notes: "Apple also provides a git via Xcode Command Line Tools (unverified here); catalog prefers detecting an existing git before installing." }
+      linux:
+        - { manager: apt, package: git, status: verified }
+        - { manager: dnf, package: git, status: verified }
+        - { manager: pacman, package: git, status: verified }
+      windows:
+        - { manager: winget, package: Git.Git, status: verified }
+        - { manager: scoop, package: git, status: verified }
+    notes: "On Windows, Git for Windows bundles the `sh` that runs git hooks (plan §8.1b, unverified) and is what Claude Code uses for its Bash tool when present. Installing it changes which shell Claude Code picks."
+
+  # ------------------------------------------------------------------ node
+  node:
+    description: Node.js runtime (also provides npm/npx, needed by most stdio MCP servers)
+    homepage: https://nodejs.org
+    license: MIT
+    detect: { command: node, args: [--version] }
+    default_channel: default          # OPEN QUESTION: current vs LTS (see notes)
+    observed: { brew-node: "26.10.0", brew-node@24: "24.21.0", brew-node@22: "22.23.3", arch: "26.10.0" }
+    install:
+      macos:
+        - { manager: brew, package: node, channel: default, status: verified,
+            notes: "Tracks the CURRENT release line (26.x on 2026-09-25), not LTS." }
+        - { manager: brew, package: "node@24", channel: lts, status: verified,
+            notes: "keg-only: not on PATH after install; needs `brew link --overwrite --force node@24` or a PATH edit. Whether 24.x is the active LTS line was not verified." }
+      linux:
+        - { manager: apt, package: nodejs, channel: default, status: verified,
+            notes: "Exists in Debian/Ubuntu; distro-pinned older major. Does not necessarily include npm (separate `npm` package on Debian/Ubuntu; unverified)." }
+        - { manager: pacman, package: nodejs, channel: default, status: verified }
+        - { manager: dnf, package: nodejs, channel: default, status: unverified,
+            notes: "packages.fedoraproject.org had no page for source package `nodejs` on 2026-09-25 (Fedora uses versioned source names); confirm the binary package name on a Fedora VM." }
+      windows:
+        - { manager: winget, package: OpenJS.NodeJS, channel: default, status: verified }
+        - { manager: winget, package: OpenJS.NodeJS.LTS, channel: lts, status: verified }
+        - { manager: scoop, package: nodejs, channel: default, status: verified }
+        - { manager: scoop, package: nodejs-lts, channel: lts, status: verified }
+    notes: |
+      Channel policy is undecided. Node's "current" line is not LTS; an MCP server pinned to a package
+      may require a supported LTS. Recommend `lts` as the default channel (needs sign-off), which means
+      brew's keg-only formula needs PATH handling in the installer.
+
+  # ------------------------------------------------------------------ gitleaks
+  gitleaks:
+    description: Secret scanner for git repos and files (used by base-secure, plan §8.1b)
+    homepage: https://gitleaks.io/
+    license: MIT
+    detect: { command: gitleaks, args: [version] }           # `version` subcommand confirmed in cmd/version.go
+    observed: { brew: "8.30.1", arch: "8.30.1", scoop: "8.30.1", ubuntu-questing: "8.16.0-1build1", ubuntu-stonking: "8.26.0-1" }
+    install:
+      macos:
+        - { manager: brew, package: gitleaks, status: verified }
+      linux:
+        - { manager: dnf, package: gitleaks, status: verified }
+        - { manager: pacman, package: gitleaks, status: verified }
+        - { manager: apt, package: gitleaks, status: verified,
+            notes: "Distro versions lag (8.16.0–8.26.0 vs 8.30.1). Old rule sets miss newer key formats; base-secure should require a minimum version, or embed the ruleset (plan §13 'embed gitleaks')." }
+      windows:
+        - { manager: winget, package: Gitleaks.Gitleaks, status: verified }
+        - { manager: scoop, package: gitleaks, status: verified }
+    alternatives:
+      - { manager: go, package: "github.com/gitleaks/gitleaks/v8", status: unverified, notes: "Needs a Go toolchain." }
+      - { manager: docker, package: "zricethezav/gitleaks", status: verified, notes: "Documented in the gitleaks README; unsuitable for git hooks (startup cost)." }
+    notes: "Plan §13 recommends embedding the ruleset rather than shelling out; this entry exists for `rigfile doctor` and for users who want the standalone binary."
+
+# Third-party repository setups referenced above. Each is an explicit, separately approved plan item.
+repo_setups:
+  gh-official-apt:
+    description: "GitHub CLI official apt repository"
+    needs_admin: true
+    source: https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+    steps_summary: "download keyring from cli.github.com/packages/githubcli-archive-keyring.gpg to /etc/apt/keyrings, add a sources.list.d entry, apt update, apt install gh"
+    status: verified   # keyring URL and location confirmed in the upstream install doc on 2026-09-25; exact steps must be copied from the doc at implementation time, not from this summary

@@ -1,0 +1,119 @@
+# Rigfile model catalog — DRAFT (Stage 0)
+# Maps a logical role (`role: local-coder` in a rigfile `models:` entry) to a recommended model per
+# hardware tier and engine. Spec: RIGFILE_PLAN.md §9.5 ("Catalog").
+#
+# status: verified   — confirmed against a public source on `checked`
+# status: unverified — from the plan/general knowledge; needs a test
+# status: stub       — placeholder for a variant the plan mentions but that was NOT researched;
+#                      MUST NOT be applied. Fields marked TODO-verify are intentionally not filled in.
+#
+# Weights are downloaded from the source and never re-hosted. Pins (`revision`) are the commit SHA
+# observed on `checked` and must be re-verified when the catalog is refreshed.
+apiVersion: rigfile.dev/catalog/v1
+kind: models
+checked: 2026-09-25
+
+roles:
+
+  local-coder:
+    description: "Small local model for cheap/high-volume work: summaries, commit messages, simple subagents, fallback. NOT a replacement for a frontier model at multi-step coding or tool use (RIGFILE_PLAN.md §9.5 'Honest expectations')."
+    purpose: [summaries, commit-messages, simple-subagents, fallback]
+    variants:
+
+      # ---------------------------------------------------------------------------
+      # Entry 1: the owner's own setup (from the Stage 0 prompt, not from any config folder).
+      # ---------------------------------------------------------------------------
+      - id: apple-silicon-16gb-mlx-qwen3-8b-4bit
+        status: verified
+        when: { os: macos, arch: arm64, min_memory_gb: 16 }
+        engine: mlx-lm
+        engine_version: "0.31.3"            # PyPI `mlx-lm` latest on 2026-09-25 (pin; re-verify)
+        model: mlx-community/Qwen3-8B-4bit
+        revision: 545dc4251c05440727734bcd94334791f6ab0192   # HF commit SHA observed 2026-09-25 (lastModified 2025-04-28)
+        weights_format: mlx-safetensors      # repo ships model.safetensors (+ index) and tokenizer files; no pickle files listed
+        publisher: mlx-community
+        license: apache-2.0                  # HF cardData.license
+        download:
+          bytes: 4607835174                  # model.safetensors (LFS) size; whole repo ≈ 4.62 GB
+          note: "Plan said ≈4.5 GB; measured 4.61 GB for the weights file."
+        source_checks:
+          - https://huggingface.co/api/models/mlx-community/Qwen3-8B-4bit
+          - https://huggingface.co/api/models/mlx-community/Qwen3-8B-4bit/tree/main
+          - https://pypi.org/pypi/mlx-lm/json
+        serve:
+          # Exactly as given by the owner in the Stage 0 prompt:
+          command_as_given: "mlx_lm.server --port 8080 --prompt-cache-size 1 --prompt-cache-bytes 1073741824"
+          # What a rig should actually run so the result is reproducible and loopback-only. Two flags
+          # were added; both verified against mlx_lm/server.py on main (@87b7b58, 2026-09-24):
+          #   --model <repo>   : optional in mlx_lm.server (it can load models per request via the request's
+          #                      `model` field), but without it nothing pins WHICH weights are served.
+          #   --host 127.0.0.1 : this is the server's default already; stated explicitly because base-secure
+          #                      enforces loopback and `doctor` checks the flag.
+          command_pinned:
+            exe: mlx_lm.server
+            args: ["--model", "mlx-community/Qwen3-8B-4bit", "--host", "127.0.0.1", "--port", "8080",
+                   "--prompt-cache-size", "1", "--prompt-cache-bytes", "1073741824"]
+          host: 127.0.0.1
+          port: 8080
+          api: openai-chat
+          endpoints: ["POST /v1/chat/completions", "POST /v1/completions", "GET /v1/models"]
+          no_endpoints: ["/v1/responses", "/v1/messages"]     # verified: not registered in server.py
+          flag_defaults_observed: { host: 127.0.0.1, port: 8080, prompt-cache-size: 10, max-tokens: 512 }
+          upstream_warning: "mlx_lm SERVER.md: 'not recommended for production as it only implements basic security checks'."
+          autostart: launchd        # UNVERIFIED design; per-user LaunchAgent (Stage 3b)
+        wiring:
+          codex:
+            status: needs-bridge
+            reason: "Codex custom providers accept only wire_api=responses per the configuration reference; mlx_lm.server has no /v1/responses. `--oss` supports only ollama and lmstudio. A Responses→chat-completions bridge would be needed (UNVERIFIED that one exists/works)."
+            source: docs/targets/codex.md §9
+          claude-code:
+            status: unsupported-by-vendor
+            reason: "Needs an Anthropic Messages endpoint (gateway). Anthropic does not support routing Claude Code to non-Claude models via a gateway. mlx_lm.server has no /v1/messages."
+            source: docs/targets/claude-code.md §9
+          openai-chat-clients:
+            status: unverified
+            reason: "Any tool speaking OpenAI chat completions (e.g. Aider, OpenCode, Continue) is expected to work but was not researched in Stage 0."
+        tool_calling: unverified    # plan §9.5: `doctor` must smoke-test tool calls and mark the model "chat only" on failure
+        memory_note: "~4.6 GB weights; fits 16 GB unified memory. Prompt cache is capped to 1 entry / 1 GiB by the given flags."
+
+      # ---------------------------------------------------------------------------
+      # Variants below are named in RIGFILE_PLAN.md §9.5 but were NOT researched in Stage 0.
+      # ---------------------------------------------------------------------------
+      - id: apple-silicon-32gb-mlx-larger
+        status: stub
+        when: { os: macos, arch: arm64, min_memory_gb: 32 }
+        engine: mlx-lm
+        engine_version: TODO-verify
+        model: TODO-verify              # plan: "a ~30B 4-bit coder"; no specific model chosen or checked
+        revision: TODO-verify
+
+      - id: nvidia-12gb-llamacpp-qwen3-8b-gguf
+        status: stub
+        when: { gpu: nvidia, min_vram_gb: 12 }
+        engine: llama.cpp
+        engine_version: TODO-verify
+        model: TODO-verify              # plan: "Qwen3-8B GGUF Q4_K_M or larger"; no repo/revision checked
+        revision: TODO-verify
+        weights_format: gguf
+
+      - id: fallback-ollama-qwen3-8b
+        status: verified                # tag exists on ollama.com/library/qwen3 (page lists 8b, ≈5.2 GB, Apache-2.0 mentioned)
+        when: {}                        # anything else (Intel Mac, Windows/Linux CPU, no matching GPU)
+        engine: ollama
+        engine_version: TODO-verify     # latest release seen: v0.34.4 (2026-09-23); pin when Stage 3b starts
+        model: "qwen3:8b"
+        license: Apache-2.0             # per ollama.com library page text; confirm on the model card
+        download: { approx_gb: 5.2, note: "as displayed on the Ollama library page" }
+        serve:
+          host: 127.0.0.1
+          port: 11434                   # Ollama default (per Ollama docs examples); rigs may remap
+          api: [openai-chat, openai-responses, anthropic-messages]
+          api_sources:
+            - https://docs.ollama.com/api/openai-compatibility          # documents POST /v1/responses (stateless only)
+            - https://docs.ollama.com/api/anthropic-compatibility       # documents POST /v1/messages; names Claude Code
+        wiring:
+          codex: { status: supported, how: "oss_provider = \"ollama\" / --oss (built-in provider)", source: docs/targets/codex.md §9 }
+          claude-code: { status: unsupported-by-vendor-but-documented-by-ollama, how: "ANTHROPIC_BASE_URL=http://localhost:11434", source: docs/targets/claude-code.md §9 }
+        note: "This is the only variant in this catalog with a documented path to BOTH agents."
+
+# Other roles named in the plan (fast-summarizer, embedder) are intentionally not defined yet.
