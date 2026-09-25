@@ -32,14 +32,16 @@ var version = "0.1.0-stage1"
 
 // env bundles process I/O and machine access so tests can drive run() with a temp HOME.
 type env struct {
-	in         io.Reader
-	out, err   io.Writer
-	getenv     func(string) string
-	stateDir   string                       // "" = platform default
-	mcp        claudecode.MCPClient         // nil = the real `claude` CLI
-	keyringOff bool                         // tests: force the encrypted-file secret backend
-	lookPath   func(string) (string, error) // nil = exec.LookPath
-	tools      tools.Host                   // nil = run real package managers
+	in          io.Reader
+	out, err    io.Writer
+	getenv      func(string) string
+	stateDir    string                              // "" = platform default
+	mcp         claudecode.MCPClient                // nil = the real `claude` CLI
+	keyringOff  bool                                // tests: force the encrypted-file secret backend
+	lookPath    func(string) (string, error)        // nil = exec.LookPath
+	tools       tools.Host                          // nil = run real package managers
+	interactive bool                                // tests: behave as if stdin/stdout were a terminal
+	hidden      func(prompt string) ([]byte, error) // tests: replaces the hidden-input prompt
 }
 
 func (e env) look(name string) (string, error) {

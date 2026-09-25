@@ -1,10 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -188,6 +188,9 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	if len(runTools) > 0 {
 		fmt.Fprintln(e.out, "note: `rigfile rollback` does not uninstall tools")
 	}
+	if !f.yes {
+		promptMissingSecrets(e, p)
+	}
 	return exit
 }
 
@@ -215,9 +218,29 @@ func printTools(e env, tp tools.Plan) {
 	}
 }
 
+// readLine reads up to a newline one byte at a time, so no input beyond the line is consumed (several
+// prompts can share one stdin).
+func readLine(r io.Reader) string {
+	var sb strings.Builder
+	buf := make([]byte, 1)
+	for {
+		n, err := r.Read(buf)
+		if n == 1 {
+			if buf[0] == '\n' {
+				break
+			}
+			sb.WriteByte(buf[0])
+		}
+		if err != nil {
+			break
+		}
+	}
+	return sb.String()
+}
+
 func confirm(e env, prompt string) bool {
 	fmt.Fprint(e.out, prompt)
-	line, _ := bufio.NewReader(e.in).ReadString('\n')
+	line := readLine(e.in)
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "a", "y", "yes", "apply":
 		return true
@@ -257,6 +280,9 @@ func printNeeds(e env, p *session.Prepared) {
 				how = "sign in"
 			}
 			fmt.Fprintf(e.out, "LOGIN NEEDED   %s (%s)   %s\n", n.Ref, how, n.Description)
+			if h, ok := loginHints[n.Ref]; ok {
+				fmt.Fprintf(e.out, "               %s\n", h)
+			}
 		}
 	}
 }
@@ -441,4 +467,10 @@ func cmdLock(args []string, e env) int {
 	}
 	fmt.Fprintf(e.out, "wrote %s (%d layer(s))\n", p.LockPath, len(p.Lock.Layers))
 	return 0
+}
+
+// loginHints say how to sign in with the vendor's own tool. Rigfile never handles these credentials.
+var loginHints = map[string]string{
+	"claude-code": "run `claude`, then use /login (or set up an API key / gateway)",
+	"github":      "run `gh auth login`",
 }

@@ -626,3 +626,55 @@ func TestToolInstallFailureIsReportedAndConfigStillApplies(t *testing.T) {
 		t.Fatal("config should still have been applied")
 	}
 }
+
+func TestApplyEndsWithABatchedSecretsPrompt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file backend is stubbed on Windows until Stage 3")
+	}
+	m := newMachine(t)
+	pass := filepath.Join(t.TempDir(), "pass")
+	_ = os.WriteFile(pass, []byte("correct horse battery staple\n"), 0o600)
+	m.env["RIGFILE_PASSPHRASE_FILE"] = pass
+	rig := newRig(t)
+
+	var asked []string
+	var out, errb bytes.Buffer
+	call := func(stdin string, args ...string) int {
+		out.Reset()
+		errb.Reset()
+		return run(args, env{in: strings.NewReader(stdin), out: &out, err: &errb, getenv: func(k string) string { return m.env[k] },
+			mcp: m.mcp, keyringOff: true, tools: m.tools, interactive: true,
+			hidden: func(p string) ([]byte, error) { asked = append(asked, p); return []byte("FAKE-BATCH-VALUE"), nil }})
+	}
+	// "a" approves the apply, "y" agrees to set the missing secrets
+	if code := call("a\ny\n", "apply", rig); code != 0 {
+		t.Fatalf("code %d\n%s%s", code, out.String(), errb.String())
+	}
+	if len(asked) != 1 || !strings.Contains(asked[0], "alpaca/api_key") || !strings.Contains(out.String(), "get it at https://example.test/keys") || !strings.Contains(out.String(), "stored alpaca/api_key") {
+		t.Fatalf("asked=%v\n%s", asked, out.String())
+	}
+	if strings.Contains(out.String()+errb.String(), "FAKE-BATCH-VALUE") {
+		t.Fatal("a secret value was printed")
+	}
+	if r := m.run("", "secrets", "status", "alpaca/api_key"); !strings.Contains(r.out, "alpaca/api_key: set") {
+		t.Fatalf("%+v", r)
+	}
+	// nothing missing any more: a second apply asks nothing
+	asked = nil
+	if code := call("", "apply", rig); code != 0 || len(asked) != 0 || strings.Contains(out.String(), "not set yet") {
+		t.Fatalf("code %d asked %v\n%s", code, asked, out.String())
+	}
+	// declining is fine and points at the command
+	_ = m.run("", "secrets", "rm", "alpaca/api_key")
+	if code := call("n\n", "apply", rig); code != 0 || !strings.Contains(out.String(), "skipped; set them later") || len(asked) != 0 {
+		t.Fatalf("code %d\n%s", code, out.String())
+	}
+	// non-interactive runs never prompt
+	if r := m.run("", "apply", rig, "--yes"); strings.Contains(r.out, "Set them now") {
+		t.Fatalf("%+v", r)
+	}
+	// the login hint is shown
+	if r := m.run("", "plan", rig); !strings.Contains(r.out, "use /login") {
+		t.Fatalf("%+v", r)
+	}
+}

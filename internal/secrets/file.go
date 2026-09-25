@@ -27,8 +27,8 @@ const MinPassphraseLen = 12
 // FileStore keeps all secrets in one age-encrypted (scrypt passphrase) file, for machines without a
 // keychain (headless Linux, plan §7.2). The whole file is decrypted per operation; it is small.
 //
-// Known spike limitation: no cross-process lock, so two concurrent `rigfile secrets set` runs are
-// last-writer-wins. Stage 1 proper adds an advisory lock.
+// Writers (Set, Delete) hold an advisory lock (<path>.lock) across their read-modify-write, so
+// concurrent `rigfile secrets set` runs cannot lose each other's updates (unix; Windows in Stage 3).
 type FileStore struct {
 	Path       string
 	Passphrase func() (string, error) // asked on every operation; never cached in the struct
@@ -109,6 +109,11 @@ func (f *FileStore) Set(ref string, value []byte) error {
 	if err := ValidateRef(ref); err != nil {
 		return err
 	}
+	unlock, err := lockFile(f.Path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	m, err := f.load()
 	if err != nil {
 		return err
@@ -138,6 +143,11 @@ func (f *FileStore) Delete(ref string) error {
 	if err := ValidateRef(ref); err != nil {
 		return err
 	}
+	unlock, err := lockFile(f.Path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	m, err := f.load()
 	if err != nil {
 		return err

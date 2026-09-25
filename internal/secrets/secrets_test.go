@@ -3,10 +3,12 @@ package secrets
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/zalando/go-keyring"
@@ -204,5 +206,36 @@ func TestOpenPrefersKeychainThenFallsBackToFile(t *testing.T) {
 
 	if _, err := Open(OpenOptions{}); err == nil || !strings.Contains(err.Error(), "no usable secret store") {
 		t.Fatalf("no backend at all must be an explicit error, got %v", err)
+	}
+}
+
+func TestConcurrentWritersDoNotLoseUpdates(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("advisory locking arrives with Windows support (Stage 3)")
+	}
+	path := filepath.Join(t.TempDir(), "secrets.age")
+	newStore := func() *FileStore {
+		return &FileStore{Path: path, WorkFactor: 10, Passphrase: func() (string, error) { return "correct horse battery staple", nil }}
+	}
+	const n = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs <- newStore().Set(fmt.Sprintf("app/key%d", i), []byte("v"))
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	refs, err := newStore().Refs()
+	if err != nil || len(refs) != n {
+		t.Fatalf("lost updates: got %d of %d refs (%v)", len(refs), n, err)
 	}
 }

@@ -283,3 +283,86 @@ func cmdExec(args []string, e env) int {
 	}
 	return code
 }
+
+// isInteractive reports whether we can prompt the user.
+func isInteractive(e env) bool {
+	if e.interactive {
+		return true
+	}
+	_, ok := isTTY(e.in)
+	return ok
+}
+
+// readHidden reads one secret value from the terminal without echo.
+func readHidden(e env, prompt string) ([]byte, error) {
+	if e.hidden != nil {
+		return e.hidden(prompt)
+	}
+	fd, ok := isTTY(e.in)
+	if !ok {
+		return nil, errors.New("not a terminal")
+	}
+	fmt.Fprint(e.err, prompt)
+	b, err := term.ReadPassword(fd)
+	fmt.Fprintln(e.err)
+	return b, err
+}
+
+// promptMissingSecrets is the batched "secrets needed" step at the end of apply: after everything else
+// succeeded, offer to set every declared secret that is still missing. Interactive only; an empty value
+// skips that secret. It never prints values.
+func promptMissingSecrets(e env, p *session.Prepared) {
+	if !isInteractive(e) {
+		return
+	}
+	var refs []state.Need
+	for _, n := range p.Needs() {
+		if n.Kind == "secret" {
+			refs = append(refs, n)
+		}
+	}
+	if len(refs) == 0 {
+		return
+	}
+	st, err := openStore(e, p.Plat)
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile: cannot check secrets:", err)
+		return
+	}
+	var missing []state.Need
+	for _, n := range refs {
+		if _, err := st.Get(n.Ref); secrets.IsNotFound(err) {
+			missing = append(missing, n)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	names := make([]string, len(missing))
+	for i, n := range missing {
+		names[i] = n.Ref
+	}
+	if !confirm(e, fmt.Sprintf("\n%d secret(s) are not set yet: %s\nSet them now? (input is hidden; leave empty to skip one)  [y]es  [n]o ", len(missing), strings.Join(names, ", "))) {
+		fmt.Fprintln(e.out, "skipped; set them later with `rigfile secrets set <ref>`")
+		return
+	}
+	for _, n := range missing {
+		if n.ObtainURL != "" {
+			fmt.Fprintf(e.out, "%s: get it at %s\n", n.Ref, n.ObtainURL)
+		}
+		v, err := readHidden(e, "Value for "+n.Ref+": ")
+		if err != nil {
+			fmt.Fprintln(e.err, "rigfile:", err)
+			return
+		}
+		if len(v) == 0 {
+			fmt.Fprintf(e.out, "skipped %s\n", n.Ref)
+			continue
+		}
+		if err := st.Set(n.Ref, v); err != nil {
+			fmt.Fprintln(e.err, "rigfile:", err)
+			return
+		}
+		fmt.Fprintf(e.out, "stored %s in the %s\n", n.Ref, st.Kind())
+	}
+}
