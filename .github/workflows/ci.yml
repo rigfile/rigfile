@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main, stage-0-spec, "stage-*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        shell: bash
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+      - run: go vet ./...
+      # The keychain is not available on CI runners; tests use the encrypted-file backend.
+      - run: go test -race -count=1 ./...
+
+  windows-build:
+    # Windows is Stage 3: CI only proves it still compiles and vets. No tests run there yet.
+    name: build (windows, cross-compiled)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: GOOS=windows GOARCH=amd64 go vet ./...
+      - run: GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/rigfile
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
