@@ -1,6 +1,6 @@
 # Rigfile status
 
-**Current stage: Stage 1 — Local CLI, Claude Code only, no network, macOS + Linux — IN PROGRESS (spike built; awaiting the owner's go/no-go)**
+**Current stage: Stage 1 — Local CLI, Claude Code only, no network, macOS + Linux — IN PROGRESS (spike passed; building the full stage)**
 **Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
 Last updated: 2026-09-25
 
@@ -18,6 +18,9 @@ Sign-off terms: the owner accepted the schema and the seven merge-semantics deci
 | 2026-09-25 | **Secret backend for Stage 1: OS keychain only** (macOS Keychain, Linux Secret Service, encrypted-file fallback for headless Linux). 1Password/Bitwarden later | plan §17 Q4 |
 | 2026-09-25 | **OS order: macOS + Linux in Stage 1, Windows in Stage 3** (platform layer built for all three from day one; Windows stubbed) | plan §17 Q8 |
 | 2026-09-25 | Merge-semantics decisions 1–7 accepted as written | `docs/merge-semantics.md` App. C |
+| 2026-09-25 | **Go confirmed** after the spike (go/no-go: go) | `docs/spike-report.md`, ADR 0001 |
+| 2026-09-25 | **User-scope MCP written via `claude mcp add-json --scope user`**, not by editing `~/.claude.json` | ADR 0002 |
+| 2026-09-25 | Owner allows a **read-only `rigfile init` capture of their real `~/.claude`** into a scratch dir to build the first sanitized fixture; nothing enters the repo before the owner reviews it | owner, 2026-09-25 |
 
 ## Still open (not blocking the Stage 1 spike)
 
@@ -29,7 +32,7 @@ Sign-off terms: the owner accepted the schema and the seven merge-semantics deci
 ## Stage 1 spike — result (branch `stage-1-spike`, not merged)
 
 Built and tested 2026-09-25: manifest validation, marker-splice editing, JSON layout-preserving edits, platform layer, Claude Code permissions adapter with backup-first writes, secrets (keychain + age fallback), exec shim, PreToolUse guard, CLI. 179 tests, race-clean, no skips on macOS. Hook ≈ 5 ms/call; release binaries 4.7–5.8 MB on darwin/arm64, linux/amd64, linux/arm64, windows/amd64. Details, findings and the not-verified list: `docs/spike-report.md`.
-**Waiting on the owner:** review the code (guide in the report §7) and confirm Go / no-go. Also open: real-Keychain and real-Linux checks, Linux/Windows latency, file-store lock.
+**Owner confirmed go.** Still open from the spike: real-Keychain and real-Linux checks, Linux/Windows latency, file-store lock.
 
 ## Stage 1 — plan of record
 

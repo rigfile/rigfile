@@ -1,6 +1,6 @@
 # ADR 0001: Implementation language for the Rigfile CLI
 
-- **Status:** **Accepted 2026-09-25** by the owner (RIGFILE_PLAN.md §17 Q3), **conditional on the Stage 1 spike in §7**: the spike's go/no-go review can still trigger the documented Python fallback.
+- **Status:** **Accepted 2026-09-25** by the owner (RIGFILE_PLAN.md §17 Q3). The Stage 1 spike (§7, `docs/spike-report.md`) passed and the owner confirmed **go** on 2026-09-25; the Python fallback is no longer in play unless a later ADR reopens it.
 - **Date:** 2026-09-25
 - **Deciders:** Jia (owner). Drafted by Claude Code.
 - **Options:** Go, Python, TypeScript
