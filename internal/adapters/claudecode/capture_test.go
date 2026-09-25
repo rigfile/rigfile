@@ -60,6 +60,7 @@ func TestCaptureEverythingAndRoundTrip(t *testing.T) {
   "wrapped": {"type": "stdio", "command": "/usr/local/bin/rigfile", "args": ["exec", "--secret", "TOKEN_X=w/token", "--env", "A=b", "--", "uvx", "w-mcp==1.0"]},
   "remote": {"type": "http", "url": "https://mcp.example.test/v1", "headers": {"Authorization": "Bearer `+fakeKey+`", "X-Team": "core"}},
   "leaky": {"type": "stdio", "command": "npx", "args": ["--token=`+fakeKey+`"]},
+  "local": {"type": "stdio", "command": "uvx", "args": ["tool", "--config", "`+home+`/proj/cfg.yaml"]},
   "old": {"type": "sse", "url": "https://x.test/sse"},
   "http": {"type": "http", "url": "http://insecure.test"}
 }}`)
@@ -147,7 +148,7 @@ func TestCaptureEverythingAndRoundTrip(t *testing.T) {
 	if r.Auth != "bearer" || r.BearerToken != "secret://remote/bearer_token" || r.Headers["X-Team"] != "core" {
 		t.Fatalf("%+v", r)
 	}
-	if len(findings(c, "skipped", "mcp")) != 3 { // leaky, old(sse), http(insecure)
+	if len(findings(c, "skipped", "mcp")) != 4 { // leaky, local(home path), old(sse), http(insecure)
 		t.Fatalf("%v", findings(c, "skipped", "mcp"))
 	}
 

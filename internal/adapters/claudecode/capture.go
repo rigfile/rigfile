@@ -684,6 +684,17 @@ func (c *capturer) mcpStdio(name, command string, args []string, env map[string]
 	if scan.LooksLikeSecret(command + " " + strings.Join(args, " ")) {
 		return nil, "its command line contains text that looks like a secret"
 	}
+	if h := c.o.Home; h != "" {
+		all := append([]string{command}, args...)
+		for _, v := range env {
+			all = append(all, v)
+		}
+		for _, a := range all {
+			if strings.Contains(a, h) || homeAbsRe.MatchString(a) {
+				return nil, "an argument or env value is an absolute path on this machine (" + shorten(strings.ReplaceAll(a, h, "~")) + "); not portable, so the server was left out. Add it to the rig by hand with a path that works everywhere"
+			}
+		}
+	}
 	out.Command, out.Args = command, args
 	keys := make([]string, 0, len(env))
 	for k := range env {
