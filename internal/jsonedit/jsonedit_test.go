@@ -433,3 +433,112 @@ func TestAppendRawRejectsInvalidValuesAndShapes(t *testing.T) {
 		t.Fatalf("%v %s", err, out)
 	}
 }
+
+// --- RemoveRaw / RemoveStrings ------------------------------------------------------------------
+
+func TestRemoveStringsFirstMiddleLastOnly(t *testing.T) {
+	doc := "{\n  \"permissions\": {\n    \"deny\": [\n      \"a\",\n      \"b\",\n      \"c\"\n    ]\n  }\n}\n"
+	cases := []struct{ remove, want string }{
+		{"a", "{\n  \"permissions\": {\n    \"deny\": [\n      \"b\",\n      \"c\"\n    ]\n  }\n}\n"},
+		{"b", "{\n  \"permissions\": {\n    \"deny\": [\n      \"a\",\n      \"c\"\n    ]\n  }\n}\n"},
+		{"c", "{\n  \"permissions\": {\n    \"deny\": [\n      \"a\",\n      \"b\"\n    ]\n  }\n}\n"},
+	}
+	for _, c := range cases {
+		out, n, err := RemoveStrings([]byte(doc), deny, []string{c.remove})
+		if err != nil || n != 1 || string(out) != c.want {
+			t.Fatalf("remove %s: n=%d err=%v\n%s\nwant\n%s", c.remove, n, err, out, c.want)
+		}
+	}
+	one := "{\n  \"permissions\": {\n    \"deny\": [\n      \"only\"\n    ]\n  }\n}\n"
+	out, n, err := RemoveStrings([]byte(one), deny, []string{"only"})
+	if err != nil || n != 1 || string(out) != "{\n  \"permissions\": {\n    \"deny\": []\n  }\n}\n" {
+		t.Fatalf("only element: %v %d\n%s", err, n, out)
+	}
+}
+
+func TestRemoveRawObjectsAndLayouts(t *testing.T) {
+	entry := `{"matcher":"Bash","hooks":[{"type":"command","command":"rigfile","args":["hook","run","guard"]}]}`
+	user := `{"matcher":"Write","hooks":[{"type":"command","command":"mine.sh"}]}`
+	for name, doc := range map[string]string{
+		"pretty":  "{\n  \"hooks\": {\n    \"PreToolUse\": [\n      " + user + ",\n      " + entry + "\n    ]\n  }\n}\n",
+		"compact": `{"hooks":{"PreToolUse":[` + user + `,` + entry + `]}}`,
+		"crlf":    "{\r\n  \"hooks\": {\r\n    \"PreToolUse\": [\r\n      " + user + ",\r\n      " + entry + "\r\n    ]\r\n  }\r\n}\r\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, n, err := RemoveRaw([]byte(doc), []string{"hooks", "PreToolUse"}, []string{entry})
+			if err != nil || n != 1 || !json.Valid(out) {
+				t.Fatalf("n=%d err=%v\n%s", n, err, out)
+			}
+			var m map[string]any
+			_ = json.Unmarshal(out, &m)
+			left := m["hooks"].(map[string]any)["PreToolUse"].([]any)
+			if len(left) != 1 || left[0].(map[string]any)["matcher"] != "Write" {
+				t.Fatalf("the user's hook must remain: %s", out)
+			}
+			if strings.Contains(string(out), "rigfile") {
+				t.Fatalf("our entry still present: %s", out)
+			}
+		})
+	}
+}
+
+func TestRemoveIsExactAndSafe(t *testing.T) {
+	doc := `{"a": ["x, y", "x", ["x"], {"k": "x"}, 5]}`
+	out, n, err := RemoveStrings([]byte(doc), []string{"a"}, []string{"x"})
+	if err != nil || n != 1 || string(out) != `{"a": ["x, y", ["x"], {"k": "x"}, 5]}` {
+		t.Fatalf("must remove only the exact string element: n=%d %v\n%s", n, err, out)
+	}
+	// no match / missing path / empty doc are no-ops
+	same, n, err := RemoveStrings([]byte(doc), []string{"a"}, []string{"nope"})
+	if err != nil || n != 0 || string(same) != doc {
+		t.Fatal("no match must be a byte-identical no-op")
+	}
+	if same, n, _ := RemoveStrings([]byte(doc), []string{"b", "c"}, []string{"x"}); n != 0 || string(same) != doc {
+		t.Fatal("missing path")
+	}
+	if _, n, err := RemoveStrings(nil, []string{"a"}, []string{"x"}); n != 0 || err != nil {
+		t.Fatal("empty doc")
+	}
+	if _, _, err := RemoveStrings([]byte(`{"a": "s"}`), []string{"a"}, []string{"x"}); !errors.Is(err, ErrWrongType) {
+		t.Fatalf("non-array: %v", err)
+	}
+	if _, _, err := RemoveStrings([]byte(`{`), []string{"a"}, []string{"x"}); !errors.Is(err, ErrInvalidJSON) {
+		t.Fatalf("invalid: %v", err)
+	}
+	// duplicates are all removed
+	out, n, _ = RemoveStrings([]byte(`{"a":["x","y","x"]}`), []string{"a"}, []string{"x"})
+	if n != 2 || string(out) != `{"a":["y"]}` {
+		t.Fatalf("n=%d %s", n, out)
+	}
+}
+
+// Property: add then remove restores the original document (for docs where the array existed).
+func TestAddThenRemoveRestoresOriginal(t *testing.T) {
+	rng := rand.New(rand.NewSource(11))
+	for i := 0; i < 300; i++ {
+		var have []string
+		for j := 0; j < 1+rng.Intn(3); j++ {
+			have = append(have, "r"+string(rune('a'+rng.Intn(20)))+string(rune('a'+j)))
+		}
+		base := map[string]any{"z": 1, "permissions": map[string]any{"deny": have}}
+		var doc []byte
+		switch rng.Intn(3) {
+		case 0:
+			doc, _ = json.Marshal(base)
+		case 1:
+			doc, _ = json.MarshalIndent(base, "", "  ")
+			doc = append(doc, '\n')
+		default:
+			doc, _ = json.MarshalIndent(base, "", "\t")
+			doc = append(doc, '\n')
+		}
+		added, _, err := AppendStrings(doc, deny, []string{"NEW-A", "NEW-B"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		back, n, err := RemoveStrings(added, deny, []string{"NEW-A", "NEW-B"})
+		if err != nil || n != 2 || !bytes.Equal(back, doc) {
+			t.Fatalf("iter %d: not restored (n=%d err=%v)\n--- original ---\n%s\n--- added ---\n%s\n--- back ---\n%s", i, n, err, doc, added, back)
+		}
+	}
+}

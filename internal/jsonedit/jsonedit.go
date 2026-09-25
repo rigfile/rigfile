@@ -497,3 +497,133 @@ func ReadStrings(doc []byte, path []string) ([]string, error) {
 	}
 	return out, nil
 }
+
+// RemoveRaw deletes every element of the array at path whose compacted JSON equals one of raws, by
+// splicing text: the commas and whitespace around a removed element are removed with it and nothing
+// else is touched. It is used only for entries Rigfile itself added (recorded in state.json).
+// A missing path or no match is not an error. If the last element is removed the array becomes [].
+func RemoveRaw(doc []byte, path []string, raws []string) (out []byte, removed int, err error) {
+	if len(bytes.TrimSpace(doc)) == 0 {
+		return doc, 0, nil
+	}
+	if !gjson.ValidBytes(doc) {
+		return nil, 0, ErrInvalidJSON
+	}
+	want := map[string]bool{}
+	for _, r := range raws {
+		c, err := compact(r)
+		if err != nil {
+			return nil, 0, err
+		}
+		want[c] = true
+	}
+	out = doc
+	// Removing shifts offsets, so re-locate the array after every removal.
+	for {
+		arr := lookup(out, path)
+		if !arr.Exists() {
+			return out, removed, nil
+		}
+		if !arr.IsArray() {
+			return nil, 0, fmt.Errorf("%w: %s is not an array", ErrWrongType, strings.Join(path, "."))
+		}
+		spans := elementSpans(arr.Raw)
+		hit := -1
+		for i, sp := range spans {
+			c, err := compact(arr.Raw[sp[0]:sp[1]])
+			if err == nil && want[c] {
+				hit = i
+				break
+			}
+		}
+		if hit < 0 {
+			return out, removed, nil
+		}
+		base := arr.Index
+		from, to := base+spans[hit][0], base+spans[hit][1]
+		switch {
+		case len(spans) == 1: // only element: empty the brackets
+			from, to = base+1, base+len(arr.Raw)-1
+		case hit < len(spans)-1: // remove through the start of the next element
+			to = base + spans[hit+1][0]
+		default: // last element: remove from the end of the previous one
+			from = base + spans[hit-1][1]
+		}
+		var b bytes.Buffer
+		b.Write(out[:from])
+		b.Write(out[to:])
+		out = b.Bytes()
+		removed++
+	}
+}
+
+// RemoveStrings is RemoveRaw for string values.
+func RemoveStrings(doc []byte, path []string, vals []string) ([]byte, int, error) {
+	raws := make([]string, len(vals))
+	for i, v := range vals {
+		raws[i] = quote(v)
+	}
+	return RemoveRaw(doc, path, raws)
+}
+
+// elementSpans returns [start,end) offsets (relative to raw, which must be a JSON array) of each
+// top-level element, scanning strings and nesting properly.
+func elementSpans(raw string) [][2]int {
+	var spans [][2]int
+	depth, start := 0, -1
+	inStr, esc := false, false
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		if inStr {
+			switch {
+			case esc:
+				esc = false
+			case c == '\\':
+				esc = true
+			case c == '"':
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+			if depth == 1 && start < 0 {
+				start = i
+			}
+		case '[', '{':
+			if depth == 1 && start < 0 {
+				start = i
+			}
+			depth++
+		case ']', '}':
+			depth--
+			if depth == 1 && start >= 0 { // closed a nested element
+				spans = append(spans, [2]int{start, i + 1})
+				start = -1
+			}
+			if depth == 0 && start >= 0 { // end of the array while a scalar element is open
+				spans = append(spans, [2]int{start, trimEnd(raw, start, i)})
+				start = -1
+			}
+		case ',':
+			if depth == 1 && start >= 0 {
+				spans = append(spans, [2]int{start, trimEnd(raw, start, i)})
+				start = -1
+			}
+		case ' ', '\t', '\r', '\n':
+		default:
+			if depth == 1 && start < 0 {
+				start = i
+			}
+		}
+	}
+	return spans
+}
+
+func trimEnd(raw string, start, end int) int {
+	for end > start && (raw[end-1] == ' ' || raw[end-1] == '\t' || raw[end-1] == '\r' || raw[end-1] == '\n') {
+		end--
+	}
+	return end
+}

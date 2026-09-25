@@ -55,6 +55,16 @@ type TargetState struct {
 	AppliedAt string `json:"appliedAt,omitempty"`
 	RunID     string `json:"runId,omitempty"`
 	Items     []Item `json:"items"`
+	Needs     []Need `json:"needs,omitempty"`
+}
+
+// Need is something the applied rig requires from the user (names only; never a value).
+type Need struct {
+	Kind        string `json:"kind"` // "secret" | "login"
+	Ref         string `json:"ref"`  // secret ref path, or login provider
+	Description string `json:"description,omitempty"`
+	ObtainURL   string `json:"obtainUrl,omitempty"`
+	Method      string `json:"method,omitempty"`
 }
 
 // Item is one thing Rigfile owns.
@@ -92,8 +102,9 @@ func Load(dir string) (*State, error) {
 	return &s, nil
 }
 
-// Save writes state.json atomically with private permissions.
-func (s *State) Save(dir string) error {
+// Marshal renders state.json (items sorted for stable output). Callers write it through the
+// journaled apply.Writer so `rollback` restores it.
+func (s *State) Marshal() ([]byte, error) {
 	for _, t := range s.Targets {
 		sort.SliceStable(t.Items, func(i, j int) bool {
 			a, b := t.Items[i], t.Items[j]
@@ -103,14 +114,24 @@ func (s *State) Save(dir string) error {
 			if a.Key != b.Key {
 				return a.Key < b.Key
 			}
-			return a.Path < b.Path
+			return Identity(a) < Identity(b)
 		})
 	}
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
+		return nil, err
+	}
+	return append(b, '\n'), nil
+}
+
+// Save writes state.json atomically with private permissions (direct write, not journaled; the CLI
+// uses Marshal + the journaled writer instead).
+func (s *State) Save(dir string) error {
+	b, err := s.Marshal()
+	if err != nil {
 		return err
 	}
-	return platform.WritePrivate(filepath.Join(dir, FileName), append(b, '\n'))
+	return platform.WritePrivate(filepath.Join(dir, FileName), b)
 }
 
 // Target returns (creating if needed) the state for a target.
@@ -126,7 +147,7 @@ func (s *State) Target(name string) *TargetState {
 // Upsert adds or replaces an item, identified by category+key+path.
 func (t *TargetState) Upsert(it Item) {
 	for i, e := range t.Items {
-		if e.Category == it.Category && e.Key == it.Key && e.Path == it.Path && e.Detail["value"] == it.Detail["value"] && e.Detail["region"] == it.Detail["region"] && e.Detail["raw"] == it.Detail["raw"] {
+		if Identity(e) == Identity(it) {
 			t.Items[i] = it
 			return
 		}
@@ -290,4 +311,9 @@ func splitPath(p string) []string {
 		cur += string(r)
 	}
 	return append(out, cur)
+}
+
+// Identity is a stable key for an item: two records with the same identity describe the same owned thing.
+func Identity(it Item) string {
+	return it.Category + "|" + it.Key + "|" + it.Kind + "|" + it.Path + "|" + it.Detail["list"] + "|" + it.Detail["value"] + "|" + it.Detail["raw"] + "|" + it.Detail["region"] + "|" + it.Detail["name"]
 }

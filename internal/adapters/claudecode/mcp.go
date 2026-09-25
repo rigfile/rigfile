@@ -69,6 +69,26 @@ func mcpEntry(env Env, s manifest.MCPServer) (doc string, reason string, ok bool
 
 func (b *builder) mcp(p *merge.Projection) {
 	env := b.env
+	defer func() { b.keepOwnedOnConflict(b.plan.Ops) }()
+	// servers Rigfile registered earlier that the rig no longer has: removed if the CLI is available
+	if env.State != nil {
+		current := map[string]bool{}
+		for _, s := range p.MCPServers {
+			current[s.Name] = true
+		}
+		for _, prev := range env.State.Items {
+			if prev.Kind != state.KindMCP || current[prev.Key] {
+				continue
+			}
+			if env.MCP == nil || !env.MCP.Available() {
+				b.note("mcp server %q is no longer in the rig but the claude CLI is unavailable; not removed", prev.Key)
+				continue
+			}
+			name := prev.Key
+			b.plan.Ops = append(b.plan.Ops, engine.Op{Category: "mcp", Key: name, Symbol: engine.Removal, Runs: true,
+				Summary: name + "   (no longer in the rig)", Do: func(x *engine.Exec) error { return env.MCP.Remove(name) }})
+		}
+	}
 	if len(p.MCPServers) == 0 {
 		return
 	}

@@ -115,11 +115,13 @@ func (b *builder) settings(p *merge.Projection) {
 			})
 		}
 	}
-	// rules Rigfile added on an earlier run stay owned even though this run has nothing to add
+	// rules Rigfile added on an earlier run that the rig STILL wants stay owned (they are "present" now)
 	if env.State != nil {
-		for _, it := range env.State.Items {
-			if it.Kind == state.KindJSONList && it.Path == path {
-				permOp.Items = appendUniqueItem(permOp.Items, it)
+		for _, c := range pp.Present {
+			for _, it := range env.State.Items {
+				if it.Kind == state.KindJSONList && it.Path == path && it.Detail["list"] == "permissions."+c.List && it.Detail["value"] == c.Rule {
+					permOp.Items = appendUniqueItem(permOp.Items, it)
+				}
 			}
 		}
 	}
@@ -136,6 +138,53 @@ func (b *builder) settings(p *merge.Projection) {
 	}
 	for _, id := range p.Unrunnable {
 		b.note("hook %q has no command for %s; not installed", id, p.OS)
+	}
+
+	// ---- things Rigfile added earlier that the rig no longer wants ----
+	b.keepOwnedOnConflict(ops)
+	if env.State != nil {
+		ids := b.plan.Identities()
+		for _, o := range ops {
+			for _, it := range append(append([]state.Item(nil), o.Items...), o.Keep...) {
+				ids[state.Identity(it)] = true
+			}
+		}
+		for _, prev := range env.State.Items {
+			if prev.Path != path || ids[state.Identity(prev)] {
+				continue
+			}
+			switch prev.Kind {
+			case state.KindJSONList:
+				list := strings.Split(prev.Detail["list"], ".")
+				if prev.Detail["list"] == "permissions.deny" {
+					b.note("deny rule %s is no longer in the rig; left in place (remove it by hand if you want it gone)", prev.Detail["value"])
+					continue
+				}
+				next, n, err := jsonedit.RemoveStrings(work, list, []string{prev.Detail["value"]})
+				if err != nil {
+					b.fail(err)
+					return
+				}
+				if n > 0 {
+					work = next
+					ops = append(ops, engine.Op{Category: "permission", Key: prev.Key, Symbol: engine.Removal,
+						Summary: env.short(path), Detail: []string{fmt.Sprintf("- %-5s %s   (no longer in the rig)", prev.Key, prev.Detail["value"])}})
+				}
+			case state.KindJSONRaw:
+				next, n, err := jsonedit.RemoveRaw(work, strings.Split(prev.Detail["list"], "."), []string{prev.Detail["raw"]})
+				if err != nil {
+					b.fail(err)
+					return
+				}
+				if n > 0 {
+					work = next
+					ops = append(ops, engine.Op{Category: "hook", Key: prev.Key, Symbol: engine.Removal, Runs: true,
+						Summary: prev.Key + "   (no longer in the rig)"})
+				} else {
+					b.note("hook %q is no longer in the rig but its settings entry was edited or removed by hand; nothing removed", prev.Key)
+				}
+			}
+		}
 	}
 
 	// ---- one write for the whole file, attached to the first actionable op ----

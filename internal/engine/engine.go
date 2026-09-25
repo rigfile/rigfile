@@ -34,10 +34,11 @@ type Op struct {
 	Category string // instruction | skill | agent | command | hook | permission | mcp
 	Key      string
 	Symbol   string
-	Summary  string   // one line for the review screen
-	Detail   []string // extra lines
-	Runs     bool     // executes code on the user's machine (hooks, MCP servers): flagged on the screen
-	Items    []state.Item
+	Summary  string       // one line for the review screen
+	Detail   []string     // extra lines
+	Runs     bool         // executes code on the user's machine (hooks, MCP servers): flagged on the screen
+	Items    []state.Item // ownership to record after a successful apply
+	Keep     []state.Item // previous ownership retained unchanged (an owned item we refused to touch)
 
 	Do func(*Exec) error // nil for Unchanged and Conflict
 }
@@ -77,9 +78,13 @@ func (p *Plan) Conflicts() []Op {
 	return out
 }
 
-// Apply performs every actionable op in order and records owned items in ts. It stops at the first
-// error; whatever already happened is in the writer's journal, so it can be rolled back.
+// Apply performs every actionable op in order and REPLACES ts.Items with what the plan now owns: items of
+// ops that succeeded or are unchanged, plus previous ownership kept by refused ops. Things the rig no
+// longer contains are therefore dropped from state (their removal ops deleted them, or left them in
+// place with a note). It stops at the first error and leaves ts untouched; whatever already happened is
+// in the writer's journal, so it can be rolled back.
 func (p *Plan) Apply(x *Exec, ts *state.TargetState) error {
+	var items []state.Item
 	for _, o := range p.Ops {
 		if o.Do != nil {
 			if err := o.Do(x); err != nil {
@@ -87,13 +92,27 @@ func (p *Plan) Apply(x *Exec, ts *state.TargetState) error {
 			}
 		}
 		if o.Symbol == Conflict {
+			items = append(items, o.Keep...)
 			continue
 		}
+		items = append(items, o.Items...)
+	}
+	ts.Items = items
+	return nil
+}
+
+// Identities is the set of ownership identities the plan will hold after applying (for orphan detection).
+func (p *Plan) Identities() map[string]bool {
+	ids := map[string]bool{}
+	for _, o := range p.Ops {
 		for _, it := range o.Items {
-			ts.Upsert(it)
+			ids[state.Identity(it)] = true
+		}
+		for _, it := range o.Keep {
+			ids[state.Identity(it)] = true
 		}
 	}
-	return nil
+	return ids
 }
 
 var sectionOrder = []struct{ category, title string }{

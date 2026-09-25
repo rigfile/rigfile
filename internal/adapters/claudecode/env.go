@@ -113,7 +113,7 @@ func (b *builder) fileOp(category, key, dest string, want []byte, mode os.FileMo
 		case env.Overwrite:
 			op.Symbol, op.Summary, op.Do = engine.Update, label+"   (--overwrite)", write
 		case mine:
-			op.Symbol, op.Summary, op.Items = engine.Conflict, label+"   edited by hand since Rigfile wrote it; not touched (use --overwrite)", nil
+			op.Symbol, op.Summary, op.Items, op.Keep = engine.Conflict, label+"   edited by hand since Rigfile wrote it; not touched (use --overwrite)", nil, []state.Item{prev}
 		default:
 			op.Symbol, op.Summary, op.Items = engine.Conflict, label+"   already exists and is not managed by Rigfile; not touched (use --overwrite)", nil
 		}

@@ -173,20 +173,30 @@ func (w *Writer) Delete(path string) (Result, error) {
 	return res, nil
 }
 
+// RunID reserves the run's snapshot directory and returns its ID, so it can be recorded inside files
+// written earlier in the same run (state.json). A run that ends up changing nothing is removed by Commit.
+func (w *Writer) RunID() (string, error) {
+	if err := w.ensureRunDir(); err != nil {
+		return "", err
+	}
+	return filepath.Base(w.runDir), nil
+}
+
 // Journal returns the changes made so far in this run.
 func (w *Writer) Journal() []FileRecord { return append([]FileRecord(nil), w.journal...) }
 
 // Commit writes the run journal (run.json) next to the backups and returns the run ID. If nothing
 // changed it writes nothing and returns "".
 func (w *Writer) Commit(note string) (string, error) {
-	if len(w.journal) == 0 || w.runDir == "" {
-		// created-only runs have no backup dir yet
-		if len(w.journal) == 0 {
-			return "", nil
+	if len(w.journal) == 0 {
+		if w.runDir != "" {
+			_ = os.RemoveAll(w.runDir) // reserved by RunID but nothing changed
+			w.runDir = ""
 		}
-		if err := w.ensureRunDir(); err != nil {
-			return "", err
-		}
+		return "", nil
+	}
+	if err := w.ensureRunDir(); err != nil {
+		return "", err
 	}
 	run := Run{ID: filepath.Base(w.runDir), Time: w.runTime.UTC().Format(time.RFC3339), Note: note, Files: w.journal}
 	b, err := json.MarshalIndent(run, "", "  ")
@@ -321,7 +331,7 @@ func ListRuns(backupRoot string) ([]Run, error) {
 // Outcome is one line of a rollback report.
 type Outcome struct {
 	Path   string
-	Action string // restored | removed | skipped
+	Action string // restored | removed | gone (nothing to do) | skipped (refused)
 	Reason string
 }
 
@@ -360,7 +370,7 @@ func Rollback(backupRoot, runID string, force bool) ([]Outcome, error) {
 			out = append(out, Outcome{r.Path, "restored", ""})
 		case r.Created:
 			if !exists {
-				out = append(out, Outcome{r.Path, "skipped", "already gone"})
+				out = append(out, Outcome{r.Path, "gone", "already removed"})
 			} else if curSHA != r.AfterSHA && !force {
 				out = append(out, Outcome{r.Path, "skipped", "modified since Rigfile created it"})
 				continue
