@@ -243,3 +243,15 @@ func (i *Info) PreferredSecretStore() SecretStoreKind {
 		return StoreSecretService
 	}
 }
+
+// BaseEnvKeys are the parent environment variables a launched child (an MCP server started through
+// `rigfile exec`) may inherit. Everything else is dropped: servers run with only the environment
+// they declare plus this minimum (plan §8.3). The Windows list is UNVERIFIED (Stage 3 must test it
+// on a clean VM; missing SystemRoot breaks many programs).
+func (i *Info) BaseEnvKeys() []string {
+	if i.OS == Windows {
+		return []string{"PATH", "PATHEXT", "SystemRoot", "SystemDrive", "ComSpec", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
+			"APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "ProgramFiles", "ProgramFiles(x86)", "ProgramData", "USERNAME"}
+	}
+	return []string{"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ"}
+}
