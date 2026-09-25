@@ -29,6 +29,8 @@ jobs:
       - run: go vet ./...
       # The keychain is not available on CI runners; tests use the encrypted-file backend.
       - run: go test -race -count=1 ./...
+      # timing gate (scanner speed); meaningless under -race, so it runs separately
+      - run: go test -count=1 -run TestPerformance ./internal/scan
 
   windows-build:
     # Windows is Stage 3: CI only proves it still compiles and vets. No tests run there yet.
