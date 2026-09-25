@@ -48,3 +48,16 @@ func WritePrivate(path string, data []byte) error {
 	}
 	return nil
 }
+
+// IsPrivateFile returns nil only if path exists and is not accessible by group or others (mode &
+// 0077 == 0). Used before trusting a passphrase file.
+func IsPrivateFile(path string) error {
+	st, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if st.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("%s is accessible by other users (mode %o); run: chmod 600 %s", path, st.Mode().Perm(), path)
+	}
+	return nil
+}

@@ -7,3 +7,6 @@ package platform
 func WritePrivate(path string, data []byte) error {
 	return ErrNotSupported
 }
+
+// IsPrivateFile is stubbed on Windows until Stage 3 (needs ACL inspection).
+func IsPrivateFile(path string) error { return ErrNotSupported }
