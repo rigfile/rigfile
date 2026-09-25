@@ -25,6 +25,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/digitaldreamer3462/rigfile/internal/tools"
 )
 
 var version = "0.1.0-stage1"
@@ -38,6 +39,7 @@ type env struct {
 	mcp        claudecode.MCPClient         // nil = the real `claude` CLI
 	keyringOff bool                         // tests: force the encrypted-file secret backend
 	lookPath   func(string) (string, error) // nil = exec.LookPath
+	tools      tools.Host                   // nil = run real package managers
 }
 
 func (e env) look(name string) (string, error) {

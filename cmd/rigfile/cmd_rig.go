@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/session"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/digitaldreamer3462/rigfile/internal/tools"
 )
 
 // ---- validate ---------------------------------------------------------------------------------
@@ -59,8 +61,8 @@ func cmdValidate(args []string, e env) int {
 // ---- plan / apply -----------------------------------------------------------------------------
 
 type rigFlags struct {
-	layers, project, claudeDir string
-	overwrite, yes, updateLock bool
+	layers, project, claudeDir          string
+	overwrite, yes, updateLock, noTools bool
 }
 
 func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
@@ -72,6 +74,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 	fs.BoolVar(&f.overwrite, "overwrite", false, "replace hand-edited managed content and items Rigfile does not own")
 	if withApply {
 		fs.BoolVar(&f.yes, "yes", false, "apply without asking")
+		fs.BoolVar(&f.noTools, "no-tools", false, "do not install tools; only show what would be installed")
 		fs.BoolVar(&f.updateLock, "update-lock", false, "accept a changed rig: rewrite rigfile.lock")
 	}
 	return fs
@@ -80,7 +83,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite,
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools,
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -122,6 +125,7 @@ func cmdPlanApply(verb string, args []string, e env) int {
 		fmt.Fprintln(e.out)
 	}
 	p.Plan.Render(e.out)
+	printTools(e, p.Tools)
 	printNeeds(e, p)
 	if p.HasLock && len(p.LockDiffs) > 0 {
 		fmt.Fprintf(e.out, "\nrigfile.lock does not match the rig:\n%s\n", indent(strings.Join(p.LockDiffs, "\n"), "  "))
@@ -136,10 +140,31 @@ func cmdPlanApply(verb string, args []string, e env) int {
 		fmt.Fprintln(e.err, "\nrigfile: refusing to apply a rig that no longer matches its lockfile. Review the differences above, then re-run with --update-lock to accept them.")
 		return 1
 	}
-	if p.Plan.Changes() > 0 && !f.yes {
-		if !confirm(e, fmt.Sprintf("\nApply %d change(s)?  [a]pply  [q]uit ", p.Plan.Changes())) {
+	runTools := p.Tools.Runnable()
+	if f.noTools {
+		runTools = nil
+	}
+	if (p.Plan.Changes() > 0 || len(runTools) > 0) && !f.yes {
+		if !confirm(e, fmt.Sprintf("\nApply %d change(s)%s?  [a]pply  [q]uit ", p.Plan.Changes(), plural(len(runTools), " and install 1 tool", fmt.Sprintf(" and install %d tools", len(runTools))))) {
 			fmt.Fprintln(e.out, "aborted; nothing changed")
 			return 1
+		}
+	}
+	exit := 0
+	if len(runTools) > 0 {
+		fmt.Fprintln(e.out)
+		th := e.tools
+		if th == nil {
+			th = tools.SystemHost{}
+		}
+		tp := p.Tools
+		r := tools.Execute(context.Background(), tp, th, e.out)
+		for _, msg := range r.Failed {
+			fmt.Fprintln(e.err, "rigfile: tool install failed:", msg)
+			exit = 1
+		}
+		if len(r.Failed) > 0 {
+			fmt.Fprintln(e.out, "continuing with the configuration; re-run `rigfile apply` after fixing the tool problem")
 		}
 	}
 	res, err := p.Execute(session.ExecOptions{UpdateLock: f.updateLock, Note: "apply " + p.Top.M.Name + "@" + p.Top.M.Version})
@@ -160,7 +185,34 @@ func cmdPlanApply(verb string, args []string, e env) int {
 		fmt.Fprintf(e.out, "%d item(s) were refused and left untouched (see ! lines above)\n", res.Refused)
 		return 3
 	}
-	return 0
+	if len(runTools) > 0 {
+		fmt.Fprintln(e.out, "note: `rigfile rollback` does not uninstall tools")
+	}
+	return exit
+}
+
+// printTools shows the TOOLS section of the review screen.
+func printTools(e env, tp tools.Plan) {
+	if tp.Empty() && len(tp.Present) == 0 {
+		return
+	}
+	fmt.Fprintln(e.out, "\nTOOLS")
+	for _, s := range tp.Steps {
+		if s.Manual {
+			fmt.Fprintf(e.out, "  !  %s   (run it yourself: %s)\n", s.Command(), s.Why)
+		} else {
+			fmt.Fprintf(e.out, "  +  %s   (runs after you approve)\n", s.Command())
+		}
+		if s.Warn != "" {
+			fmt.Fprintf(e.out, "       ⚠ %s\n", s.Warn)
+		}
+	}
+	for _, n := range tp.Present {
+		fmt.Fprintf(e.out, "  =  %s   already installed\n", n)
+	}
+	for _, u := range tp.Unresolved {
+		fmt.Fprintf(e.out, "  ?  %s\n", u)
+	}
 }
 
 func confirm(e env, prompt string) bool {

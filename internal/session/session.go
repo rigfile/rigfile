@@ -23,6 +23,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/digitaldreamer3462/rigfile/internal/tools"
 )
 
 // Target is the only adapter in Stage 1.
@@ -39,6 +40,7 @@ type Options struct {
 	ProjectDir string
 	MCP        claudecode.MCPClient
 	Overwrite  bool
+	ToolsHost  tools.Host // nil = the real machine
 }
 
 // Prepared is everything computed before anything is written.
@@ -53,6 +55,7 @@ type Prepared struct {
 	Problems []manifest.Problem
 	State    *state.State
 	Plan     *engine.Plan // nil if the rig has errors
+	Tools    tools.Plan   // what apply would install (planned, never run here)
 
 	Lock      *lock.Lock
 	LockPath  string
@@ -154,6 +157,21 @@ func Prepare(o Options) (*Prepared, error) {
 	if p.Plan, err = claudecode.Build(env, p.Proj); err != nil {
 		return nil, err
 	}
+	cat, err := tools.LoadCatalog()
+	if err != nil {
+		return nil, err
+	}
+	th := o.ToolsHost
+	if th == nil {
+		th = tools.SystemHost{}
+	}
+	in := tools.Input{}
+	for k, v := range p.Merged.Tools {
+		for _, e := range v {
+			in[k] = append(in[k], e.V)
+		}
+	}
+	p.Tools = tools.Build(cat, in, string(pi.OS), th)
 	p.Plan.Replaced = p.Merged.Replaced
 	for _, w := range append(append([]string(nil), res.Warnings...), m.Warnings...) {
 		p.Plan.Notes = append(p.Plan.Notes, w)

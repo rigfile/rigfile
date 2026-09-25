@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -39,16 +42,34 @@ func (f *fakeMCP) Remove(n string) error {
 	return nil
 }
 
+type fakeTools struct {
+	have map[string]bool
+	ran  []string
+	fail string
+}
+
+func (f *fakeTools) Has(c string) bool { return f.have[c] }
+func (f *fakeTools) Run(_ context.Context, argv []string, out io.Writer) error {
+	line := strings.Join(argv, " ")
+	f.ran = append(f.ran, line)
+	if f.fail != "" && line == f.fail {
+		return errors.New("exit status 1")
+	}
+	fmt.Fprintln(out, "installed", argv[len(argv)-1])
+	return nil
+}
+
 type machine struct {
-	t    *testing.T
-	home string
-	mcp  *fakeMCP
-	env  map[string]string
+	t     *testing.T
+	home  string
+	mcp   *fakeMCP
+	tools *fakeTools
+	env   map[string]string
 }
 
 func newMachine(t *testing.T) *machine {
 	h := t.TempDir()
-	return &machine{t: t, home: h, mcp: newFakeMCP(), env: map[string]string{"HOME": h, "USERPROFILE": h, "PATH": os.Getenv("PATH")}}
+	return &machine{t: t, home: h, mcp: newFakeMCP(), tools: &fakeTools{have: map[string]bool{"npm": true}}, env: map[string]string{"HOME": h, "USERPROFILE": h, "PATH": os.Getenv("PATH")}}
 }
 
 type result struct {
@@ -60,7 +81,7 @@ func (m *machine) run(stdin string, args ...string) result {
 	var out, errb bytes.Buffer
 	code := run(args, env{
 		in: strings.NewReader(stdin), out: &out, err: &errb,
-		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, keyringOff: true,
+		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, keyringOff: true, tools: m.tools,
 		lookPath: func(n string) (string, error) {
 			if n == "rigfile" || n == "claude" {
 				return "/usr/local/bin/" + n, nil
@@ -393,7 +414,7 @@ func TestSecretsAndDoctor(t *testing.T) {
 func TestDoctorFlagsMissingRigfileOnPath(t *testing.T) {
 	m := newMachine(t)
 	var out, errb bytes.Buffer
-	code := run([]string{"doctor"}, env{in: strings.NewReader(""), out: &out, err: &errb, getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, keyringOff: true,
+	code := run([]string{"doctor"}, env{in: strings.NewReader(""), out: &out, err: &errb, getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, keyringOff: true, tools: m.tools,
 		lookPath: func(string) (string, error) { return "", errors.New("nope") }})
 	if code != 1 || !strings.Contains(out.String(), "✘ rigfile on PATH") {
 		t.Fatalf("code=%d\n%s", code, out.String())
@@ -552,5 +573,56 @@ func TestInitCapturesAndTheResultAppliesCleanly(t *testing.T) {
 	y := string(mustRead(t, filepath.Join(out2, "rigfile.yaml")))
 	if r.code != 0 || !strings.Contains(r.out, "already managed by Rigfile") || strings.Contains(y, "skills:") || strings.Contains(y, "agents:") {
 		t.Fatalf("%+v\n%s", r, y)
+	}
+}
+
+const toolsRigYAML = `apiVersion: rigfile.dev/v1
+name: jiaxu/tools
+version: 1.0.0
+tools:
+  common: [nonsense-tool]
+  npm: ['good-mcp@1.4.2', 'loose-mcp']
+`
+
+func TestToolsAreShownThenInstalledOnlyAfterApproval(t *testing.T) {
+	m := newMachine(t)
+	rig := t.TempDir()
+	put(t, rig, "rigfile.yaml", toolsRigYAML, 0o644)
+
+	r := m.run("", "plan", rig)
+	for _, want := range []string{"TOOLS", "+  npm install -g good-mcp@1.4.2", "unpinned", "?  nonsense-tool: not in the tool catalog"} {
+		if r.code != 0 || !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if len(m.tools.ran) != 0 {
+		t.Fatalf("plan must not install anything: %v", m.tools.ran)
+	}
+	// declined: nothing runs
+	if r := m.run("q\n", "apply", rig); r.code != 1 || len(m.tools.ran) != 0 {
+		t.Fatalf("%+v %v", r, m.tools.ran)
+	}
+	// --no-tools: config only
+	if r := m.run("", "apply", rig, "--yes", "--no-tools"); r.code != 0 || len(m.tools.ran) != 0 {
+		t.Fatalf("%+v %v", r, m.tools.ran)
+	}
+	// approved
+	r = m.run("a\n", "apply", rig)
+	if r.code != 0 || len(m.tools.ran) != 2 || m.tools.ran[0] != "npm install -g good-mcp@1.4.2" || !strings.Contains(r.out, "does not uninstall tools") {
+		t.Fatalf("%+v %v", r, m.tools.ran)
+	}
+}
+
+func TestToolInstallFailureIsReportedAndConfigStillApplies(t *testing.T) {
+	m := newMachine(t)
+	m.tools.fail = "npm install -g good-mcp@1.4.2"
+	rig := newRig(t)
+	put(t, rig, "rigfile.yaml", rigYAML+"tools:\n  npm: ['good-mcp@1.4.2']\n", 0o644)
+	r := m.run("", "apply", rig, "--yes")
+	if r.code != 1 || !strings.Contains(r.err, "tool install failed") || !strings.Contains(r.out, "continuing with the configuration") {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".claude", "CLAUDE.md")); err != nil {
+		t.Fatal("config should still have been applied")
 	}
 }
