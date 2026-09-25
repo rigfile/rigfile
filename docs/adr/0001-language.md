@@ -1,10 +1,10 @@
 # ADR 0001: Implementation language for the Rigfile CLI
 
-- **Status:** Proposed. Needs the owner's decision (RIGFILE_PLAN.md §17 Q3).
+- **Status:** **Accepted 2026-09-25** by the owner (RIGFILE_PLAN.md §17 Q3), **conditional on the Stage 1 spike in §7**: the spike's go/no-go review can still trigger the documented Python fallback.
 - **Date:** 2026-09-25
 - **Deciders:** Jia (owner). Drafted by Claude Code.
 - **Options:** Go, Python, TypeScript
-- **Recommendation:** Go, with a 2–3 day spike at the start of Stage 1 that has the owner review real Go code, and an explicit fallback (Python, one-dir bundle) if that review is too painful. See §7.
+- **Decision:** Go, with a 2–3 day spike at the start of Stage 1 that has the owner review real Go code, and an explicit fallback (Python, one-dir bundle) if that review is too painful. See §7.
 
 ---
 

@@ -1,6 +1,6 @@
 # Merge semantics
 
-**Status:** DRAFT for Stage 0 review. **Date:** 2026-09-25.
+**Status:** v1, accepted by the owner 2026-09-25 with all Appendix C recommendations as written (the **(decision)** items in this document are therefore settled; revisiting one needs a new ADR). **Date:** 2026-09-25.
 **Scope:** how layers (`from:`), per-target overrides, `os:`/`targets:` filters and pre-existing user files combine into what `plan` shows and `apply` writes.
 **Inputs:** `RIGFILE_PLAN.md` §6.3 (table), §8 (base-secure), §9.1 (structured merging); `schema/rigfile.v1.json`; vendor facts in `docs/targets/*.md`.
 **Language-neutral.** Nothing here depends on ADR 0001.

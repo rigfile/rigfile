@@ -1,40 +1,45 @@
 # Rigfile status
 
-**Current stage: Stage 0 — Research & spec freeze — DRAFTS COMPLETE, AWAITING OWNER REVIEW / SIGN-OFF**
+**Current stage: Stage 1 — Local CLI, Claude Code only, no network, macOS + Linux — IN PROGRESS (spike phase)**
+**Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
 Last updated: 2026-09-25
 
-Stage 0 exit criteria (RIGFILE_PLAN.md §12): schema reviewed; target docs complete for Claude Code + Codex at minimum; owner signs off. **Not yet met: needs review and sign-off.** Stage 1 must not start until then.
+## Stage 0 result (signed off)
 
-## Stage 0 checklist
+Deliverables (all in `main`): repo skeleton and working agreements (`CLAUDE.md`); target research for Claude Code and Codex (`docs/targets/`); `docs/platforms.md`; `schema/rigfile.v1.json`; `docs/merge-semantics.md`; `catalog/tools.yaml`, `catalog/models.yaml`; `docs/adr/0001-language.md`; fixture `testdata/fixtures/plan-example.rigfile.yaml`.
 
-- [x] 1. Repo skeleton: `CLAUDE.md`, `docs/STATUS.md`, `.gitignore` (base-secure §8.1a rules + existing Python rules), language-neutral dirs, `git init` (repo already existed; no commits made)
-- [x] 2. `docs/targets/claude-code.md`, `docs/targets/codex.md` (official docs, checked 2026-09-25, every claim linked; CONFLICT / UNVERIFIED marked)
-- [x] 3. `docs/platforms.md` (from §9.4, corrected)
-- [x] 4. `schema/rigfile.v1.json` (validated: 0 errors on the fixture, 29 accept/reject probes behave as intended) and `docs/merge-semantics.md`
-- [x] 5. `catalog/tools.yaml` (gh, uv, jq, git, node, gitleaks) and `catalog/models.yaml` (mlx-community/Qwen3-8B-4bit + `mlx_lm.server …` as given)
-- [x] 6. `docs/adr/0001-language.md` (status: Proposed; recommends Go with a Stage-1 spike and a Python fallback)
-- [ ] Owner review of: schema, merge-semantics decisions (Appendix C), ADR 0001
-- [ ] Owner sign-off
+Sign-off terms: the owner accepted the schema and the seven merge-semantics decisions (Appendix C of `docs/merge-semantics.md`) as recommended. The schema was validated mechanically (0 errors on the fixture; 29 accept/reject probes), not line-by-line reviewed by the owner; expect schema changes during Stage 1 (additive changes are cheap, breaking ones need a note here).
 
-Also added: `testdata/fixtures/plan-example.rigfile.yaml` (the plan's §6.1/§9.5 example, adapted to validate; illustrative values only).
+## Decisions log
 
-## Not done in this session (deliberate)
+| Date | Decision | Source |
+|---|---|---|
+| 2026-09-25 | **Language: Go**, conditional on the Stage 1 spike (fallback: Python `--onedir`) | ADR 0001 (Accepted) |
+| 2026-09-25 | **Secret backend for Stage 1: OS keychain only** (macOS Keychain, Linux Secret Service, encrypted-file fallback for headless Linux). 1Password/Bitwarden later | plan §17 Q4 |
+| 2026-09-25 | **OS order: macOS + Linux in Stage 1, Windows in Stage 3** (platform layer built for all three from day one; Windows stubbed) | plan §17 Q8 |
+| 2026-09-25 | Merge-semantics decisions 1–7 accepted as written | `docs/merge-semantics.md` App. C |
 
-- Targets Cursor, Gemini CLI, Claude Desktop: no `docs/targets/*.md` (plan requires only Claude Code + Codex for the exit). Claude Desktop paths for macOS/Windows are in `docs/platforms.md`.
-- Sanitized fixture of the owner's own Mac setup (§12 Stage 0 bullet): requires reading real config folders, which this session was told not to do. Needs the owner to supply a sanitized export or authorize a scoped read later.
-- `cmd/`, `internal/`, `web/`: not created; they encode the Go layout and wait for ADR 0001.
+## Still open (not blocking the Stage 1 spike)
 
-## Verification results / known gaps
+- §17 Q1 open source / licence: **no LICENSE file yet** (default = all rights reserved). Needed before the repo is public or CI is added. The repo already has a GitHub `origin` remote; nothing has been pushed from this environment.
+- Q2 business model, Q5 private memory sync (default: defer to Stage 8), Q6 domains/names (schema `$id` is a placeholder), Q7 targets after Claude Code (Stage 3), Q9 WSL, Q10 code-signing, Q11 local-model scope.
+- Plan corrections found in Stage 0 that the owner has not yet folded into `RIGFILE_PLAN.md` (see the "Summary of plan corrections" tables in `docs/targets/*.md` and `docs/platforms.md` §7): notably §9.5 local-model wiring, Codex hook trust, Codex/Claude Code permission syntax, `${CONFIG_DIR}`, credential files in the deny list.
+- Not done in Stage 0: Cursor / Gemini CLI / Claude Desktop target docs (Stage 3); sanitized fixture of the owner's own setup (needs an export from the owner).
 
-- UNVERIFIED items are listed at the end of each `docs/targets/*.md` (Windows stdio MCP `cmd /c`, Codex `wire_api = chat`, Windows `CODEX_HOME`, MCP env inheritance, per-subagent endpoints, etc.). None should be relied on before a test.
-- ADR 0001 benchmarks are from one Apple M2 Mac (hello-world programs). Linux/Windows start-up not measured.
-- One check was not completed: GoReleaser's current Scoop / Homebrew-formula docs pages (tooling error). Recorded in ADR §8.
+## Stage 1 — plan of record
+
+Goal (plan §12): recreate the owner's setup on a fresh machine from a local folder, on macOS and Linux.
+
+1. **Spike (ADR 0001 §7), 2–3 days:** Go vertical slice the owner reviews, then go/no-go on Go.
+   - `plan` for a Claude Code `settings.json` permissions merge (JSON key order preserved)
+   - keychain set/get on macOS + Linux (desktop keyring and headless `age` fallback)
+   - `rigfile hook pre-tool-use` shim, latency measured on macOS and Linux
+   - marker-splice edit of a TOML file with comments
+2. Then the Stage 1 build per plan §12 (platform layer, `init/plan/apply/diff/rollback/doctor/secrets/exec`, Claude Code adapter, backups, state, lockfile, tools installer, CI matrix, E2E in clean VMs).
+
+Working rules for Stage 1 are in `CLAUDE.md` (small PRs, threat note for security-sensitive code, no real secrets, tests use a temp `$HOME`).
 
 ## Notes
 
-- A Python scaffold (`pyproject.toml`, `src/`, `tests/`, `README.md`) existed before Stage 0 and is not part of the plan. Left untouched pending ADR 0001.
-- Schema `$id` (`https://rigfile.dev/schema/rigfile.v1.json`) is a placeholder; the domain is not claimed (§17 Q6).
-
-## Next (proposed, do not start)
-
-Owner decisions → if ADR accepted: Stage 1 spike (ADR §7) → Stage 1 proper.
+- A Python scaffold (`pyproject.toml`, `src/`, `tests/`, `README.md`) existed before Stage 0 and is untracked. With Go chosen it is not the product; keep as dev tooling or delete: the owner's call.
+- Global secret-scanning git hooks (gitleaks) are installed on the owner's machine outside this repo (`~/.config/git/hooks`); they run on commits and pushes here. This is a stopgap until base-secure (Stage 2).
