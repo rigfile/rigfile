@@ -1,0 +1,290 @@
+package jsonedit
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"math/rand"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func mustAppend(t *testing.T, doc string, path []string, vals ...string) (string, []string) {
+	t.Helper()
+	out, added, err := AppendStrings([]byte(doc), path, vals)
+	if err != nil {
+		t.Fatalf("AppendStrings: %v", err)
+	}
+	if !json.Valid(out) {
+		t.Fatalf("result is not valid JSON:\n%s", out)
+	}
+	return string(out), added
+}
+
+var deny = []string{"permissions", "deny"}
+
+func TestAppendToMultilineArrayMatchesLayoutExactly(t *testing.T) {
+	doc := `{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)"
+    ],
+    "deny": [
+      "Bash(git push*)",
+      "Bash(rm -rf*)"
+    ]
+  },
+  "model": "sonnet"
+}
+`
+	want := `{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)"
+    ],
+    "deny": [
+      "Bash(git push*)",
+      "Bash(rm -rf*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)"
+    ]
+  },
+  "model": "sonnet"
+}
+`
+	got, added := mustAppend(t, doc, deny, "Read(~/.ssh/**)", "Read(~/.aws/**)")
+	if got != want {
+		t.Fatalf("layout not preserved.\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+	if !reflect.DeepEqual(added, []string{"Read(~/.ssh/**)", "Read(~/.aws/**)"}) {
+		t.Fatalf("added = %v", added)
+	}
+}
+
+func TestIndentationStylesAreFollowed(t *testing.T) {
+	for name, unit := range map[string]string{"4 spaces": "    ", "tab": "\t"} {
+		t.Run(name, func(t *testing.T) {
+			doc := "{\n" + unit + `"permissions": {` + "\n" + unit + unit + `"deny": [` + "\n" + unit + unit + unit + `"a"` + "\n" + unit + unit + "]\n" + unit + "}\n}\n"
+			got, _ := mustAppend(t, doc, deny, "b")
+			want := strings.Replace(doc, `"a"`, `"a",`+"\n"+unit+unit+unit+`"b"`, 1)
+			if got != want {
+				t.Fatalf("got:\n%q\nwant:\n%q", got, want)
+			}
+		})
+	}
+}
+
+func TestCompactDocumentsStayCompact(t *testing.T) {
+	got, _ := mustAppend(t, `{"a":1}`, deny, "x", "y")
+	if got != `{"a":1,"permissions":{"deny":["x","y"]}}` {
+		t.Fatalf("compact insert: %s", got)
+	}
+	got, _ = mustAppend(t, `{"a": 1}`, deny, "x")
+	if got != `{"a": 1,"permissions": {"deny": ["x"]}}` {
+		t.Fatalf("spaced-colon compact insert: %s", got)
+	}
+	got, _ = mustAppend(t, `{"permissions":{"allow":["z"]}}`, deny, "x")
+	if got != `{"permissions":{"allow":["z"],"deny":["x"]}}` {
+		t.Fatalf("existing parent: %s", got)
+	}
+	got, _ = mustAppend(t, `{}`, deny, "x")
+	if got != `{"permissions":{"deny":["x"]}}` {
+		t.Fatalf("empty object: %s", got)
+	}
+}
+
+func TestSingleLineArrays(t *testing.T) {
+	got, _ := mustAppend(t, `{"permissions":{"deny":["a","b"]}}`, deny, "c")
+	if got != `{"permissions":{"deny":["a","b","c"]}}` {
+		t.Fatalf("compact: %s", got)
+	}
+	got, _ = mustAppend(t, `{"permissions": {"deny": ["a", "b"]}}`, deny, "c")
+	if got != `{"permissions": {"deny": ["a", "b", "c"]}}` {
+		t.Fatalf("spaced: %s", got)
+	}
+	got, _ = mustAppend(t, `{"permissions": {"deny": []}}`, deny, "c", "d")
+	if got != `{"permissions": {"deny": ["c","d"]}}` {
+		t.Fatalf("empty: %s", got)
+	}
+}
+
+func TestMissingPiecesAreCreated(t *testing.T) {
+	// permissions exists, deny missing
+	got, added := mustAppend(t, "{\n  \"permissions\": {\n    \"allow\": [\n      \"x\"\n    ]\n  }\n}\n", deny, "a")
+	want := "{\n  \"permissions\": {\n    \"allow\": [\n      \"x\"\n    ],\n    \"deny\": [\n      \"a\"\n    ]\n  }\n}\n"
+	if got != want || len(added) != 1 {
+		t.Fatalf("missing deny:\n%s\nwant:\n%s", got, want)
+	}
+	// permissions missing entirely
+	got, _ = mustAppend(t, "{\n  \"model\": \"sonnet\"\n}\n", deny, "a", "b")
+	want = "{\n  \"model\": \"sonnet\",\n  \"permissions\": {\n    \"deny\": [\n      \"a\",\n      \"b\"\n    ]\n  }\n}\n"
+	if got != want {
+		t.Fatalf("missing permissions:\n%s\nwant:\n%s", got, want)
+	}
+	// empty object and empty document
+	got, _ = mustAppend(t, "{}", deny, "a")
+	if !json.Valid([]byte(got)) || !strings.Contains(got, `"deny"`) {
+		t.Fatalf("empty object: %s", got)
+	}
+	got, _ = mustAppend(t, "", deny, "a")
+	if !strings.Contains(got, `"permissions"`) {
+		t.Fatalf("empty doc: %s", got)
+	}
+	// deeper path
+	got, _ = mustAppend(t, "{\n  \"a\": 1\n}\n", []string{"x", "y", "z"}, "v")
+	var m map[string]any
+	_ = json.Unmarshal([]byte(got), &m)
+	if m["x"].(map[string]any)["y"].(map[string]any)["z"].([]any)[0] != "v" {
+		t.Fatalf("deep path: %s", got)
+	}
+}
+
+func TestExistingAndDuplicateValuesAreSkipped(t *testing.T) {
+	doc := "{\n  \"permissions\": {\n    \"deny\": [\n      \"a\"\n    ]\n  }\n}\n"
+	got, added := mustAppend(t, doc, deny, "a", "b", "b")
+	if !reflect.DeepEqual(added, []string{"b"}) {
+		t.Fatalf("added = %v", added)
+	}
+	if strings.Count(got, `"b"`) != 1 || strings.Count(got, `"a"`) != 1 {
+		t.Fatalf("duplicates written:\n%s", got)
+	}
+	// Nothing to add => byte-identical document.
+	same, added2 := mustAppend(t, doc, deny, "a")
+	if same != doc || len(added2) != 0 {
+		t.Fatal("no-op must return the document unchanged")
+	}
+}
+
+func TestCRLFIsPreserved(t *testing.T) {
+	doc := "{\r\n  \"permissions\": {\r\n    \"deny\": [\r\n      \"a\"\r\n    ]\r\n  }\r\n}\r\n"
+	got, _ := mustAppend(t, doc, deny, "b")
+	if strings.Contains(strings.ReplaceAll(got, "\r\n", ""), "\n") {
+		t.Fatalf("bare LF in CRLF document: %q", got)
+	}
+}
+
+func TestOtherContentIsUntouched(t *testing.T) {
+	doc := "{\n  \"z_first\": {\"k\": [1,2,  3]},\n  \"permissions\": {\n    \"deny\": [\n      \"a\"\n    ]\n  },\n  \"a_last\": \"unicode é ✓\",\n  \"n\": 1.50\n}\n"
+	got, _ := mustAppend(t, doc, deny, "b")
+	// Everything before the insertion point and after it is identical.
+	pre := doc[:strings.Index(doc, `"a"`)+3]
+	post := doc[strings.Index(doc, `"a"`)+3:]
+	if !strings.HasPrefix(got, pre) || !strings.HasSuffix(got, post) {
+		t.Fatalf("surrounding bytes changed:\n%s", got)
+	}
+}
+
+func TestHTMLCharactersAreNotEscaped(t *testing.T) {
+	got, _ := mustAppend(t, `{"permissions":{"deny":[]}}`, deny, "Bash(a <b> & c)")
+	if !strings.Contains(got, `"Bash(a <b> & c)"`) {
+		t.Fatalf("html chars escaped: %s", got)
+	}
+}
+
+func TestErrors(t *testing.T) {
+	cases := map[string]struct {
+		doc  string
+		path []string
+		want error
+	}{
+		"invalid json":         {`{"a":`, deny, ErrInvalidJSON},
+		"root is an array":     {`[1]`, deny, ErrWrongType},
+		"parent not an object": {`{"permissions": "nope"}`, deny, ErrWrongType},
+		"target not an array":  {`{"permissions": {"deny": "x"}}`, deny, ErrWrongType},
+		"non-string element":   {`{"permissions": {"deny": [1]}}`, deny, ErrWrongType},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, _, err := AppendStrings([]byte(c.doc), c.path, []string{"x"})
+			if !errors.Is(err, c.want) {
+				t.Fatalf("want %v, got %v", c.want, err)
+			}
+		})
+	}
+	if _, _, err := AppendStrings([]byte("{}"), nil, []string{"x"}); err == nil {
+		t.Fatal("empty path must be an error")
+	}
+}
+
+func TestKeysWithSpecialCharacters(t *testing.T) {
+	doc := `{"a.b": {"c*d": ["x"]}}`
+	got, _ := mustAppend(t, doc, []string{"a.b", "c*d"}, "y")
+	if got != `{"a.b": {"c*d": ["x","y"]}}` {
+		t.Fatalf("got %s", got)
+	}
+}
+
+// Property: for random documents in random layouts, the result is valid JSON, contains everything the
+// original did, in the same order, plus exactly the new values.
+func TestRandomDocuments(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	indents := []string{"", "  ", "    ", "\t"}
+	for i := 0; i < 400; i++ {
+		var have []string
+		for j := 0; j < rng.Intn(4); j++ {
+			have = append(have, "rule-"+string(rune('a'+rng.Intn(20))))
+		}
+		have = dedupe(have)
+		if have == nil {
+			have = []string{} // a nil slice would marshal as null, which is (correctly) rejected
+		}
+		base := map[string]any{"z": rng.Intn(100), "permissions": map[string]any{"deny": have, "ask": []string{"q"}}, "a": "text"}
+		expect := have // what the document really contained before the edit
+		if rng.Intn(3) == 0 {
+			delete(base["permissions"].(map[string]any), "deny")
+			expect = nil
+		}
+		if rng.Intn(6) == 0 {
+			delete(base, "permissions")
+			expect = nil
+		}
+		ind := indents[rng.Intn(len(indents))]
+		var doc []byte
+		if ind == "" {
+			doc, _ = json.Marshal(base)
+		} else {
+			doc, _ = json.MarshalIndent(base, "", ind)
+			doc = append(doc, '\n')
+		}
+		add := []string{"new-1", "rule-a", "new-2"}
+		out, _, err := AppendStrings(doc, deny, add)
+		if err != nil || !json.Valid(out) {
+			t.Fatalf("iter %d: err=%v valid=%v\n%s", i, err, json.Valid(out), out)
+		}
+		var got map[string]any
+		_ = json.Unmarshal(out, &got)
+		gotDeny := toStrings(got["permissions"].(map[string]any)["deny"])
+		for _, h := range expect {
+			if !contains(gotDeny, h) {
+				t.Fatalf("iter %d: lost %q\n--- original ---\n%s\n--- result ---\n%s", i, h, doc, out)
+			}
+		}
+		if !contains(gotDeny, "new-1") || !contains(gotDeny, "new-2") {
+			t.Fatalf("iter %d: new values missing\n%s", i, out)
+		}
+		if got["a"] != "text" || !bytes.Contains(out, []byte(`"z"`)) {
+			t.Fatalf("iter %d: unrelated keys lost", i)
+		}
+		if strings.Count(string(out), `"rule-a"`) > 1 {
+			t.Fatalf("iter %d: duplicate written", i)
+		}
+	}
+}
+
+func toStrings(v any) []string {
+	var s []string
+	for _, x := range v.([]any) {
+		s = append(s, x.(string))
+	}
+	return s
+}
+
+func contains(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
