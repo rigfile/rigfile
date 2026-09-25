@@ -1,8 +1,8 @@
 # Rigfile status
 
-**Current stage: Stage 1 — Local CLI, Claude Code only, no network, macOS + Linux — IN PROGRESS (spike passed; building the full stage)**
+**Current stage: Stage 1 — Local CLI, Claude Code only, no network, macOS + Linux — BUILD COMPLETE on branch `stage-1` (M1–M9 done); awaiting owner checks below, then sign-off**
 **Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
-Last updated: 2026-09-25
+Last updated: 2026-09-25 (end of Stage 1 build session)
 
 ## Stage 0 result (signed off)
 
@@ -34,7 +34,20 @@ Sign-off terms: the owner accepted the schema and the seven merge-semantics deci
 Built and tested 2026-09-25: manifest validation, marker-splice editing, JSON layout-preserving edits, platform layer, Claude Code permissions adapter with backup-first writes, secrets (keychain + age fallback), exec shim, PreToolUse guard, CLI. 179 tests, race-clean, no skips on macOS. Hook ≈ 5 ms/call; release binaries 4.7–5.8 MB on darwin/arm64, linux/amd64, linux/arm64, windows/amd64. Details, findings and the not-verified list: `docs/spike-report.md`.
 **Owner confirmed go.** Still open from the spike: real-Keychain and real-Linux checks, Linux/Windows latency, file-store lock.
 
-## Stage 1 — plan of record
+## Stage 1 — build result (branch `stage-1`)
+
+Milestones M1–M9 in `docs/stage-1-plan.md` are all done: manifest/merge/layers, lock/state/rollback, Claude Code adapter (all seven categories), CLI (`init validate plan apply diff rollback lock doctor secrets exec hook`), tools installer, secrets completion, CI workflow, container E2E (Ubuntu + Fedora pass), and the owner's rig fixture (`testdata/fixtures/jia-rig/`). `go test -race ./...` is green on macOS; Windows cross-builds and vets.
+
+**Needs the owner before sign-off (I could not do these):**
+1. Push `stage-1` and confirm the first CI run is green (`.github/workflows/ci.yml`; ubuntu/macos tests, e2e containers, gitleaks).
+2. Real-Keychain and Linux Secret Service check (`rigfile secrets set` / `doctor` on a real desktop); macOS clean-VM run per `e2e/README.md`.
+3. Smoke-test against the real `claude` CLI: `claude mcp add-json/get/remove --scope user` (ADR 0002 open items; tests use a fake).
+4. LICENSE decision (§17 Q1); push `main` / set GitHub's default branch.
+5. Optional: fold the docs correction about the marker format into `docs/merge-semantics.md` (region id is `<id>`, not `<layer>#<id>`).
+
+Known limits: login status is not probed; tool installs are not undone by `rollback`; `init` skips nested command folders, symlinks and machine-specific MCP paths; base-secure layer arrives in Stage 2 (apply prints a note without it).
+
+## Stage 1 — plan of record (original)
 
 Goal (plan §12): recreate the owner's setup on a fresh machine from a local folder, on macOS and Linux.
 

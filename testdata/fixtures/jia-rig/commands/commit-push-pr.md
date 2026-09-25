@@ -1,0 +1,1 @@
+Review the current diff. Generate a Conventional Commit message matching this repo's recent commit style. Commit, push the current branch, then open a PR via `gh pr create` with a title and description summarizing the changes (check first if a PR already exists for this branch).

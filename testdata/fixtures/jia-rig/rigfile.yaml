@@ -1,0 +1,43 @@
+# Captured by `rigfile init`. Review before committing: secret VALUES were not captured, but
+# instructions, hooks and skills are your own text and may contain private details.
+apiVersion: rigfile.dev/v1
+name: jia/my-rig
+version: 0.1.0
+description: Owner's rig, captured with `rigfile init` and sanitised (snowflake left out; alpaca deliberately unpinned)
+skills:
+    - path: skills/ios-app-store-launch
+commands:
+    - path: commands/commit-push-pr.md
+mcp_servers:
+    alpaca:
+        command: uvx
+        args:
+            - alpaca-mcp-server
+        env:
+            ALPACA_API_KEY: secret://alpaca/alpaca_api_key
+            ALPACA_SECRET_KEY: secret://alpaca/alpaca_secret_key
+permissions:
+    deny:
+        - bash: git push*
+        - bash: rm -rf*
+        - bash: curl * | bash
+        - bash: python publisher*
+    allow:
+        - bash: git add*
+        - bash: git commit*
+        - bash: git status
+        - bash: git log*
+        - bash: git diff*
+        - bash: python src/*
+        - bash: pip install*
+        - bash: pip list*
+        - bash: cat specs/*
+        - bash: ls*
+        - bash: mkdir*
+        - bash: touch*
+        - bash: .venv/bin/python*
+secrets:
+    alpaca/alpaca_api_key:
+        description: ALPACA_API_KEY of the alpaca MCP server
+    alpaca/alpaca_secret_key:
+        description: ALPACA_SECRET_KEY of the alpaca MCP server

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
+	"github.com/digitaldreamer3462/rigfile/internal/scan"
 )
 
 // ---- harness ----------------------------------------------------------------------------------
@@ -695,5 +696,40 @@ func TestUnwritableRigDirFailsBeforeAnythingIsWritten(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(m.home, ".claude")); !os.IsNotExist(err) {
 		t.Fatal("machine was modified even though the lockfile could not be written")
+	}
+}
+
+func TestJiaRigFixture(t *testing.T) {
+	const fx = "../../testdata/fixtures/jia-rig"
+	// hygiene: no machine paths, no secret-shaped text, no credential file names
+	_ = filepath.WalkDir(fx, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b := mustRead(t, p)
+		for _, bad := range []string{"/Users/", "/home/", "snowflake:", "TESTTEST"} {
+			if strings.Contains(string(b), bad) {
+				t.Errorf("%s contains %q", p, bad)
+			}
+		}
+		if scan.LooksLikeSecret(string(b)) || scan.IsSensitiveFilename(p) {
+			t.Errorf("%s looks sensitive", p)
+		}
+		return nil
+	})
+
+	m := newMachine(t)
+	r := m.run("", "validate", fx)
+	if r.code != 0 || !strings.Contains(r.err+r.out, "alpaca") || !strings.Contains(r.err+r.out, "not pinned") {
+		t.Fatalf("want valid with the unpinned-alpaca warning: %+v", r)
+	}
+	r = m.run("", "plan", fx)
+	for _, want := range []string{"ios-app-store-launch", "commit-push-pr", "alpaca", "Bash(git push*)", "SECRET NEEDED  alpaca/alpaca_api_key"} {
+		if r.code != 0 || !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".claude")); !os.IsNotExist(err) {
+		t.Fatal("plan wrote to the machine")
 	}
 }
