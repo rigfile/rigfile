@@ -100,28 +100,28 @@ type Dropped struct {
 	List, Rule, Reason string
 }
 
-// Plan is the computed permissions change for one settings file.
-type Plan struct {
+// PermPlan is the computed permissions change for one settings file.
+type PermPlan struct {
 	Adds    []Change
 	Dropped []Dropped
 	Present []Change // desired rules already in the file (informational)
 }
 
 // Empty reports whether applying the plan would change nothing.
-func (p Plan) Empty() bool { return len(p.Adds) == 0 }
+func (p PermPlan) Empty() bool { return len(p.Adds) == 0 }
 
 // PlanPermissions computes what must be added to settings so it satisfies the canonical permissions.
 // Rules (docs/merge-semantics.md §4.5):
 //   - only ever adds; nothing already in the file is removed or reordered;
 //   - deny and ask are unioned;
 //   - an allow is dropped (and reported) when it is provably shadowed by a deny or ask.
-func PlanPermissions(pi *platform.Info, settings []byte, perms manifest.Permissions) (Plan, error) {
-	var plan Plan
+func PlanPermissions(pi *platform.Info, settings []byte, perms manifest.Permissions) (PermPlan, error) {
+	var plan PermPlan
 	have := map[string][]string{}
 	for _, l := range lists {
 		cur, err := jsonedit.ReadStrings(settings, []string{"permissions", l})
 		if err != nil {
-			return Plan{}, err
+			return PermPlan{}, err
 		}
 		have[l] = cur
 	}
@@ -130,7 +130,7 @@ func PlanPermissions(pi *platform.Info, settings []byte, perms manifest.Permissi
 		for i, r := range rules {
 			native, ok, err := TranslateRule(pi, r)
 			if err != nil {
-				return Plan{}, fmt.Errorf("permissions.%s[%d]: %w", l, i, err)
+				return PermPlan{}, fmt.Errorf("permissions.%s[%d]: %w", l, i, err)
 			}
 			if ok {
 				desired[l] = append(desired[l], native)
@@ -197,7 +197,7 @@ func splitRule(r string) (tool, arg string, ok bool) {
 }
 
 // Apply returns settings with every planned rule added (layout preserved; see internal/jsonedit).
-func (p Plan) Apply(settings []byte) ([]byte, error) {
+func (p PermPlan) Apply(settings []byte) ([]byte, error) {
 	out := settings
 	for _, l := range lists {
 		var add []string

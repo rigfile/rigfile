@@ -87,6 +87,12 @@ func resolve(path string) (string, error) {
 // WriteFile replaces path with data. If the file exists and differs it is first copied to the
 // backup snapshot. If content is identical nothing is touched.
 func (w *Writer) WriteFile(path string, data []byte) (Result, error) {
+	return w.WriteFileMode(path, data, 0)
+}
+
+// WriteFileMode is WriteFile with an explicit permission for NEW files (0 = private 0600). An existing
+// file keeps its own mode. Use 0o755 for scripts that must be executable.
+func (w *Writer) WriteFileMode(path string, data []byte, mode os.FileMode) (Result, error) {
 	if w.BackupRoot == "" {
 		return Result{}, errors.New("apply: BackupRoot is required")
 	}
@@ -96,6 +102,9 @@ func (w *Writer) WriteFile(path string, data []byte) (Result, error) {
 	}
 	res := Result{Path: abs}
 	rec := FileRecord{Path: abs, Mode: 0o600, AfterSHA: hashing.Bytes(data)}
+	if mode != 0 {
+		rec.Mode = uint32(mode.Perm())
+	}
 
 	old, err := os.ReadFile(abs)
 	switch {

@@ -280,3 +280,22 @@ func (d Decision) Output() ([]byte, error) {
 		},
 	})
 }
+
+// Builtins are the hook names a rig may reference as `run: builtin:<name>`, with the canonical events
+// each supports. `rigfile hook run <name>` dispatches to them.
+var Builtins = map[string][]string{
+	"guard": {"pre_tool_use"},
+}
+
+// KnownBuiltin reports whether name is a built-in hook.
+func KnownBuiltin(name string) bool { _, ok := Builtins[name]; return ok }
+
+// SupportsEvent reports whether the built-in handles the canonical event.
+func SupportsEvent(name, event string) bool {
+	for _, e := range Builtins[name] {
+		if e == event {
+			return true
+		}
+	}
+	return false
+}

@@ -213,7 +213,7 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	return 0
 }
 
-func printPlan(w io.Writer, settings string, p claudecode.Plan) {
+func printPlan(w io.Writer, settings string, p claudecode.PermPlan) {
 	fmt.Fprintf(w, "Claude Code  %s\nPERMISSIONS\n", settings)
 	for _, c := range p.Adds {
 		fmt.Fprintf(w, "  + %-5s %s\n", c.List, c.Rule)
