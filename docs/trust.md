@@ -1,6 +1,6 @@
 # Trust and supply chain: spec (S6-M0)
 
-Status: spec of record for Stage 6. Threat background: RIGFILE_PLAN.md §11 and `docs/registry.md` §7. This document says what the registry and the CLI will tell a person deciding whether to run a stranger's rig, and how each statement is established.
+Status: spec of record for Stage 6, implemented on branch `stage-6`; §10 lists where the build differs from the first draft. Threat background: RIGFILE_PLAN.md §11 and `docs/registry.md` §7. This document says what the registry and the CLI will tell a person deciding whether to run a stranger's rig, and how each statement is established.
 
 ## 1. What can go wrong with a rig, and which layer answers it
 
@@ -100,3 +100,14 @@ Status `held` joins `pending`, `published`, `rejected`, `yanked`, `removed`. It 
 | `held` is invisible except to owner and admins; release and reject work; admin page needs CSRF | `TestHeldVersions`, `TestAdminPage` |
 | OSV: malicious rejects, vulnerable warns, unavailable is reported, hostile answers ignored | `TestPackageLookups` |
 | Pause blocks uploads; mass revocation works | `TestPublishingPause`, `TestRevokeTokens` |
+
+## 10. As built: differences from the draft above
+
+- **Publisher identity is GitHub Actions only.** A signature counts as "the publisher's own" when the certificate's issuer is `https://token.actions.githubusercontent.com` and its subject is a workflow in a repository owned by the publisher's GitHub login (`sigverify.PublisherIdentity`). The draft also allowed a GitHub OIDC login mapped through the account's e-mail; the registry asks GitHub for no scope, so it cannot know the e-mail, and such signatures verify but are shown as "signed, but not by the publisher's identity".
+- **Signing flow:** `rigfile publish <rig> --write-tarball rig.tgz` writes the exact bytes that will be uploaded (deterministic), `cosign sign-blob --bundle bundle.json rig.tgz` signs them, `rigfile publish <rig> --to-registry --sign-bundle bundle.json` uploads both (multipart). The registry verifies before accepting; the CLI verifies again on every pull.
+- **Registry pins are not re-verified from cache.** A pinned re-fetch that is served from the local cache (registry layers referenced from a lock) does not repeat the signature check; the top-level `pull` always downloads and verifies.
+- **Signer recorded in `state.json`**, not in `rigfile.lock` (the lock records layers' source, commit and tree hash). `rigfile update` refuses a changed signer unless `--accept-signer-change`.
+- **The `held` queue applies to public rigs only** (danger-level analysis on a new version). A private rig with a danger finding is published to its owner with the analysis attached; **going public** with danger findings, or with a name that is a look-alike or affix of a notable rig, needs an administrator (`ApprovePublic`), which files a review request automatically.
+- **Popular rigs** (`RIGFILE_REGISTRY_POPULAR_STARS`, default off): new versions of a public rig at or above the threshold are rejected unless signed by the publisher's Actions identity **and** the publisher is verified.
+- **OSV**: exact pinned packages from `npx`/`bunx`/`pnpm dlx`/`uvx`/`pipx run`/`uv run` are looked up; an advisory id starting `MAL-` rejects (UNVERIFIED against the live API), other advisories warn, an unreachable OSV is a visible warning. Configured with `RIGFILE_REGISTRY_OSV_URL` and `RIGFILE_REGISTRY_OSV=off`.
+- **Not built:** `admin rescan` of stored versions, reputation signals that need download counts, publisher-account age from GitHub (the registry's own first-seen date is shown), the OIDC-signing client, signing Rigfile's own releases with Sigstore.

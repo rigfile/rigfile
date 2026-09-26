@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 5 (registry website MVP) is BUILT and MERGED to `main` together with Stages 1-4 (2026-09-26; CI green on all ten jobs). Stage 6 (trust and supply chain) has NOT been started and starts on the owner's go. Open owner items: the external security review and lawyer review that Stage 5's exit criteria require, a real deployment with real GitHub sign-in, and the Stage 2-4 owner checklists (`docs/stage-3-owner-checks.md`, `docs/stage-4-owner-checks.md`, `docs/stage-5-owner-checks.md`).**
-Last updated: 2026-09-26 (Stage 5 merged)
+**Current stage: Stage 6 (trust and supply chain): S6-M0 to S6-M7 BUILT on branch `stage-6` (not pushed, not merged); S6-M8 is the owner gate (`docs/stage-6-owner-checks.md`). Stages 1-5 are merged to `main`. The exit criteria need an EXTERNAL security review (Stages 5 and 6) and a rehearsal of the incident runbook, neither of which I can provide.**
+Last updated: 2026-09-26 (Stage 6 built)
 
 ## Stage 0 result (signed off)
 
@@ -135,3 +135,12 @@ Proven: store, API, auth flows, scan worker, pages (including hostile-content te
 Not proven: real GitHub sign-in, a real S3/R2 bucket, a real deployment, Windows/macOS runs of the new tests (they skip without a database), legal review, external security review, real users. See `docs/stage-5-owner-checks.md`.
 
 Incident during the build: my first host-side E2E script ran the real CLI and triggered a macOS Keychain dialog on the owner's Mac (nothing was stored). Fixed with `RIGFILE_SECRETS_BACKEND=file`, which every host script must set.
+
+
+## Stage 6: built, awaiting owner steps
+
+Plan of record: `docs/stage-6-plan.md`; spec: `docs/trust.md` (§10 lists differences as built); runbook: `docs/incident-response.md`; policy: `SECURITY.md`; metrics: `docs/analysis-metrics.md`. New: `internal/{analyze,similar,sigverify,pkgcheck}`, registry migration `0002_trust.sql`, held-version queue and `/admin`, verified publishers, trust facts API and pull-screen section, Sigstore signature verification (registry and CLI), popular-rig policy, OSV lookups, publishing pause and token revocation.
+
+Proven: unit and CLI tests for every part; registry tests against a real Postgres; a real public-good Sigstore bundle verified through the JSON path; analysis measured at 100% recall / 0 false positives **on a self-written corpus** (which says little about real attackers).
+
+Not proven: the live Sigstore root fetch, OSV's live API, real signatures made in GitHub Actions, the rules against real-world rigs, the runbook under pressure, external review. See `docs/stage-6-owner-checks.md`.

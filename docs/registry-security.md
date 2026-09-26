@@ -79,3 +79,27 @@ Known weak points:
 4. **`store_rigs.go`**: the visibility predicate in every query.
 5. **`pages.go`, `markdown.go`, templates**: any output path that is not auto-escaped.
 6. The deployment: TLS termination, proxy headers, database and bucket credentials, backups, the operator tools.
+
+## 6. Stage 6 additions (2026-09-26)
+
+New claims and their evidence:
+
+| Claim | Evidence |
+|---|---|
+| Hostile text never reaches the page through analysis, similar-name or advisory data (fixed messages, bounded and printable-only third-party text) | `TestFindingsNeverEchoTheFile`, `TestPackageLookups` (hostile OSV answer) |
+| A held or unreleased version is invisible to everyone but its owner and admins and is never resolved by a range | `TestHeldVersions` |
+| Admin actions need an administrator session, same-origin and CSRF; a non-admin cannot tell `/admin` exists | `TestAdminPage` |
+| Going public is gated on the newest version's analysis and on name look-alikes, and files exactly one review request | `TestHeldVersions`, `TestSimilarNamesAreRecordedShownAndHoldTheNameBack` |
+| Signatures are verified before a version is accepted; a stranger's valid signature is never shown as the publisher's | `TestSignedUploadsAreVerifiedStoredAndShown`; cryptography in `internal/sigverify` tests, including a real public-good bundle |
+| The pulling machine re-verifies, `--require-signature` refuses, a changed signer is refused on update | `TestSignedRigsAreVerifiedOnThePullingMachineAndSignerChangesAreRefused` |
+| A popular rig cannot ship an unsigned or unverified-publisher version | `TestPopularRigPolicy` |
+| A package listed as malicious rejects; an unreachable lookup is reported, never silently clean | `TestPackageLookupsDuringTheScan` |
+| Incident switches work and are audited | `TestPublishingPauseAndTokenRevocation`, `TestAdminTools` |
+
+New known weak points:
+- **The analysis and similar-name rules are heuristics with a self-written corpus** (`docs/analysis-metrics.md`). Their value is raising the cost of obvious attacks and giving readers facts; they will miss determined attackers and will sometimes cry wolf. Held-for-review depends on an administrator actually looking at `/admin`.
+- **The Sigstore trusted root is fetched over the network at first use** (TUF, cached) unless `RIGFILE_REGISTRY_SIGSTORE_ROOT` pins a file. That path is not exercised by automated tests (only the virtual Sigstore and a bundled real public-good bundle are). If the fetch fails, signed uploads answer 503 and pulls report "present but NOT verified here".
+- **Only GitHub Actions identities count as the publisher.** Interactive keyless signatures verify but are shown as not-the-publisher.
+- **Star counts can be bought or faked**; the popular-rig policy is a soft trigger.
+- **OSV is a third party**: its outage degrades the check to a warning; its content is treated as untrusted text. The `MAL-` convention is unverified against the live API.
+- **No re-scan of stored versions** when rules improve.
