@@ -48,10 +48,6 @@ func launcherHosts(argv0 string) []string {
 	return nil
 }
 
-// caEnv names the variables that make common runtimes trust the session CA. The CA is given to this child only, never
-// installed in an OS trust store.
-var caEnv = []string{"NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO"}
-
 // startLevel2 decides the level for a launch (docs/rigd.md §7). It returns (nil, "", nil) for Level 1 with an optional
 // notice for the person, or a live session for Level 2. An error means "do not start the server".
 func startLevel2(dir, server string, argv []string, allow []string, binds map[string][]string, sec map[string]string) (*level2, string, error) {
@@ -109,16 +105,6 @@ func startLevel2(dir, server string, argv []string, allow []string, binds map[st
 		l.end()
 		return nil, "", err
 	}
-	for k, v := range reply.Surrogates {
-		l.env[k] = v
-	}
-	for _, k := range []string{"HTTPS_PROXY", "https_proxy"} {
-		l.env[k] = reply.ProxyURL
-	}
-	l.env["NO_PROXY"], l.env["no_proxy"] = "", ""
-	l.env["NODE_USE_ENV_PROXY"] = "1" // Node's built-in fetch only follows the proxy variables when asked
-	for _, k := range caEnv {
-		l.env[k] = caPath
-	}
+	l.env = rigd.ChildEnv(reply, caPath)
 	return l, "", nil
 }

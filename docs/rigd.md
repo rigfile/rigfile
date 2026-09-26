@@ -13,7 +13,8 @@ The attacker controls the **MCP server process** (a malicious package, a comprom
 | Ask the bound service to echo the key back, then leak it | key leaks | the response is scrubbed to the surrogate |
 | Use the key against the bound host for something else | works | still works (the child *is* the user's proxy to that service) |
 | Steal the key from disk or the keychain | not exposed by the child | not exposed by the child; `rigd` holds it in memory for the session |
-| Talk to `rigd` from another local process to obtain surrogates or the CA | n/a | needs the broker token (private file) and session credentials |
+| Talk to `rigd` from another local process to obtain surrogates or the CA | n/a | needs the broker token (a private file); a browser or a DNS-rebinding page is refused before the token is checked |
+| **Read the broker token file (the child runs as you) and open a session that binds the key to the attacker's host** | key leaks | **not stopped**: see §8. Closing it needs OS-level separation |
 | Make the child trust the CA globally | n/a | the CA is only ever given to that child's environment |
 
 **What Level 2 does not stop:** misuse of the key *against the bound host* (an agent told to place trades, delete repositories, send email through the service the key is for). The broker narrows where a secret can go, not what the secret's owner can be made to do. Permissions on the key itself (read-only tokens, paper-trading keys) remain the user's first defence.
@@ -81,6 +82,7 @@ Bound-host and allowlist patterns are the schema's `hostPattern`: an exact host,
 - Go programs on macOS and Windows use the OS trust store and ignore `SSL_CERT_FILE`; Java uses its own keystore; certificate-pinning clients reject the interception. These are the Level 1 cases.
 - HTTP/3, WebSockets, gRPC over h2c and raw sockets are not intercepted (WebSocket upgrades are refused rather than tunnelled uninspected when a surrogate is involved).
 - `rigd` must be running for Level 2; if it dies mid-session the child's requests fail (closed), they do not bypass.
+- **A targeted same-user attacker is not stopped.** The session API trusts whoever holds the token, and the token file is readable by every process running as you, including a compromised MCP server. Such a process can open its own session for any secret the store holds and bind it to a host of its choosing (`docs/red-team-broker.md`, last row, is a test that keeps this honest). base-secure denies the *agent* reading `~/.rigfile/**`, but an MCP server process is not covered by an agent permission. What Level 2 does stop is the common case, code that only has its environment and network (a malicious package harvesting variables). Ways to close the gap, none built: run the broker under another account; keep the token in an OS store with a per-application access-control list (macOS Keychain); have the broker verify a session's bindings against a policy the user signs.
 - The broker holds real secrets in memory while sessions exist; a local attacker with the user's rights (debugger, memory read) can take them. It is not a defence against a compromised user account, only against a compromised *child process*.
 
 ## 9. Tests (named)
@@ -96,6 +98,7 @@ Bound-host and allowlist patterns are the schema's `hostPattern`: an exact host,
 | Proxy authentication and loopback-only | `TestProxyAuth` |
 | The audit log never contains a value | `TestAuditNeverContainsSecrets` |
 | The broker API authenticates, expires and cleans up sessions, and never returns real values | `TestBroker*` |
+| Frontings, upgrades, non-loopback peers, internal addresses | `TestProxyRefusesFrontingAndUpgrades`, `TestProxyRefusesNonLoopbackPeers`, `TestDefaultDialRefusesInternalAddressesForNames` |
 | `exec` sets the environment, ends the session, and falls back or fails as specified | `TestExecLevel2*` |
 | Service files per OS | `TestServiceFiles` |
-| A malicious MCP server cannot exfiltrate the real key | `TestRedTeam*` |
+| A malicious MCP server cannot exfiltrate the real key (29 attempts, real child process, real broker; results in `docs/red-team-broker.md`) | `TestRedTeamBroker` |

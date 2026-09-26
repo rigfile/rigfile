@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 6 (trust and supply chain): S6-M0 to S6-M7 BUILT on branch `stage-6` (not pushed, not merged); S6-M8 is the owner gate (`docs/stage-6-owner-checks.md`). Stages 1-5 are merged to `main`. The exit criteria need an EXTERNAL security review (Stages 5 and 6) and a rehearsal of the incident runbook, neither of which I can provide.**
-Last updated: 2026-09-26 (Stage 6 built)
+**Current stage: Stage 7 (`rigd`, the secret broker): S7-M0 to S7-M6 BUILT on branch `stage-7` (not pushed); S7-M7 is the owner gate (`docs/stage-7-owner-checks.md`). Stages 1-5 are merged to `main`; Stage 6 is pushed with green CI and awaiting your merge. Open for the owner: the Stage 5-6 external security review and runbook rehearsal, and the live checks for Stage 7 (real service install per OS, real MCP servers).**
+Last updated: 2026-09-26 (Stage 7 built)
 
 ## Stage 0 result (signed off)
 
@@ -144,3 +144,11 @@ Plan of record: `docs/stage-6-plan.md`; spec: `docs/trust.md` (§10 lists differ
 Proven: unit and CLI tests for every part; registry tests against a real Postgres; a real public-good Sigstore bundle verified through the JSON path; analysis measured at 100% recall / 0 false positives **on a self-written corpus** (which says little about real attackers).
 
 Not proven: the live Sigstore root fetch, OSV's live API, real signatures made in GitHub Actions, the rules against real-world rigs, the runbook under pressure, external review. See `docs/stage-6-owner-checks.md`.
+
+## Stage 7: built, awaiting owner steps
+
+Plan of record: `docs/stage-7-plan.md`; spec: `docs/rigd.md` (§7 records what was built); results: `docs/red-team-broker.md`; owner steps: `docs/stage-7-owner-checks.md`. New: `internal/rigd` (in-memory CA, host patterns, surrogates and sessions, intercepting CONNECT proxy, audit log, broker API and client, service files per OS), `rigfile broker run|status|enable|disable|exclude|include|install|uninstall|start|stop`, `rigfile exec` Level 2 (`--server`, `--allow`, `--bind`), adapters that write those flags from `network.allow` and `secrets.<ref>.hosts`, a per-server level in `rigfile doctor`.
+
+Proven: the proxy and broker against local TLS servers; a real malicious child process against the real broker (29 attempts: everything blocked or reduced to a surrogate, one documented exception); `exec` with real child processes; a detached background broker end to end; service files as goldens and installs through a fake activator with rollback.
+
+Not proven: a real launchd/systemd/scheduled-task install, real MCP servers and vendor APIs, Node/Python/Go clients against the CA variables, and one real gap: **a compromised child runs as you and can read the broker token** (`docs/red-team-broker.md`, last row). See `docs/stage-7-owner-checks.md`.

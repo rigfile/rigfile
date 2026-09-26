@@ -26,7 +26,7 @@ func TestServiceFiles(t *testing.T) {
 		}
 		got := string(u.Content)
 		if goos == "windows" {
-			got = DecodeUTF16(u.Content)
+			got = strings.ReplaceAll(DecodeUTF16(u.Content), "\r\n", "\n") // the golden file is stored with LF endings on every OS
 			if u.Content[0] != 0xFF || u.Content[1] != 0xFE {
 				t.Fatal("the task file must be UTF-16 with a byte-order mark")
 			}
