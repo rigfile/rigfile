@@ -11,7 +11,7 @@
 # observed on `checked` and must be re-verified when the catalog is refreshed.
 apiVersion: rigfile.dev/catalog/v1
 kind: models
-checked: 2026-09-25
+checked: 2026-09-26
 
 roles:
 
@@ -100,8 +100,10 @@ roles:
         status: verified                # tag exists on ollama.com/library/qwen3 (page lists 8b, ≈5.2 GB, Apache-2.0 mentioned)
         when: {}                        # anything else (Intel Mac, Windows/Linux CPU, no matching GPU)
         engine: ollama
-        engine_version: TODO-verify     # latest release seen: v0.34.4 (2026-09-23); pin when Stage 3b starts
+        engine_version: "0.34.4"        # github.com/ollama/ollama releases/latest: v0.34.4, published 2026-09-23 (checked 2026-09-26)
         model: "qwen3:8b"
+        digest: "500a1f067a9f"          # the id ollama.com/library/qwen3:8b shows for this tag on 2026-09-26; `ollama list` shows the same 12 hex in its ID column (UNVERIFIED equivalence, checked at pull time and warned on mismatch)
+        weights_format: gguf            # Ollama stores GGUF blobs; quantization Q4_K_M per the library page
         license: Apache-2.0             # per ollama.com library page text; confirm on the model card
         download: { approx_gb: 5.2, note: "as displayed on the Ollama library page" }
         serve:

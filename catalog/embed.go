@@ -7,3 +7,8 @@ import _ "embed"
 //
 //go:embed tools.yaml
 var ToolsYAML []byte
+
+// ModelsYAML is catalog/models.yaml.
+//
+//go:embed models.yaml
+var ModelsYAML []byte
