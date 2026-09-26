@@ -63,7 +63,7 @@ func cmdValidate(args []string, e env) int {
 // ---- plan / apply -----------------------------------------------------------------------------
 
 type rigFlags struct {
-	layers, project, claudeDir                                                 string
+	layers, project, claudeDir, registry                                       string
 	overwrite, yes, updateLock, noTools, noGit, unsafeBase, sandbox, noSandbox bool
 	targets                                                                    kvFlags
 	pulled                                                                     *pulledRig // set by `pull` and `update`
@@ -80,6 +80,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 	fs.SetOutput(e.err)
 	fs.StringVar(&f.layers, "layers", "", "directory holding inherited layers: <dir>/<owner>/<name>/rigfile.yaml")
 	fs.StringVar(&f.project, "project", "", "project directory for scope: project instructions")
+	fs.StringVar(&f.registry, "registry", "", "Rigfile registry to resolve owner/name layers from (default $RIGFILE_REGISTRY)")
 	fs.StringVar(&f.claudeDir, "claude-dir", "", "Claude Code config directory (default ~/.claude or $CLAUDE_CONFIG_DIR)")
 	fs.BoolVar(&f.unsafeBase, "i-understand-unsafe-base", false, "DANGEROUS: skip rigfile/base-secure (local only; recorded in state; doctor shows it red)")
 	fs.BoolVar(&f.sandbox, "sandbox", false, "also turn on Claude Code's OS-level sandbox with base-secure's credential denies (remembered; macOS/Linux/WSL2)")
@@ -98,7 +99,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Registry: registryBaseQuiet(e, f.registry), RegistryToken: regToken(e), Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)

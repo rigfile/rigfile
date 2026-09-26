@@ -154,7 +154,11 @@ func (s *Server) deviceCode(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, "unknown client_id")
 		return
 	}
-	const ttl, interval = 15 * time.Minute, 5
+	const ttl = 15 * time.Minute
+	interval := s.Cfg.DeviceInterval
+	if interval < 1 {
+		interval = 5
+	}
 	dc, uc, err := s.Store.CreateDevice(r.Context(), ttl, interval)
 	if err != nil {
 		apiError(w, http.StatusInternalServerError, "could not start a sign-in")

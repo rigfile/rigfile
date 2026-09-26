@@ -67,9 +67,13 @@ type Options struct {
 	// Sources fetches `from:` layers written as git sources (nil = the real services, cached under the state
 	// directory). Tests inject a client that talks to local fakes.
 	Sources *source.Client
-	Source  string // set by `pull`: the canonical source string of the rig itself, recorded in state.json
-	Commit  string
-	Tree    string
+	// Registry is the origin of the Rigfile registry to resolve owner/name layers from ("" = none); RegistryToken returns
+	// the stored sign-in token for it (private layers), or "".
+	Registry      string
+	RegistryToken func(base string) string
+	Source        string // set by `pull`: the canonical source string of the rig itself, recorded in state.json
+	Commit        string
+	Tree          string
 }
 
 // Prepared is everything computed before anything is written.
@@ -183,9 +187,9 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 	}
 	sc := o.Sources
 	if sc == nil {
-		sc = &source.Client{CacheDir: filepath.Join(sd, "sources"), Getenv: o.Getenv}
+		sc = &source.Client{CacheDir: filepath.Join(sd, "sources"), Getenv: o.Getenv, Registry: &source.RegistryFetcher{Token: o.RegistryToken}}
 	}
-	remote := layers.SourceRemote{Client: sc, Pins: map[string]source.Pin{}}
+	remote := layers.SourceRemote{Client: sc, Pins: map[string]source.Pin{}, Registry: o.Registry}
 	if b, err := os.ReadFile(filepath.Join(top.Dir, lock.FileName)); err == nil {
 		if old, err := lock.Parse(b); err == nil {
 			for src, pin := range old.Pins() {

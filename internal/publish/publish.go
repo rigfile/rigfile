@@ -5,6 +5,9 @@
 package publish
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io/fs"
 	"os"
@@ -461,4 +464,39 @@ func AuditDir(dir string, sc *scan.Scanner) (*Audit, error) {
 	p := &Prepared{Problems: a.Problems}
 	a.Unpinned = p.unpinned()
 	return a, nil
+}
+
+// Tarball packs the prepared rig as a deterministic gzip tarball (sorted paths, fixed times and ownership), the exact
+// bytes the registry stores and hashes. It refuses a rig that is blocked.
+func (p *Prepared) Tarball() ([]byte, error) {
+	if b := p.Blocked(); len(b) > 0 {
+		return nil, fmt.Errorf("publish: blocked: %s", strings.Join(b, "; "))
+	}
+	names := make([]string, 0, len(p.Files))
+	for n := range p.Files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var buf bytes.Buffer
+	gw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	tw := tar.NewWriter(gw)
+	for _, n := range names {
+		mode := int64(0o644)
+		if strings.HasSuffix(n, ".sh") {
+			mode = 0o755
+		}
+		if err := tw.WriteHeader(&tar.Header{Name: n, Typeflag: tar.TypeReg, Mode: mode, Size: int64(len(p.Files[n]))}); err != nil {
+			return nil, err
+		}
+		if _, err := tw.Write(p.Files[n]); err != nil {
+			return nil, err
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	if err := gw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

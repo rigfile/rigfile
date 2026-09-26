@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
@@ -45,6 +46,8 @@ type env struct {
 	interactive bool                                           // tests: behave as if stdin/stdout were a terminal
 	hidden      func(prompt string) ([]byte, error)            // tests: replaces the hidden-input prompt
 	sources     *source.Client                                 // nil = the real services, cached under the state directory
+	sleep       func(time.Duration)                            // tests: replaces the device-flow polling delay
+	pollEvery   time.Duration                                  // tests: how often publish checks the registry scan
 	runCmd      func(ctx context.Context, argv []string) error // tests: replaces running a vendor login command
 	openURL     func(string) error                             // tests: replaces opening the browser
 }
@@ -85,6 +88,12 @@ func run(args []string, e env) int {
 		return cmdSelfUpdate(args[1:], e)
 	case "verify-signature":
 		return cmdVerifySignature(args[1:], e)
+	case "login":
+		return cmdLogin(args[1:], e)
+	case "logout":
+		return cmdLogout(args[1:], e)
+	case "whoami":
+		return cmdWhoami(args[1:], e)
 	case "logins":
 		return cmdLogins(args[1:], e)
 	case "publish":
@@ -121,7 +130,8 @@ func usage(w io.Writer) {
   apply [<rig-dir>]                  apply the rig to Claude Code (review, confirm, backup first)
   pull <source> [--plan-only]        fetch a rig from github.com/o/r[@ref][//dir] (or gitlab.com, https/ssh git URL), review, apply
   update [--plan-only]               re-resolve the source of the last pulled rig and show what changed
-  publish [--to-git DIR]             scrub your setup (or a rig dir) into a clean repository you can share
+  login | logout | whoami            sign in to a Rigfile registry (device flow; token kept in your keychain)
+  publish [--to-git DIR] [--to-registry [--public]]   scrub your setup (or a rig dir); write a repo and/or publish to the registry
   logins [--provider name]           walk through the logins the applied rig needs
   self-update [--check]              install the latest release after verifying its signature and checksum
   verify-signature <file> [--pubkey k] check a minisign signature

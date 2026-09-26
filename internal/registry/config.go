@@ -26,10 +26,11 @@ type Config struct {
 	Admins       []string // RIGFILE_REGISTRY_ADMINS: comma-separated GitHub logins
 	TrustProxy   bool     // RIGFILE_REGISTRY_TRUST_PROXY=1: take the client address from the last X-Forwarded-For entry
 
-	SessionTTL  time.Duration
-	TokenTTL    time.Duration
-	MaxUpload   int64 // compressed bytes
-	ScanWorkers int
+	SessionTTL     time.Duration
+	TokenTTL       time.Duration
+	MaxUpload      int64 // compressed bytes
+	ScanWorkers    int
+	DeviceInterval int // seconds between device-flow polls (default 5)
 }
 
 // Origin returns scheme://host of the public URL.
@@ -62,7 +63,7 @@ func ConfigFromEnv(getenv func(string) string, readFile func(string) ([]byte, er
 		GitHubID: getenv("RIGFILE_REGISTRY_GITHUB_CLIENT_ID"), GitHubSecret: getenv("RIGFILE_REGISTRY_GITHUB_CLIENT_SECRET"),
 		GitHubWeb: def(getenv("RIGFILE_REGISTRY_GITHUB_WEB"), "https://github.com"), GitHubAPI: def(getenv("RIGFILE_REGISTRY_GITHUB_API"), "https://api.github.com"),
 		TrustProxy: getenv("RIGFILE_REGISTRY_TRUST_PROXY") == "1",
-		SessionTTL: 7 * 24 * time.Hour, TokenTTL: 30 * 24 * time.Hour, MaxUpload: 20 << 20, ScanWorkers: 2,
+		SessionTTL: 7 * 24 * time.Hour, TokenTTL: 30 * 24 * time.Hour, MaxUpload: 20 << 20, ScanWorkers: 2, DeviceInterval: 5,
 	}
 	if f := getenv("RIGFILE_REGISTRY_GITHUB_CLIENT_SECRET_FILE"); f != "" && readFile != nil {
 		b, err := readFile(f)

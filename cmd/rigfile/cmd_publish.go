@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -34,13 +35,25 @@ func cmdPublish(args []string, e env) int {
 	all := fs.Bool("all", false, "include everything that was captured (no checklist)")
 	ack := fs.Bool("ack-personal", false, "you reviewed the personal-information list and accept it")
 	gitInit := fs.Bool("git-init", false, "run `git init` and make one commit in the output directory")
+	toReg := fs.Bool("to-registry", false, "publish to the Rigfile registry (private unless --public); needs `rigfile login`")
+	public := fs.Bool("public", false, "with --to-registry: make the rig public once the registry scan has published it")
+	regFlag := fs.String("registry", "", "registry address (default $RIGFILE_REGISTRY)")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
 		return 2
 	}
-	if *toGit == "" || len(pos) > 1 {
-		fmt.Fprintln(e.err, "usage: rigfile publish [<rig-dir>] --to-git <dir> [--name owner/name] [--from target] [--all] [--ack-personal] [--git-init]")
+	if (*toGit == "" && !*toReg) || len(pos) > 1 || (*public && !*toReg) {
+		fmt.Fprintln(e.err, "usage: rigfile publish [<rig-dir>] [--to-git <dir>] [--to-registry [--public]] [--name owner/name] [--from target] [--all] [--ack-personal] [--git-init]")
 		return 2
+	}
+	var regBase string
+	if *toReg {
+		b, err := registryBase(e, *regFlag)
+		if err != nil {
+			fmt.Fprintln(e.err, "rigfile:", err)
+			return 1
+		}
+		regBase = b
 	}
 	pi, err := platformInfo(e)
 	if err != nil {
@@ -66,7 +79,7 @@ func cmdPublish(args []string, e env) int {
 		fmt.Fprintln(e.err, "rigfile: refusing to publish: rigfile/base-secure was skipped on this machine (--i-understand-unsafe-base, since "+st.UnsafeBase.Since+"). Run a normal `rigfile apply` first.")
 		return 1
 	}
-	if ents, err := os.ReadDir(*toGit); err == nil && len(ents) > 0 {
+	if ents, err := os.ReadDir(*toGit); *toGit != "" && err == nil && len(ents) > 0 {
 		fmt.Fprintf(e.err, "rigfile: %s already has files; choose an empty directory\n", *toGit)
 		return 1
 	}
@@ -111,11 +124,23 @@ func cmdPublish(args []string, e env) int {
 		}
 		return 1
 	}
-	if err := p.Write(*toGit); err != nil {
-		fmt.Fprintln(e.err, "rigfile:", err)
-		return 1
+	if *toGit != "" {
+		if err := p.Write(*toGit); err != nil {
+			fmt.Fprintln(e.err, "rigfile:", err)
+			return 1
+		}
+		fmt.Fprintf(e.out, "\nscan proof: %d finding(s) in %d file(s) written to %s\n", p.Proof.Findings, p.Proof.Files, *toGit)
+	} else {
+		fmt.Fprintf(e.out, "\nscan proof: %d finding(s) in %d file(s)\n", p.Proof.Findings, p.Proof.Files)
 	}
-	fmt.Fprintf(e.out, "\nscan proof: %d finding(s) in %d file(s) written to %s\n", p.Proof.Findings, p.Proof.Files, *toGit)
+	if *toReg {
+		if code := publishToRegistry(e, p, regBase, *public); code != 0 {
+			return code
+		}
+	}
+	if *toGit == "" {
+		return 0
+	}
 	if *gitInit {
 		if err := gitInitCommit(*toGit, p.Manifest.Name+"@"+p.Manifest.Version); err != nil {
 			fmt.Fprintln(e.err, "rigfile:", err)
@@ -326,4 +351,37 @@ func gitInitCommit(dir, label string) error {
 		return err
 	}
 	return run("commit", "-q", "-m", "Publish "+label) // through the user's own hooks
+}
+
+// publishToRegistry uploads the prepared rig and waits for the registry's scan.
+func publishToRegistry(e env, p *publish.Prepared, base string, public bool) int {
+	tb, err := p.Tarball()
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	owner, name, _ := strings.Cut(p.Manifest.Name, "/")
+	c := regClient(e, base)
+	if storedToken(e, base) == "" {
+		fmt.Fprintln(e.err, "rigfile: not signed in to", base, "- run `rigfile login` first")
+		return 1
+	}
+	v, err := c.Upload(context.Background(), owner, name, tb)
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	if code := pollPublished(e, c, owner, name, v.Version); code != 0 {
+		return code
+	}
+	if !public {
+		fmt.Fprintf(e.out, "%s/%s is private: only you can pull it. Make it public with: rigfile publish ... --to-registry --public (or the rig page)\n", owner, name)
+		return 0
+	}
+	if err := c.SetVisibility(context.Background(), owner, name, "public"); err != nil {
+		fmt.Fprintln(e.err, "rigfile: published, but it could not be made public:", err)
+		return 1
+	}
+	fmt.Fprintf(e.out, "%s/%s is public. Others pull it with: rigfile pull %s/%s --registry %s\n", owner, name, owner, name, base)
+	return 0
 }
