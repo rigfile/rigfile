@@ -14,6 +14,12 @@ func cmdGitHook(args []string, e env) int {
 	switch args[0] {
 	case "pre-commit":
 		return githook.PreCommit(g, githook.DefaultScanner, e.err)
+	case "commit-msg":
+		if len(args) < 2 {
+			fmt.Fprintln(e.err, "usage: rigfile hook commit-msg <message-file>")
+			return 2
+		}
+		return githook.CommitMsg(githook.DefaultScanner, args[1], e.err)
 	case "pre-push":
 		remote := ""
 		if len(args) > 1 {
@@ -34,7 +40,7 @@ func cmdGitHook(args []string, e env) int {
 func cmdHook(args []string, e env) int {
 	if len(args) > 0 {
 		switch args[0] {
-		case "pre-commit", "pre-push", "reference-transaction":
+		case "pre-commit", "commit-msg", "pre-push", "reference-transaction":
 			return cmdGitHook(args, e)
 		}
 	}

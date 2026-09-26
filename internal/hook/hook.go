@@ -93,7 +93,9 @@ func PreToolUse(in Input) Decision {
 // --- shell command rules --------------------------------------------------------------------
 
 var (
-	hooksPath   = regexp.MustCompile(`(?i)\bcore\.hooksPath\b`)
+	hooksPath = regexp.MustCompile(`(?i)\bcore\.hooksPath\b`)
+	// `bash <(curl ...)`, `sh -c "$(curl ...)"`, `eval "$(wget ...)"`: a download executed without a pipe
+	subToShell  = regexp.MustCompile(`(?is)\b(ba|z|da|k)?sh\b[^;&|]*(<\(|\$\()\s*(curl|wget)\b|\beval\b[^;&|]*(\$\(|` + "`" + `)\s*(curl|wget)\b|\bsource\s+<\(\s*(curl|wget)\b`)
 	pipeToShell = regexp.MustCompile(`(?is)\b(curl|wget)\b[^|;&]*\|\s*(sudo\s+)?(ba|z|da|k)?sh\b|\b(iwr|irm|invoke-webrequest|invoke-restmethod)\b[^|;&]*\|\s*(iex|invoke-expression)\b`)
 )
 

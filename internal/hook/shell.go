@@ -22,7 +22,7 @@ func checkShellDepth(cmd string, depth int) Decision {
 	if depth > maxShellDepth {
 		return Decision{}
 	}
-	if pipeToShell.MatchString(cmd) {
+	if pipeToShell.MatchString(cmd) || subToShell.MatchString(cmd) {
 		return Decision{Ask, "This pipes a download straight into a shell. Download the script, review it, then run it.", "no-pipe-to-shell"}
 	}
 	var best Decision

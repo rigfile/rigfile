@@ -68,6 +68,7 @@ own() {
   fi
   case $name in
     pre-commit) "$rf" hook pre-commit ;;
+    commit-msg) "$rf" hook commit-msg "$@" ;;
     pre-push) printf '%%s' "$input" | "$rf" hook pre-push "$@" ;;
     reference-transaction)
       [ "$BACKSTOP" = 1 ] || return 0
@@ -78,7 +79,7 @@ own() {
 }
 
 case $name in
-  pre-commit|pre-push|reference-transaction) own "$@" || exit $? ;;
+  pre-commit|commit-msg|pre-push|reference-transaction) own "$@" || exit $? ;;
 esac
 
 chain() {

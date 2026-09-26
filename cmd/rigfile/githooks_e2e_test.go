@@ -338,3 +338,15 @@ func TestDispatcherFailsOpenLoudlyWhenRigfileIsMissing(t *testing.T) {
 		t.Fatalf("the skip must be loud:\n%s", stderr)
 	}
 }
+
+func TestSecretInACommitMessageIsBlockedByTheRealHook(t *testing.T) {
+	g := newGitEnv(t)
+	g.install(true, "")
+	g.write("a.txt", "a\n")
+	g.mustGit("add", "-A")
+	_, stderr, err := g.git("commit", "-q", "-m", "note: the key is "+e2eSecret)
+	if err == nil || !strings.Contains(stderr, "commit MESSAGE") || strings.Contains(stderr, e2eSecret) {
+		t.Fatalf("%v\n%s", err, stderr)
+	}
+	g.mustGit("commit", "-q", "-m", "fine message")
+}

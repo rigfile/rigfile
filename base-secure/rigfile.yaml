@@ -57,6 +57,12 @@ permissions:
     - {read: "**/service-account*.json", reason: "cloud credentials"}
     - {read: "**/client_secret*.json", reason: "OAuth client secrets"}
     - {read: "**/*.tfstate", reason: "Terraform state holds secrets"}
+    - {read: "**/secrets.yml", reason: "secret files"}
+    - {read: "**/secrets.yaml", reason: "secret files"}
+    - {read: "**/*.secret", reason: "secret files"}
+    - {read: "**/.htpasswd", reason: "password hashes"}
+    - {read: "**/kubeconfig", reason: "cluster credentials"}
+    - {read: "**/*.kubeconfig", reason: "cluster credentials"}
     - {read: "**/.netrc", reason: "stored passwords"}
     - {read: "**/.npmrc", reason: "registry tokens"}
     - {read: "**/.pypirc", reason: "registry tokens"}

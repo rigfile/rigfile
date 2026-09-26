@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
@@ -183,4 +184,33 @@ func ReferenceTransaction(g Git, scf ScannerFunc, state string, stdin io.Reader,
 		return 1
 	}
 	return 0
+}
+
+// CommitMsg is `rigfile hook commit-msg <file>`: the message text is not part of any diff, so a secret pasted
+// into a commit message would otherwise be committed unseen. Fails closed like pre-commit.
+func CommitMsg(scf ScannerFunc, file string, stderr io.Writer) int {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		fmt.Fprintf(stderr, "\n✘ rigfile: commit blocked: cannot read the commit message: %v\n", err)
+		return 1
+	}
+	sc, err := scf()
+	if err != nil {
+		fmt.Fprintf(stderr, "\n✘ rigfile: commit blocked: scanner unavailable: %v\n", err)
+		return 1
+	}
+	// comment lines (git strips them) are not part of the message
+	var msg strings.Builder
+	for _, l := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(l, "#") {
+			msg.WriteString(l + "\n")
+		}
+	}
+	fs := sc.ScanText("", msg.String())
+	if len(fs) == 0 {
+		return 0
+	}
+	res := Result{Findings: fs, Notes: []string{"the secret is in the commit MESSAGE, which a diff scan would never see; edit the message"}}
+	fmt.Fprint(stderr, Render("commit", res))
+	return 1
 }

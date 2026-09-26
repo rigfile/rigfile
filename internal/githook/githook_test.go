@@ -350,3 +350,23 @@ func TestBackstopLatency(t *testing.T) {
 	}
 	t.Logf("reference-transaction backstop (tree already approved by pre-commit): %v per update, in-process", total/n)
 }
+
+func TestCommitMsgScansTheMessageButNotGitComments(t *testing.T) {
+	dir := t.TempDir()
+	write := func(s string) string {
+		p := filepath.Join(dir, "MSG")
+		_ = os.WriteFile(p, []byte(s), 0o644)
+		return p
+	}
+	var out bytes.Buffer
+	if code := CommitMsg(Fixed(scanner(t, scan.Options{})), write("fix: rotate key\n\ntoken was "+fakeGH+"\n"), &out); code != 1 || !strings.Contains(out.String(), "commit MESSAGE") || strings.Contains(out.String(), fakeGH) {
+		t.Fatalf("code %d\n%s", code, out.String())
+	}
+	out.Reset()
+	if code := CommitMsg(Fixed(scanner(t, scan.Options{})), write("fix: thing\n\n# token "+fakeGH+" is only in a git comment\n"), &out); code != 0 {
+		t.Fatalf("comment lines are stripped by git and must not count: %d\n%s", code, out.String())
+	}
+	if code := CommitMsg(Fixed(scanner(t, scan.Options{})), filepath.Join(dir, "missing"), &out); code != 1 {
+		t.Fatal("an unreadable message must fail closed")
+	}
+}
