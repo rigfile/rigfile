@@ -51,6 +51,10 @@ type Options struct {
 	// UnsafeBase skips rigfile/base-secure (--i-understand-unsafe-base): local only, recorded in state.json,
 	// shown red by doctor, and never accepted by a future `publish`.
 	UnsafeBase bool
+
+	// SandboxOn / SandboxOff set the sticky opt-in for Claude Code's sandbox profile (S2-M5b); neither keeps the
+	// choice recorded by the last apply.
+	SandboxOn, SandboxOff bool
 }
 
 // Prepared is everything computed before anything is written.
@@ -69,6 +73,7 @@ type Prepared struct {
 	Tools      tools.Plan   // what apply would install (planned, never run here)
 	GitPlan    *engine.Plan // the git module (base-secure); nil with --no-git
 	cleanup    func()       // removes the extracted base-secure files
+	Sandbox    bool         // effective sandbox opt-in for this run
 
 	Lock      *lock.Lock
 	LockPath  string
@@ -117,6 +122,15 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 		}
 	}
 	p := &Prepared{Opts: o, Plat: pi, StateDir: sd, UnsafeBase: o.UnsafeBase}
+	if st0, err := state.Load(sd); err == nil {
+		p.Sandbox = st0.Prefs.Sandbox
+	}
+	if o.SandboxOn {
+		p.Sandbox = true
+	}
+	if o.SandboxOff {
+		p.Sandbox = false
+	}
 
 	top, err := manifest.Load(o.RigDir)
 	if err != nil {
@@ -193,7 +207,7 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 
 	env := claudecode.Env{
 		Plat: pi, ClaudeDir: claudeDir, ProjectDir: o.ProjectDir, State: p.State.Targets[Target],
-		MCP: o.MCP, Overwrite: o.Overwrite, BaseSecure: !o.UnsafeBase,
+		MCP: o.MCP, Overwrite: o.Overwrite, BaseSecure: !o.UnsafeBase, Sandbox: p.Sandbox,
 	}
 	if p.Plan, err = claudecode.Build(env, p.Proj); err != nil {
 		return nil, err
@@ -396,6 +410,7 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 		ts.AppliedAt = now().UTC().Format(time.RFC3339)
 		ts.RunID = runID
 	}
+	p.State.Prefs.Sandbox = p.Sandbox
 	switch {
 	case p.UnsafeBase && p.State.UnsafeBase == nil:
 		p.State.UnsafeBase = &state.UnsafeBase{Since: now().UTC().Format(time.RFC3339)}

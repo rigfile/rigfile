@@ -36,6 +36,8 @@ type Env struct {
 	RigfileCmd string             // command used in MCP/hook entries; default "rigfile"
 	Overwrite  bool               // replace hand-edited managed content and files Rigfile does not own
 	BaseSecure bool               // rigfile/base-secure is part of this run: add its non-rule settings (S2-M5)
+	Sandbox    bool               // opt-in: also turn on Claude Code's OS-level sandbox with base-secure's credential denies (S2-M5b)
+	Have       func(string) bool  // is this command on PATH? nil = exec.LookPath
 }
 
 func (e Env) rigfile() string {

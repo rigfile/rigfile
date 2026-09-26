@@ -55,6 +55,15 @@ func AppendRaw(doc []byte, path []string, raws []string) (out []byte, added []st
 // is absent. An existing member is NEVER changed: existing is its current value (raw JSON text for non-strings)
 // and added is false. Missing parent objects are created. Layout of everything else is preserved.
 func SetMissingString(doc []byte, path []string, value string) (out []byte, existing string, added bool, err error) {
+	return SetMissingRaw(doc, path, quote(value))
+}
+
+// SetMissingRaw is SetMissingString for any JSON scalar or value: raw is its JSON text (`true`, `"x"`, `3`).
+// existing is the current value's text (unquoted for strings).
+func SetMissingRaw(doc []byte, path []string, raw string) (out []byte, existing string, added bool, err error) {
+	if !gjson.Valid(raw) {
+		return nil, "", false, fmt.Errorf("jsonedit: %q is not a JSON value", raw)
+	}
 	if len(path) == 0 {
 		return nil, "", false, fmt.Errorf("jsonedit: empty path")
 	}
@@ -72,8 +81,8 @@ func SetMissingString(doc []byte, path []string, value string) (out []byte, exis
 	for k := 0; k < len(path)-1; k++ {
 		child := lookup(doc, append(prefix, path[k]))
 		if !child.Exists() {
-			raw := buildChain(st, len(prefix)+1, path[k+1:], quote(value))
-			out, err := insertMember(doc, st, prefix, path[k], raw)
+			chain := buildChain(st, len(prefix)+1, path[k+1:], raw)
+			out, err := insertMember(doc, st, prefix, path[k], chain)
 			return out, "", err == nil, err
 		}
 		if !child.IsObject() {
@@ -88,8 +97,21 @@ func SetMissingString(doc []byte, path []string, value string) (out []byte, exis
 		}
 		return doc, cur.Raw, false, nil
 	}
-	out, err = insertMember(doc, st, prefix, last, quote(value))
+	out, err = insertMember(doc, st, prefix, last, raw)
 	return out, "", err == nil, err
+}
+
+// ReadValueRaw returns the compacted JSON text of the value at path (ok=false when absent).
+func ReadValueRaw(doc []byte, path []string) (string, bool) {
+	if len(bytes.TrimSpace(doc)) == 0 || !gjson.ValidBytes(doc) {
+		return "", false
+	}
+	r := lookup(doc, path)
+	if !r.Exists() {
+		return "", false
+	}
+	c, err := compact(r.Raw)
+	return c, err == nil
 }
 
 // ReadString returns the string value at path (ok=false when absent or not a string).

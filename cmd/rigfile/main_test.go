@@ -973,3 +973,77 @@ func TestExistingBypassModeSettingIsNeverOverwritten(t *testing.T) {
 		t.Fatal("the user's own value was overwritten")
 	}
 }
+
+func TestSandboxProfileIsOptInStickyAndNeverOverwritesUserSettings(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sandbox profile is macOS/Linux")
+	}
+	m := newMachine(t)
+	rig := plainRig(t, "")
+	settingsPath := filepath.Join(m.home, ".claude", "settings.json")
+
+	// off by default
+	if r := m.run("", "plan", rig, "--no-git"); strings.Contains(r.out, "sandbox.") {
+		t.Fatalf("the sandbox must be opt-in:\n%s", r.out)
+	}
+	// opt in
+	r := m.run("", "plan", rig, "--no-git", "--sandbox")
+	for _, want := range []string{"sandbox.enabled = true", "sandbox.allowUnsandboxedCommands = false", "sandbox.credentials.files", "sandbox.credentials.envVars"} {
+		if r.code != 0 || !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git", "--sandbox"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	var doc struct {
+		Sandbox struct {
+			Enabled                  bool `json:"enabled"`
+			AllowUnsandboxedCommands bool `json:"allowUnsandboxedCommands"`
+			Credentials              struct {
+				Files   []struct{ Path, Mode string } `json:"files"`
+				EnvVars []struct{ Name, Mode string } `json:"envVars"`
+			} `json:"credentials"`
+		} `json:"sandbox"`
+	}
+	if err := json.Unmarshal(mustRead(t, settingsPath), &doc); err != nil || !doc.Sandbox.Enabled || doc.Sandbox.AllowUnsandboxedCommands || len(doc.Sandbox.Credentials.Files) < 10 || len(doc.Sandbox.Credentials.EnvVars) < 5 {
+		t.Fatalf("%v %+v", err, doc)
+	}
+	for _, f := range doc.Sandbox.Credentials.Files {
+		if f.Mode != "deny" {
+			t.Fatalf("only deny entries: %+v", f)
+		}
+	}
+	// sticky: a later plain apply keeps it and changes nothing
+	if r := m.run("", "plan", rig, "--no-git"); r.code != 0 || !strings.Contains(r.out, "sandbox.enabled") || strings.Contains(r.out, "+ ") && strings.Contains(r.out, "SETTINGS   +") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "diff"); r.code != 0 || !strings.Contains(r.out, "no drift") {
+		t.Fatalf("%+v", r)
+	}
+	// turning it off removes the entry lists and says the scalars stay
+	r = m.run("", "apply", rig, "--yes", "--no-git", "--no-sandbox")
+	if r.code != 0 || !strings.Contains(r.out, "still in") {
+		t.Fatalf("%+v", r)
+	}
+	after := string(mustRead(t, settingsPath))
+	if strings.Contains(after, `"~/.ssh"`) || !strings.Contains(after, `"enabled": true`) {
+		t.Fatalf("lists should be gone, scalars should stay:\n%s", after)
+	}
+}
+
+func TestSandboxDoesNotOverwriteAUserChoice(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+	m := newMachine(t)
+	put(t, filepath.Join(m.home, ".claude"), "settings.json", "{\n  \"sandbox\": {\n    \"enabled\": false\n  }\n}\n", 0o644)
+	rig := plainRig(t, "")
+	r := m.run("", "apply", rig, "--yes", "--no-git", "--sandbox")
+	if r.code != 3 || !strings.Contains(r.out, "your settings already say false") {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(string(mustRead(t, filepath.Join(m.home, ".claude", "settings.json"))), `"enabled": false`) {
+		t.Fatal("the user's own sandbox choice was overwritten")
+	}
+}

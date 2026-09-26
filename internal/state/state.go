@@ -32,7 +32,7 @@ const (
 	KindRegion    = "region"     // a marker-delimited region inside a user file; Hash = marker hash; Detail: region, style
 	KindJSONList  = "json-list"  // one string inside a JSON array; Detail: list ("permissions.deny"), value
 	KindJSONRaw   = "json-raw"   // one structured entry in a JSON array (a hook definition); Detail: list, raw (compacted JSON)
-	KindJSONValue = "json-value" // a scalar member Rigfile added to a JSON file; Detail: path ("permissions.x"), value
+	KindJSONValue = "json-value" // a scalar member Rigfile added to a JSON file; Detail: path ("permissions.x"), value (raw JSON text)
 	KindMCP       = "mcp"        // an MCP server registered through the vendor CLI; Detail: name; checked by a probe
 )
 
@@ -43,6 +43,13 @@ type State struct {
 	// UnsafeBase is set while the last apply skipped rigfile/base-secure (--i-understand-unsafe-base). doctor
 	// shows it as a red item until a normal apply clears it.
 	UnsafeBase *UnsafeBase `json:"unsafeBase,omitempty"`
+	// Prefs are choices that persist across applies (so a later `apply` without the flag keeps them).
+	Prefs Prefs `json:"prefs,omitempty"`
+}
+
+// Prefs are sticky options.
+type Prefs struct {
+	Sandbox bool `json:"sandbox,omitempty"` // opt-in Claude Code sandbox settings (S2-M5b)
 }
 
 // UnsafeBase records that the safety base layer was deliberately skipped.
@@ -291,7 +298,7 @@ func checkOne(it Item, probes map[string]Probe) (Status, string) {
 		if err != nil {
 			return Unknown, err.Error()
 		}
-		v, ok := jsonedit.ReadString(doc, splitPath(it.Detail["path"]))
+		v, ok := jsonedit.ReadValueRaw(doc, splitPath(it.Detail["path"]))
 		switch {
 		case !ok:
 			return Missing, "the setting was removed"

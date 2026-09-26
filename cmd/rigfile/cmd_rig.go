@@ -62,8 +62,8 @@ func cmdValidate(args []string, e env) int {
 // ---- plan / apply -----------------------------------------------------------------------------
 
 type rigFlags struct {
-	layers, project, claudeDir                             string
-	overwrite, yes, updateLock, noTools, noGit, unsafeBase bool
+	layers, project, claudeDir                                                 string
+	overwrite, yes, updateLock, noTools, noGit, unsafeBase, sandbox, noSandbox bool
 }
 
 func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
@@ -73,6 +73,8 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 	fs.StringVar(&f.project, "project", "", "project directory for scope: project instructions")
 	fs.StringVar(&f.claudeDir, "claude-dir", "", "Claude Code config directory (default ~/.claude or $CLAUDE_CONFIG_DIR)")
 	fs.BoolVar(&f.unsafeBase, "i-understand-unsafe-base", false, "DANGEROUS: skip rigfile/base-secure (local only; recorded in state; doctor shows it red)")
+	fs.BoolVar(&f.sandbox, "sandbox", false, "also turn on Claude Code's OS-level sandbox with base-secure's credential denies (remembered; macOS/Linux/WSL2)")
+	fs.BoolVar(&f.noSandbox, "no-sandbox", false, "stop managing the sandbox profile (settings already added stay until you delete them)")
 	fs.BoolVar(&f.noGit, "no-git", false, "skip the git protections (global gitignore and secret-scanning hooks)")
 	fs.BoolVar(&f.overwrite, "overwrite", false, "replace hand-edited managed content and items Rigfile does not own")
 	if withApply {
@@ -86,7 +88,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase,
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox,
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)

@@ -134,9 +134,21 @@ func (b *builder) settings(p *merge.Projection) {
 
 	// ---- base-secure settings ----
 	if env.BaseSecure {
-		if op, ok := b.settingOp(path, &work, "permissions.disableBypassPermissionsMode", "disable",
+		if op, ok := b.settingOp(path, &work, "permissions.disableBypassPermissionsMode", `"disable"`,
 			"bypassPermissions mode skips the prompts that protect .git, .claude and shell rc files; base-secure turns it off (decision O8)"); ok {
 			ops = append(ops, op)
+		}
+	}
+
+	// ---- opt-in sandbox (S2-M5b) ----
+	if env.Sandbox {
+		ops = append(ops, b.sandboxOps(path, &work)...)
+	} else if env.State != nil {
+		for _, it := range env.State.Items {
+			if it.Path == path && it.Kind == state.KindJSONValue && strings.HasPrefix(it.Detail["path"], "sandbox.") {
+				b.note("sandbox.enabled and its companion settings that Rigfile added earlier are still in %s (their entry lists were removed); delete the \"sandbox\" block by hand to turn the sandbox off completely", env.short(path))
+				break
+			}
 		}
 	}
 
@@ -189,7 +201,7 @@ func (b *builder) settings(p *merge.Projection) {
 				}
 				if n > 0 {
 					work = next
-					ops = append(ops, engine.Op{Category: "hook", Key: prev.Key, Symbol: engine.Removal, Runs: true,
+					ops = append(ops, engine.Op{Category: prev.Category, Key: prev.Key, Symbol: engine.Removal, Runs: prev.Category == "hook",
 						Summary: prev.Key + "   (no longer in the rig)"})
 				} else {
 					b.note("hook %q is no longer in the rig but its settings entry was edited or removed by hand; nothing removed", prev.Key)
@@ -216,7 +228,7 @@ func (b *builder) settings(p *merge.Projection) {
 func (b *builder) settingOp(settingsPath string, work *[]byte, dotted, want, why string) (engine.Op, bool) {
 	env := b.env
 	segs := strings.Split(dotted, ".")
-	next, existing, added, err := jsonedit.SetMissingString(*work, segs, want)
+	next, existing, added, err := jsonedit.SetMissingRaw(*work, segs, want)
 	if err != nil {
 		b.fail(fmt.Errorf("%s: %w", env.short(settingsPath), err))
 		return engine.Op{}, false
@@ -224,12 +236,12 @@ func (b *builder) settingOp(settingsPath string, work *[]byte, dotted, want, why
 	item := state.Item{Category: "setting", Key: dotted, Kind: state.KindJSONValue, Path: settingsPath, Hash: hashing.Bytes([]byte(want)),
 		Detail: map[string]string{"path": dotted, "value": want}}
 	op := engine.Op{Category: "setting", Key: dotted, Detail: []string{why}}
-	label := env.short(settingsPath) + "   " + dotted + " = \"" + want + "\""
+	label := env.short(settingsPath) + "   " + dotted + " = " + want
 	switch {
 	case added:
 		*work = next
 		op.Symbol, op.Summary, op.Items = engine.Update, label, []state.Item{item}
-	case existing == want:
+	case existing == strings.Trim(want, `"`):
 		op.Symbol, op.Summary = engine.Unchanged, label+"   (up to date)"
 		if _, mine := env.owned("setting", dotted, settingsPath); mine {
 			op.Items = []state.Item{item}
