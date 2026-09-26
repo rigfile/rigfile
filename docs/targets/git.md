@@ -30,3 +30,18 @@
 
 ## Not covered here (Stage 3)
 Git for Windows' bundled `sh` running hooks, GitHub Desktop / VS Code / JetBrains invocation quirks, and case-insensitive file-system behaviour are research items for Stage 3; the matcher is built case-insensitive and CRLF-safe from the start.
+
+## Empirical results (S2-M3, 2026-09-25, git 2.50.1 Apple Git-155, macOS arm64)
+
+All confirmed with real `git` in temp repos (`internal/githook`, `cmd/rigfile/githooks_e2e_test.go`):
+
+| Claim | Result |
+|---|---|
+| `core.hooksPath` replaces `.git/hooks` | **Confirmed**: with it set, a repo-local `pre-commit` does not run; unset it and it does (`TestHooksPathSilencesRepoLocalHooks`). The chaining design (S2-M4) is required, not optional. |
+| `git commit --no-verify` skips pre-commit | Confirmed. |
+| `git push --no-verify` skips pre-push | **Confirmed** (the documented gap): the push goes through. |
+| `reference-transaction` (prepared, non-zero exit) blocks `git commit --no-verify` | **Confirmed**: the commit is refused, the branch does not move, git prints the hook's message. Ordinary git (commit, branch, checkout, rebase, merge, tag, annotated tag, fetch, branch -D) keeps working with the backstop installed. |
+| Hook invocations per `git commit` | The reference-transaction hook runs **5 times** (preparing/prepared/committed, an aborted transaction, prepared/committed again). Hence the `sh` pre-filter in the shim: only `prepared` on `refs/heads/*` or `refs/tags/*` starts Rigfile. |
+| Cost | `git commit`: ~20 ms bare. `rigfile hook pre-commit` adds ~50-75 ms **on this machine, where each git subprocess costs ~12 ms** (Apple's `/usr/bin/git` shim); it spawns 4 (`diff --cached`, `cat-file --batch`, `write-tree`, and the git dir when `GIT_DIR` is not exported). The backstop adds 0-35 ms depending on the shim version measured (noisy): a commit whose tree pre-commit approved needs **zero git subprocesses** (the new commit's tree and parent are read from the loose object file) and only a ~6 ms Go start-up. Linux with a stock git will be much faster; re-measure in the container E2E. |
+
+Design consequences: pre-commit records the approved index tree in `<git-dir>/rigfile-scanned-trees`; the backstop skips commits whose tree is in that set; it fails **open** on internal errors (a bug must not brick every ref update) but blocks on findings; pre-commit and pre-push fail **closed**.

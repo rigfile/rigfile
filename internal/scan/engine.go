@@ -17,6 +17,7 @@ type Finding struct {
 	Line, End   int    // 1-based, inclusive; 0 for name/size findings
 	Column      int    // 1-based byte column of the match start; 0 for name/size findings
 	Fingerprint string // first 12 hex chars of sha256(rule \0 path \0 secret)
+	Commit      string // set by callers that scan history (short commit id); empty for working-tree text
 }
 
 // String renders "path:line: rule: description [fingerprint]" and never the value.
@@ -68,20 +69,30 @@ func New(o Options) (*Scanner, error) {
 // path is forward-slash or native; it is only used for names, allowlists and reporting.
 func (s *Scanner) ScanFile(path string, data []byte) []Finding {
 	path = strings.ReplaceAll(path, `\`, "/")
+	out := s.ScanName(path, len(data))
+	if len(data) > s.opts.MaxFileBytes || isBinary(data) {
+		return out
+	}
+	return append(out, s.ScanText(path, string(data))...)
+}
+
+// ScanName checks only a file's name and size, for callers that decided not to read a huge blob.
+func (s *Scanner) ScanName(path string, size int) []Finding {
+	path = strings.ReplaceAll(path, `\`, "/")
 	var out []Finding
 	if !s.opts.SkipNames && IsSensitiveFilename(path) {
 		out = append(out, Finding{Kind: "name", RuleID: "sensitive-filename", Path: path,
 			Description: "file name looks like a credentials or key file", Fingerprint: fingerprint("sensitive-filename", path, path)})
 	}
-	if len(data) > s.opts.MaxFileBytes {
-		return append(out, Finding{Kind: "size", RuleID: "file-too-large", Path: path,
+	if size > s.opts.MaxFileBytes {
+		out = append(out, Finding{Kind: "size", RuleID: "file-too-large", Path: path,
 			Description: fmt.Sprintf("file is larger than %d MB", s.opts.MaxFileBytes>>20), Fingerprint: fingerprint("file-too-large", path, path)})
 	}
-	if isBinary(data) {
-		return out
-	}
-	return append(out, s.ScanText(path, string(data))...)
+	return out
 }
+
+// MaxFileBytes is the size limit in effect.
+func (s *Scanner) MaxFileBytes() int { return s.opts.MaxFileBytes }
 
 // ScanText scans text (a file's contents, a diff, a shell command). name is used for path-scoped rules
 // and reporting; pass "" for text that is not a file.

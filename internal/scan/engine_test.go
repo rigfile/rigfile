@@ -84,7 +84,7 @@ func TestDetectsKnownFormatsAndNeverReturnsTheValue(t *testing.T) {
 	rt := reflect.TypeOf(Finding{})
 	for i := 0; i < rt.NumField(); i++ {
 		switch n := rt.Field(i).Name; n {
-		case "Kind", "RuleID", "Description", "Path", "Line", "End", "Column", "Fingerprint":
+		case "Kind", "RuleID", "Description", "Path", "Line", "End", "Column", "Fingerprint", "Commit":
 		default:
 			t.Fatalf("unexpected Finding field %q: review that it cannot hold a secret", n)
 		}

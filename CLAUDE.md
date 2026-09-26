@@ -12,7 +12,7 @@ Never read or copy from the developer's real `~/.claude`, `~/.codex` or other co
 - Layout: `cmd/rigfile` (CLI), `internal/{manifest,merge,layers,lock,state,apply,engine,session,adapters/claudecode,tools,secrets,execshim,hook,scan,platform,splice,jsonedit,hashing}`, `catalog/`, `schema/`, `e2e/` (container tests: `e2e/run.sh`), `docs/`.
 - Tests use a temp `$HOME` and injected fakes (`env` in `cmd/rigfile`, `MCPClient`, `tools.Host`); never touch the real machine, keychain or package managers.
 - The `claude` CLI's output formats are undocumented (ADR 0002): keep that logic behind `MCPClient`.
-- Commits: conventional (`feat(mN):`, `fix(...)`), end with the Co-Authored-By line the harness gives. Commit only when asked. The global gitleaks hook runs on commit; do not bypass it.
+- Commits: conventional (`feat(mN):`, `fix(...)`), end with the Co-Authored-By line the harness gives. Commit at the end of each coherent change or milestone without asking (owner, 2026-09-25); pushing stays with the owner (my pushes are denied; hand over the command). The global gitleaks hook runs on commit; fix what it flags (build fake secrets at run time), never bypass it.
 - Do not work around permission or classifier denials; report them and let the owner run the command.
 
 ## Working agreements (RIGFILE_PLAN.md §16)
@@ -30,4 +30,4 @@ Never read or copy from the developer's real `~/.claude`, `~/.codex` or other co
 ## Stage 0 rules (still apply to research and docs)
 
 - Research output must cite an official source link and the date checked. Where docs are unclear or disagree with the plan, write **UNVERIFIED** or **CONFLICT** — do not guess.
-- No git commits unless the owner asks (this holds in every stage).
+- Commits: see "Working in this repo" (the owner delegated committing on 2026-09-25).
