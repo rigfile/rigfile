@@ -36,7 +36,7 @@ Migrations `0003_collections.sql` and `0004_orgs.sql` run automatically at start
 
 ## 5. Not built, and what each would need
 
-- **Private memory sync between your own machines (end-to-end encrypted).** A security design of its own: how a second machine obtains the key without the server seeing it, what is synced, conflict rules, a transport. I will write the spec if you ask; I did not want to start crypto design without your decisions.
+- **Private memory sync between your own machines (end-to-end encrypted).** A security design of its own: how a second machine obtains the key without the server seeing it, what is synced, conflict rules, a transport. **The design is written: `docs/private-sync.md`** (bring-your-own transport, age multi-recipient encryption, device enrolment with a fingerprint check, revocation, rollback detection). It lists six decisions for you; nothing is built until you make them.
 - **Hosted cloud rig.** The plan defers it until the local product has traction.
 - **More Linux distros and ARM (Raspberry Pi, Windows on ARM).** The release tool already builds arm64; it needs clean-machine runs I cannot do. List for you: `rigfile self-update`, `rigfile apply` and `rigfile broker run` on Raspberry Pi OS (arm64), Alpine (musl), and Windows 11 on ARM.
 - **Windsurf, Zed, VS Code Copilot adapters:** researched, blocked on paths (above).
