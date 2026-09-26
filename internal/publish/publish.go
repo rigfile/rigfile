@@ -5,6 +5,9 @@
 package publish
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io/fs"
 	"os"
@@ -418,4 +421,82 @@ func FromDir(dir string) (map[string][]byte, error) {
 		}
 	}
 	return files, nil
+}
+
+// Audit is the server-side check of a rig that already exists as a directory: the same secret scanner and manifest
+// checks that gate `rigfile publish`, without the local-only steps (home-path rewriting, personal information).
+type Audit struct {
+	Secrets  []Finding
+	Problems []manifest.Problem
+	Unpinned []manifest.Problem // warnings about unpinned packages: fine for a private rig, refused for a public one
+	Manifest *manifest.Manifest
+	Files    int
+}
+
+// AuditDir scans every file and file name under dir and validates its manifest.
+func AuditDir(dir string, sc *scan.Scanner) (*Audit, error) {
+	a := &Audit{}
+	err := filepath.WalkDir(dir, func(fp string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, fp)
+		rel = filepath.ToSlash(rel)
+		data, err := os.ReadFile(fp)
+		if err != nil {
+			return err
+		}
+		a.Files++
+		for _, f := range sc.ScanFile(rel, data) {
+			a.Secrets = append(a.Secrets, Finding{Kind: "secret", Rule: f.RuleID, File: rel, Line: f.Line, Sample: f.Description})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	l, err := manifest.Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	a.Manifest = l.M
+	a.Problems = manifest.Check(l)
+	p := &Prepared{Problems: a.Problems}
+	a.Unpinned = p.unpinned()
+	return a, nil
+}
+
+// Tarball packs the prepared rig as a deterministic gzip tarball (sorted paths, fixed times and ownership), the exact
+// bytes the registry stores and hashes. It refuses a rig that is blocked.
+func (p *Prepared) Tarball() ([]byte, error) {
+	if b := p.Blocked(); len(b) > 0 {
+		return nil, fmt.Errorf("publish: blocked: %s", strings.Join(b, "; "))
+	}
+	names := make([]string, 0, len(p.Files))
+	for n := range p.Files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var buf bytes.Buffer
+	gw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	tw := tar.NewWriter(gw)
+	for _, n := range names {
+		mode := int64(0o644)
+		if strings.HasSuffix(n, ".sh") {
+			mode = 0o755
+		}
+		if err := tw.WriteHeader(&tar.Header{Name: n, Typeflag: tar.TypeReg, Mode: mode, Size: int64(len(p.Files[n]))}); err != nil {
+			return nil, err
+		}
+		if _, err := tw.Write(p.Files[n]); err != nil {
+			return nil, err
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	if err := gw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

@@ -1,0 +1,6 @@
+{{template "head" .}}
+<h1>Sign in the Rigfile CLI</h1>
+<p>Enter the code shown by <code>rigfile login</code>.</p>
+{{if .Error}}<p class="bad">{{.Error}}</p>{{end}}
+<form action="/device" method="get"><input name="user_code" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters" required><button type="submit">Continue</button></form>
+{{template "foot" .}}

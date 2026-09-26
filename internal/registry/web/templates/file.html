@@ -1,0 +1,4 @@
+{{template "head" .}}
+{{with .Data}}<p><a href="/r/{{.Rig.Owner}}/{{.Rig.Name}}/v/{{.Version.Version}}">{{.Rig.Owner}}/{{.Rig.Name}} {{.Version.Version}}</a> / <strong>{{.Path}}</strong> · <a href="{{.RawURL}}">raw</a></p>
+<pre><code>{{.Text}}</code></pre>{{end}}
+{{template "foot" .}}

@@ -1,0 +1,4 @@
+{{template "head" .}}
+<h1>{{.Data.Login}}</h1>
+{{if .Data.Rigs}}{{template "rigs" .Data}}{{else}}<p class="muted">No rigs to show.</p>{{end}}
+{{template "foot" .}}

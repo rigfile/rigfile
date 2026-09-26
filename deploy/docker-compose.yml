@@ -1,0 +1,32 @@
+# Local trial of the registry: Postgres + the service. NOT a production deployment (no TLS, throwaway passwords).
+#   docker compose -f deploy/docker-compose.yml up --build
+# Sign-in needs a GitHub OAuth app (callback http://localhost:8080/auth/callback): export
+# RIGFILE_REGISTRY_GITHUB_CLIENT_ID and RIGFILE_REGISTRY_GITHUB_CLIENT_SECRET first. Without them, use the operator
+# tools to make an account and a token:
+#   docker compose -f deploy/docker-compose.yml exec registry rigfile-registry admin create-user --login me --github-id 1
+#   docker compose -f deploy/docker-compose.yml exec registry rigfile-registry admin token --login me
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: local-only
+      POSTGRES_DB: rigfile
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      retries: 20
+  registry:
+    build: { context: .., dockerfile: Dockerfile.registry }
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["127.0.0.1:${RIGFILE_REGISTRY_PORT:-8080}:8080"]
+    environment:
+      RIGFILE_REGISTRY_PUBLIC_URL: http://localhost:${RIGFILE_REGISTRY_PORT:-8080}
+      RIGFILE_REGISTRY_DATABASE_URL: postgres://postgres:local-only@db:5432/rigfile?sslmode=disable
+      RIGFILE_REGISTRY_GITHUB_CLIENT_ID: ${RIGFILE_REGISTRY_GITHUB_CLIENT_ID:-unset}
+      RIGFILE_REGISTRY_GITHUB_CLIENT_SECRET: ${RIGFILE_REGISTRY_GITHUB_CLIENT_SECRET:-unset}
+      RIGFILE_REGISTRY_ADMINS: ${RIGFILE_REGISTRY_ADMINS:-}
+    volumes: ["blobs:/var/lib/rigfile/blobs"]
+volumes:
+  pgdata: {}
+  blobs: {}

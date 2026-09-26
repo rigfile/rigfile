@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
@@ -64,15 +65,16 @@ func (f *fakeTools) Run(_ context.Context, argv []string, out io.Writer) error {
 }
 
 type machine struct {
-	t     *testing.T
-	home  string
-	mcp   *fakeMCP
-	tools *fakeTools
-	env   map[string]string
-	src   *source.Client // git sources for pull/update; nil = the real services
-	tty   bool           // behave as an interactive terminal (scripted key presses on stdin)
-	ran   [][]string     // vendor login commands that were "run"
-	key   string         // what the hidden prompt returns
+	t         *testing.T
+	home      string
+	mcp       *fakeMCP
+	tools     *fakeTools
+	env       map[string]string
+	src       *source.Client // git sources for pull/update; nil = the real services
+	tty       bool           // behave as an interactive terminal (scripted key presses on stdin)
+	ran       [][]string     // vendor login commands that were "run"
+	key       string         // what the hidden prompt returns
+	pollEvery time.Duration  // how often publish checks the registry scan
 }
 
 func newMachine(t *testing.T) *machine {
@@ -90,7 +92,7 @@ func (m *machine) run(stdin string, args ...string) result {
 	var out, errb bytes.Buffer
 	code := run(args, env{
 		in: strings.NewReader(stdin), out: &out, err: &errb,
-		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, sources: m.src, interactive: m.tty,
+		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, sources: m.src, interactive: m.tty, pollEvery: m.pollEvery,
 		runCmd: func(_ context.Context, argv []string) error { m.ran = append(m.ran, argv); return nil },
 		hidden: func(string) ([]byte, error) { return []byte(m.key), nil }, keyringOff: true, tools: m.tools,
 		lookPath: func(n string) (string, error) {

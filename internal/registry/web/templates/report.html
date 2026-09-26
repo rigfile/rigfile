@@ -1,0 +1,12 @@
+{{template "head" .}}
+<h1>Report a rig</h1>
+<p>Use this to report malware, leaked secrets, illegal content, abuse or impersonation. Reports are read by the registry's administrators.</p>
+<form action="/report" method="post">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<p><label>Rig (owner/name)<br><input name="rig" value="{{.Data.Rig}}" required maxlength="100"></label></p>
+<p><label>Version (optional)<br><input name="version" value="{{.Data.Version}}" maxlength="40"></label></p>
+<p><label>Reason<br><select name="reason">{{range .Data.Reasons}}<option value="{{.}}">{{.}}</option>{{end}}</select></label></p>
+<p><label>Details<br><textarea name="details" rows="6" cols="60" maxlength="2000"></textarea></label></p>
+<button type="submit">Send report</button>
+</form>
+{{template "foot" .}}

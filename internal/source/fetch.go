@@ -21,6 +21,7 @@ type Client struct {
 	CacheDir string
 	HTTPS    Fetcher // GitHub and GitLab; nil = the real services
 	Git      Fetcher // other git URLs; nil = the git binary
+	Registry Fetcher // Rigfile registries; nil = an anonymous RegistryFetcher
 	Getenv   func(string) string
 }
 
@@ -30,6 +31,8 @@ type Fetched struct {
 	Dir        string // the rig directory (holds rigfile.yaml), inside the cache
 	Commit     string
 	TreeSHA256 string
+	Yanked     bool // the pulled version was yanked by its publisher
+	YankReason string
 }
 
 // Pin is what a lock or state file remembers about a source.
@@ -101,7 +104,11 @@ func (c *Client) Get(ctx context.Context, spec Spec, pin *Pin) (*Fetched, error)
 			return nil, err
 		}
 	}
-	return &Fetched{Spec: spec, Dir: dest, Commit: commit, TreeSHA256: sum}, nil
+	out := &Fetched{Spec: spec, Dir: dest, Commit: commit, TreeSHA256: sum}
+	if y, ok := f.(interface{ LastYank() (bool, string) }); ok {
+		out.Yanked, out.YankReason = y.LastYank()
+	}
+	return out, nil
 }
 
 func where(sub string) string {
@@ -126,6 +133,11 @@ func (c *Client) valid(dir, sum string) (bool, error) {
 
 func (c *Client) fetcher(spec Spec) Fetcher {
 	switch spec.Kind {
+	case Registry:
+		if c.Registry != nil {
+			return c.Registry
+		}
+		return &RegistryFetcher{}
 	case GitHub, GitLab:
 		if c.HTTPS != nil {
 			return c.HTTPS

@@ -9,6 +9,8 @@ import (
 	"path"
 	"regexp"
 	"strings"
+
+	"github.com/digitaldreamer3462/rigfile/internal/regclient"
 )
 
 // Kinds of source.
@@ -16,6 +18,8 @@ const (
 	GitHub = "github"
 	GitLab = "gitlab"
 	Git    = "git" // any other git URL, fetched with the git binary
+	// Registry is a rig published to a Rigfile registry; Spec.URL is the registry's origin and Ref a version or range.
+	Registry = "registry"
 )
 
 // Spec is a parsed source string.
@@ -32,6 +36,8 @@ var (
 	segRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 	refRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/+-]*$`)
 	shaRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	// a registry ref is a version or a range (^1, ~1.2, 1.2.3, 1.0.0-rc1)
+	rangeRe = regexp.MustCompile(`^[\^~]?[0-9A-Za-z][0-9A-Za-z._+-]*$`)
 )
 
 // IsCommit reports whether ref is a full 40-hex commit id.
@@ -45,6 +51,8 @@ func (s Spec) String() string {
 		b.WriteString("github.com/" + s.Path)
 	case GitLab:
 		b.WriteString("gitlab.com/" + s.Path)
+	case Registry:
+		b.WriteString("rigfile+" + s.URL + "/" + s.Path)
 	default:
 		b.WriteString(s.URL)
 	}
@@ -88,7 +96,11 @@ func Parse(raw string) (Spec, error) {
 		p, s.Ref = p[:i], p[i+1:]
 	}
 	p = strings.TrimSuffix(strings.TrimRight(p, "/"), ".git")
-	if s.Ref != "" && !refRe.MatchString(s.Ref) || strings.Contains(s.Ref, "..") || strings.HasSuffix(s.Ref, "/") || strings.HasSuffix(s.Ref, ".lock") {
+	if strings.HasPrefix(scheme, "rigfile+") {
+		if s.Ref != "" && !rangeRe.MatchString(s.Ref) {
+			return s, fmt.Errorf("source: %q is not a version or range", s.Ref)
+		}
+	} else if s.Ref != "" && !refRe.MatchString(s.Ref) || strings.Contains(s.Ref, "..") || strings.HasSuffix(s.Ref, "/") || strings.HasSuffix(s.Ref, ".lock") {
 		return s, fmt.Errorf("source: %q is not a valid ref", s.Ref)
 	}
 	if s.Subdir != "" {
@@ -120,6 +132,16 @@ func Parse(raw string) (Spec, error) {
 			}
 		}
 		s.Kind, s.Path = GitLab, p
+	case scheme == "rigfile+https" || scheme == "rigfile+http":
+		parts := strings.Split(p, "/")
+		if len(parts) != 2 || !segRe.MatchString(parts[0]) || !segRe.MatchString(parts[1]) {
+			return s, fmt.Errorf("source: %q is not rigfile+https://registry/owner/name", raw)
+		}
+		base, err := regclient.ValidateBase(strings.TrimPrefix(scheme, "rigfile+") + "://" + host)
+		if err != nil {
+			return s, err
+		}
+		s.Kind, s.URL, s.Path = Registry, base, p
 	case scheme == "https" || scheme == "ssh" || scheme == "file":
 		if strings.HasPrefix(host, "-") || strings.ContainsAny(raw, " \t\n\x00") {
 			return s, fmt.Errorf("source: %q is not a valid URL", raw)

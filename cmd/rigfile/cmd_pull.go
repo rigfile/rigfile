@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/digitaldreamer3462/rigfile/internal/source"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
@@ -32,7 +35,7 @@ func cmdPull(verb string, args []string, e env) int {
 	}
 	client := e.sources
 	if client == nil {
-		client = &source.Client{CacheDir: filepath.Join(sd, "sources"), Getenv: e.getenv}
+		client = &source.Client{CacheDir: filepath.Join(sd, "sources"), Getenv: e.getenv, Registry: &source.RegistryFetcher{Token: regToken(e)}}
 	}
 
 	var spec source.Spec
@@ -43,12 +46,23 @@ func cmdPull(verb string, args []string, e env) int {
 			fmt.Fprintln(e.err, "usage: rigfile pull <github.com/owner/repo[@ref][//dir] | gitlab.com/... | https://host/repo.git[@ref]> [flags]")
 			return 2
 		}
-		if !source.Looks(pos[0]) {
-			fmt.Fprintf(e.err, "rigfile: %q is not a git source. To apply a rig directory on this machine use `rigfile apply %s`.\n", pos[0], pos[0])
-			return 2
-		}
-		if spec, err = source.Parse(pos[0]); err != nil {
-			fmt.Fprintln(e.err, "rigfile:", err)
+		arg := pos[0]
+		switch {
+		case source.Looks(arg):
+			if spec, err = source.Parse(arg); err != nil {
+				fmt.Fprintln(e.err, "rigfile:", err)
+				return 2
+			}
+		case registryRef.MatchString(arg) && !isDir(arg):
+			base, err := registryBase(e, f.registry)
+			if err != nil {
+				fmt.Fprintln(e.err, "rigfile:", err)
+				return 1
+			}
+			name, ref, _ := strings.Cut(arg, "@")
+			spec = source.Spec{Kind: source.Registry, URL: base, Path: name, Ref: ref}
+		default:
+			fmt.Fprintf(e.err, "rigfile: %q is not a git source or a registry rig (owner/name). To apply a rig directory on this machine use `rigfile apply %s`.\n", arg, arg)
 			return 2
 		}
 	case "update":
@@ -92,10 +106,17 @@ func cmdPull(verb string, args []string, e env) int {
 		return 0
 	}
 
+	origin := "a git repository"
+	if spec.Kind == source.Registry {
+		origin = "the Rigfile registry (" + spec.URL + ")"
+	}
 	banner := []string{
 		fmt.Sprintf("Source: %s   commit %s   tree %s", spec, got.Commit[:12], got.TreeSHA256[:12]),
-		"!!! This rig comes from a git repository you did not write. Review every hook, script and MCP command below:",
+		"!!! This rig comes from " + origin + " and you did not write it. Review every hook, script and MCP command below:",
 		"!!! approving the plan lets them run on this machine. Nothing has run yet.",
+	}
+	if got.Yanked {
+		banner = append(banner, "!!! The publisher YANKED this version: "+got.YankReason)
 	}
 	if prev != nil {
 		banner = append([]string{fmt.Sprintf("Update: %s -> %s", short12(prev.Commit), short12(got.Commit))}, banner...)
@@ -109,6 +130,13 @@ func cmdPull(verb string, args []string, e env) int {
 		mode = "plan"
 	}
 	return planApply(mode, got.Dir, f, e)
+}
+
+var registryRef = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,38}/[a-z0-9][a-z0-9._-]{0,62}(@[\^~]?[0-9A-Za-z][0-9A-Za-z._+-]*)?$`)
+
+func isDir(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && st.IsDir()
 }
 
 func short12(s string) string {

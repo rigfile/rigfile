@@ -90,6 +90,13 @@ func (b baseSource) ResolveRemote(spec string) (*manifest.Loaded, RemoteInfo, er
 	return nil, RemoteInfo{}, fmt.Errorf("git sources are not available here")
 }
 
+func (b baseSource) ResolveRegistry(ref Ref) (*manifest.Loaded, RemoteInfo, error) {
+	if r, ok := b.next.(RegistryResolver); ok {
+		return r.ResolveRegistry(ref)
+	}
+	return nil, RemoteInfo{}, &NotFoundError{ref}
+}
+
 func (b baseSource) Resolve(ref Ref) (*manifest.Loaded, error) {
 	if ref.Name == merge.BaseSecure {
 		if b.base == nil {
@@ -112,7 +119,13 @@ type Remote interface {
 	ResolveRemote(spec string) (*manifest.Loaded, RemoteInfo, error)
 }
 
-// WithRemote lets `from:` entries that are git sources resolve through r; every other reference goes to next.
+// RegistryResolver resolves an owner/name[@range] layer that no local directory has, through a registry.
+type RegistryResolver interface {
+	ResolveRegistry(ref Ref) (*manifest.Loaded, RemoteInfo, error)
+}
+
+// WithRemote lets `from:` entries that are git sources resolve through r, and (when r also implements
+// RegistryResolver) owner/name layers missing from next resolve through the registry; every other reference goes to next.
 func WithRemote(next Source, r Remote) Source { return remoteSource{next, r} }
 
 type remoteSource struct {
@@ -122,6 +135,13 @@ type remoteSource struct {
 
 func (s remoteSource) ResolveRemote(spec string) (*manifest.Loaded, RemoteInfo, error) {
 	return s.r.ResolveRemote(spec)
+}
+
+func (s remoteSource) ResolveRegistry(ref Ref) (*manifest.Loaded, RemoteInfo, error) {
+	if rr, ok := s.r.(RegistryResolver); ok {
+		return rr.ResolveRegistry(ref)
+	}
+	return nil, RemoteInfo{}, &NotFoundError{ref}
 }
 
 // Result is the resolved layer list plus notes for the plan screen.
@@ -201,14 +221,27 @@ func (r *Result) walk(l *manifest.Loaded, src Source, done map[string]bool, stac
 			continue
 		}
 		child, err := src.Resolve(ref)
+		var regInfo *RemoteInfo
 		if err != nil {
-			return fmt.Errorf("%s: %w", name, err)
+			var nf *NotFoundError
+			if rr, ok := src.(RegistryResolver); ok && errors.As(err, &nf) {
+				var ri RemoteInfo
+				if child, ri, err = rr.ResolveRegistry(ref); err == nil {
+					regInfo = &ri
+				}
+			}
+			if err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
 		}
 		if !Satisfies(child.M.Version, ref.Range) {
 			return fmt.Errorf("%s requires %s@%s but found version %s", name, ref.Name, ref.Range, child.M.Version)
 		}
 		if err := r.walk(child, src, done, stack, depth+1, false); err != nil {
 			return err
+		}
+		if regInfo != nil {
+			r.Remotes[child.M.Name] = *regInfo
 		}
 	}
 	done[name] = true

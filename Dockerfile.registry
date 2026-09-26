@@ -1,0 +1,21 @@
+# Rigfile registry: a static Go binary in a minimal image, running as an unprivileged user.
+#   docker build -f Dockerfile.registry -t rigfile-registry .
+FROM golang:1.27-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/rigfile-registry ./cmd/rigfile-registry
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates wget \
+ && addgroup -S rigfile && adduser -S -G rigfile -h /var/lib/rigfile rigfile \
+ && mkdir -p /var/lib/rigfile/blobs && chown -R rigfile:rigfile /var/lib/rigfile
+COPY --from=build /out/rigfile-registry /usr/local/bin/rigfile-registry
+USER rigfile
+ENV RIGFILE_REGISTRY_LISTEN=0.0.0.0:8080 \
+    RIGFILE_REGISTRY_BLOB=fs:/var/lib/rigfile/blobs
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=3s --retries=6 CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
+ENTRYPOINT ["/usr/local/bin/rigfile-registry"]
+CMD ["serve"]

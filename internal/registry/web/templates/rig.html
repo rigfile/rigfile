@@ -1,0 +1,33 @@
+{{template "head" .}}
+{{with .Data}}
+<h1>{{.Rig.Owner}}/{{.Rig.Name}}{{if eq .Rig.Visibility "private"}} <span class="tag">private</span>{{end}}</h1>
+<p>{{.Rig.Description}}</p>
+{{if .Version}}
+{{if eq .Version.Status "yanked"}}<div class="banner warn">This version was <strong>yanked</strong> by its publisher: {{.Version.YankReason}}</div>{{end}}
+{{if eq .Version.Status "pending"}}<div class="banner">This version is still being scanned. Only you can see it.</div>{{end}}
+{{if eq .Version.Status "rejected"}}<div class="banner bad">The scan rejected this version. Only you can see it.
+<ul>{{range .Version.Findings}}<li><strong>{{.Kind}}</strong> {{.Rule}} {{.File}}{{if .Line}}:{{.Line}}{{end}} {{.Message}}</li>{{end}}</ul></div>{{end}}
+{{if and .IsOwner .Version.Warnings}}<div class="banner warn"><strong>Warnings</strong><ul>{{range .Version.Warnings}}<li>{{.Message}}</li>{{end}}</ul></div>{{end}}
+<div class="grid"><div>
+<div class="readme">{{.Readme}}</div>
+<h2>Manifest</h2><pre><code>{{.Version.ManifestYAML}}</code></pre>
+<h2>Files</h2>
+<table>{{$r := .Rig}}{{$v := .Version}}{{range .Files}}<tr><td>{{if .IsText}}<a href="/r/{{$r.Owner}}/{{$r.Name}}/v/{{$v.Version}}/files/{{.Path}}">{{.Path}}</a>{{else}}{{.Path}}{{end}}</td><td class="muted">{{.Size}} bytes</td></tr>{{end}}</table>
+</div><aside>
+<div class="card"><strong>Install</strong><pre><code>{{.Install}}</code></pre>
+<div class="muted">Review the plan before you approve: a rig can run hooks and MCP servers.</div></div>
+<div class="card"><strong>Version {{.Version.Version}}</strong>
+<div class="muted">sha256 {{slice .Version.TarballSHA256 0 12}}…</div>
+{{if .Version.Targets}}<div>Targets: {{range .Version.Targets}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
+{{if .Layers}}<div>Builds on: {{range .Layers}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
+{{if .Version.NeedsSecrets}}<div>Secrets you will be asked for: {{range .Version.NeedsSecrets}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
+{{if .Version.NeedsLogins}}<div>Logins: {{range .Version.NeedsLogins}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}</div>
+<div class="card"><strong>Versions</strong><ul>{{range .Versions}}<li><a href="/r/{{$r.Owner}}/{{$r.Name}}/v/{{.Version}}">{{.Version}}</a> <span class="muted">{{.Status}}</span></li>{{end}}</ul></div>
+{{if $.User}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/star" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button name="action" value="{{if .Rig.Starred}}unstar{{else}}star{{end}}" type="submit">{{if .Rig.Starred}}★ Unstar{{else}}☆ Star{{end}} ({{.Rig.Stars}})</button></form>{{else}}<div class="muted">★ {{.Rig.Stars}}</div>{{end}}
+{{if .IsOwner}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/visibility" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{if eq .Rig.Visibility "private"}}<button name="visibility" value="public" type="submit">Make public</button>{{else}}<button name="visibility" value="private" type="submit">Make private</button>{{end}}</form>{{end}}
+<p><a href="/report?rig={{.Rig.Owner}}/{{.Rig.Name}}&amp;version={{.Version.Version}}">Report this rig</a></p>
+</aside></div>
+{{else}}<p class="muted">No published version yet.</p>{{end}}
+{{end}}
+{{template "foot" .}}

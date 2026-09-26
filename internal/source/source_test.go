@@ -20,15 +20,18 @@ import (
 
 func TestParse(t *testing.T) {
 	ok := map[string]string{
-		"github.com/o/r":                             "github.com/o/r",
-		"github.com/o/r@v1.2.0":                      "github.com/o/r@v1.2.0",
-		"github.com/o/r.git@feature/x":               "github.com/o/r@feature/x",
-		"github.com/o/r@main//rigs/py":               "github.com/o/r@main//rigs/py",
-		"https://github.com/o/r":                     "github.com/o/r",
-		"gitlab.com/g/sub/p@v1":                      "gitlab.com/g/sub/p@v1",
-		"https://git.example.test/x/y.git@v2":        "https://git.example.test/x/y@v2",
-		"ssh://git@git.example.test/x/y.git@v2//sub": "ssh://git@git.example.test/x/y@v2//sub",
-		"file:///tmp/repo.git":                       "file:///tmp/repo",
+		"github.com/o/r":                                      "github.com/o/r",
+		"github.com/o/r@v1.2.0":                               "github.com/o/r@v1.2.0",
+		"github.com/o/r.git@feature/x":                        "github.com/o/r@feature/x",
+		"github.com/o/r@main//rigs/py":                        "github.com/o/r@main//rigs/py",
+		"https://github.com/o/r":                              "github.com/o/r",
+		"gitlab.com/g/sub/p@v1":                               "gitlab.com/g/sub/p@v1",
+		"https://git.example.test/x/y.git@v2":                 "https://git.example.test/x/y@v2",
+		"ssh://git@git.example.test/x/y.git@v2//sub":          "ssh://git@git.example.test/x/y@v2//sub",
+		"file:///tmp/repo.git":                                "file:///tmp/repo",
+		"rigfile+https://registry.example.test/jia/demo":      "rigfile+https://registry.example.test/jia/demo",
+		"rigfile+https://registry.example.test/jia/demo@^1.2": "rigfile+https://registry.example.test/jia/demo@^1.2",
+		"rigfile+http://localhost:8080/jia/demo@1.0.0-rc1":    "rigfile+http://localhost:8080/jia/demo@1.0.0-rc1",
 	}
 	for in, want := range ok {
 		s, err := Parse(in)
@@ -38,7 +41,8 @@ func TestParse(t *testing.T) {
 	}
 	for _, in := range []string{"", "github.com/o", "github.com/o/r/extra", "github.com/-o/r", "github.com/o/r@-x", "github.com/o/r@a..b",
 		"github.com/o/r//../x", "github.com/o/r//C:\\x", "http://github.com/o/r", "ftp://x/y", "git@github.com:o/r", "example.com/o/r",
-		"ext::sh -c id://x/y", "https://-oProxy=x/y/z"} {
+		"ext::sh -c id://x/y", "https://-oProxy=x/y/z",
+		"rigfile+http://registry.example.test/jia/demo", "rigfile+https://x.test/onlyowner", "rigfile+https://x.test/a/b/c", "rigfile+https://x.test/a/b@$(id)", "rigfile+https://x.test/a/b@../x"} {
 		if s, err := Parse(in); err == nil {
 			t.Errorf("Parse(%q) should fail, got %+v", in, s)
 		}
