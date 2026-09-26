@@ -61,3 +61,6 @@ func IsPrivateFile(path string) error {
 	}
 	return nil
 }
+
+// RestrictToUser makes path readable by the current user only (mode 0600).
+func RestrictToUser(path string) error { return os.Chmod(path, 0o600) }

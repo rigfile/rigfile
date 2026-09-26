@@ -123,3 +123,6 @@ func IsPrivateFile(path string) error {
 	}
 	return nil
 }
+
+// RestrictToUser replaces the file's ACL with a protected, user-only one.
+func RestrictToUser(path string) error { return restrictToUser(path) }
