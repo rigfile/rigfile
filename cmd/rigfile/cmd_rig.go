@@ -103,7 +103,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Registry: registryBaseQuiet(e, f.registry), RegistryToken: regToken(e), Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Signer: f.pulled.signer(), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Registry: registryBaseQuiet(e, f.registry), RegistryToken: regToken(e), Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Signer: f.pulled.signer(), Overwrite: f.overwrite, ToolsHost: e.tools, Hardware: e.hardware, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -207,6 +207,7 @@ func planApply(verb, rigDir string, f rigFlags, e env) int {
 		dangers = printAnalysis(e, p)
 	}
 	printTools(e, p.Tools)
+	printModels(e, p)
 	printNeeds(e, p)
 	if p.HasLock && len(p.LockDiffs) > 0 {
 		fmt.Fprintf(e.out, "\nrigfile.lock does not match the rig:\n%s\n", indent(strings.Join(p.LockDiffs, "\n"), "  "))
@@ -650,4 +651,18 @@ func printAnalysis(e env, p *session.Prepared) int {
 		fmt.Fprintln(e.out, l)
 	}
 	return dangers
+}
+
+// printModels shows the MODELS section: what would be downloaded and run, and what is deliberately not wired.
+func printModels(e env, p *session.Prepared) {
+	if len(p.Models) == 0 && len(p.ModelNotes) == 0 {
+		return
+	}
+	fmt.Fprintln(e.out, "\nMODELS   (nothing is downloaded until you approve; `--models now|later|skip`)")
+	for _, m := range p.Models {
+		m.Render(e.out)
+	}
+	for _, n := range p.ModelNotes {
+		fmt.Fprintf(e.out, "  ·  %s\n", n)
+	}
 }

@@ -54,6 +54,7 @@ type env struct {
 	openURL     func(string) error                                      // tests: replaces opening the browser
 	verifySig   func(bundle, tarball []byte) (*sigverify.Result, error) // tests: replaces Sigstore verification
 	brokerAct   rigd.Activator                                          // tests: replaces launchctl / systemctl / schtasks
+	hardware    *platform.Hardware                                      // tests: replaces hardware detection
 	exe         string                                                  // tests: the path installed into service files ("" = this binary)
 }
 
@@ -89,6 +90,8 @@ func run(args []string, e env) int {
 		return cmdPull("pull", args[1:], e)
 	case "update":
 		return cmdPull("update", args[1:], e)
+	case "models":
+		return cmdModels(args[1:], e)
 	case "ui":
 		return cmdUI(args[1:], e)
 	case "org":
@@ -150,6 +153,7 @@ func usage(w io.Writer) {
   login | logout | whoami            sign in to a Rigfile registry (device flow; token kept in your keychain)
   publish [--to-git DIR] [--to-registry [--public]]   scrub your setup (or a rig dir); write a repo and/or publish to the registry
   logins [--provider name]           walk through the logins the applied rig needs
+  models list                        local models: what the catalog would choose on this machine
   ui [<rig-dir>] [--no-open]           the plan and your checklist in a browser page on this computer
   org create|list|members|add|rm       organisations: a namespace several people publish under
   collection create|add|rm|delete|show|list   curated lists of rigs on the registry
