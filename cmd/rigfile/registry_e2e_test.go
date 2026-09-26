@@ -140,7 +140,8 @@ func TestRegistryEndToEndPublishThenPullOnAnotherMachine(t *testing.T) {
 
 	// the other machine pulls it: banner, plan, apply
 	r = b.run("", "pull", "jia/shared", "--plan-only", "--no-git")
-	for _, want := range []string{"Source: rigfile+" + regURL + "/jia/shared", "the Rigfile registry", "you did not write", "Rig: jia/shared@1.0.1"} {
+	for _, want := range []string{"Source: rigfile+" + regURL + "/jia/shared", "the Rigfile registry", "you did not write", "Rig: jia/shared@1.0.1",
+		"Trust: jia/shared@1.0.1 by jia", "0 star(s)", "Trust: not signed", "ANALYSIS  no suspicious patterns"} {
 		if r.code != 0 || !strings.Contains(r.out, want) {
 			t.Fatalf("missing %q:\n%+v", want, r)
 		}

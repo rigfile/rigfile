@@ -17,6 +17,7 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}", s.apiVersion)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/manifest", s.apiManifest)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/tarball", s.apiTarball)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/trust", s.apiTrust)
 	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/versions", s.apiUpload)
 	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/versions/{version}/yank", s.apiYank)
 	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/visibility", s.apiVisibility)
@@ -36,26 +37,30 @@ func (s *Server) viewer(w http.ResponseWriter, r *http.Request) (Viewer, *User, 
 }
 
 type versionJSON struct {
-	Version    string    `json:"version"`
-	Status     string    `json:"status"`
-	SHA256     string    `json:"tarball_sha256"`
-	Size       int64     `json:"size"`
-	CreatedAt  time.Time `json:"created_at"`
-	YankReason string    `json:"yank_reason,omitempty"`
-	Targets    []string  `json:"targets,omitempty"`
-	Secrets    []string  `json:"needs_secrets,omitempty"`
-	Logins     []string  `json:"needs_logins,omitempty"`
-	Layers     []string  `json:"layers,omitempty"`
-	Findings   []Finding `json:"findings,omitempty"`
-	Warnings   []Finding `json:"warnings,omitempty"`
+	Version    string            `json:"version"`
+	Status     string            `json:"status"`
+	SHA256     string            `json:"tarball_sha256"`
+	Size       int64             `json:"size"`
+	CreatedAt  time.Time         `json:"created_at"`
+	YankReason string            `json:"yank_reason,omitempty"`
+	Targets    []string          `json:"targets,omitempty"`
+	Secrets    []string          `json:"needs_secrets,omitempty"`
+	Logins     []string          `json:"needs_logins,omitempty"`
+	Layers     []string          `json:"layers,omitempty"`
+	Findings   []Finding         `json:"findings,omitempty"`
+	Warnings   []Finding         `json:"warnings,omitempty"`
+	HeldReason string            `json:"held_reason,omitempty"`
+	Analysis   []AnalysisFinding `json:"analysis,omitempty"`
+	SimilarTo  []SimilarRig      `json:"similar_to,omitempty"`
 }
 
 func versionToJSON(v Version, owner bool) versionJSON {
 	j := versionJSON{Version: v.Version, Status: v.Status, SHA256: v.TarballSHA256, Size: v.Size, CreatedAt: v.CreatedAt, YankReason: v.YankReason,
 		Targets: v.Targets, Secrets: v.NeedsSecrets, Logins: v.NeedsLogins, Layers: v.Layers}
 	if owner { // findings are for the publisher (and admins); other people only learn that a version is published
-		j.Findings, j.Warnings = v.Findings, v.Warnings
+		j.Findings, j.Warnings, j.HeldReason = v.Findings, v.Warnings, v.HeldReason
 	}
+	j.Analysis, j.SimilarTo = v.Analysis, v.SimilarTo
 	return j
 }
 
@@ -165,6 +170,22 @@ func (s *Server) pullable(w http.ResponseWriter, r *http.Request) (*Rig, *Versio
 	return rig, ver, true
 }
 
+func (s *Server) apiTrust(w http.ResponseWriter, r *http.Request) {
+	if !s.limit(w, r, "trust", 240, 60) {
+		return
+	}
+	rig, ver, ok := s.pullable(w, r)
+	if !ok {
+		return
+	}
+	t, err := s.Store.Trust(r.Context(), rig, ver)
+	if err != nil {
+		apiError(w, http.StatusInternalServerError, "could not gather the facts")
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
 func (s *Server) apiManifest(w http.ResponseWriter, r *http.Request) {
 	_, ver, ok := s.pullable(w, r)
 	if !ok {
@@ -210,6 +231,11 @@ func (s *Server) apiTarball(w http.ResponseWriter, r *http.Request) {
 func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
 	u := s.requireToken(w, r)
 	if u == nil {
+		return
+	}
+	if paused, why := s.Store.PublishingPaused(r.Context()); paused {
+		w.Header().Set("Retry-After", "3600")
+		apiError(w, http.StatusServiceUnavailable, "publishing is paused: "+why)
 		return
 	}
 	if !s.Lim.Allow("upload|"+strconv.FormatInt(u.ID, 10), 6, 10) {

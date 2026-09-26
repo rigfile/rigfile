@@ -5,11 +5,16 @@
 {{if .Version}}
 {{if eq .Version.Status "yanked"}}<div class="banner warn">This version was <strong>yanked</strong> by its publisher: {{.Version.YankReason}}</div>{{end}}
 {{if eq .Version.Status "pending"}}<div class="banner">This version is still being scanned. Only you can see it.</div>{{end}}
+{{if eq .Version.Status "held"}}<div class="banner warn">This version is <strong>held for review</strong> by an administrator: {{.Version.HeldReason}}. Only you and administrators can see it.</div>{{end}}
+{{if .Trust}}{{if .Trust.SimilarTo}}<div class="banner warn"><strong>Similar name.</strong> This name could be confused with {{range .Trust.SimilarTo}}<code>{{.Ref}}</code> ({{.Kind}}{{if .Verified}}, verified publisher{{end}}, {{.Stars}} stars) {{end}}. Check that you are pulling the rig you mean.</div>{{end}}{{end}}
 {{if eq .Version.Status "rejected"}}<div class="banner bad">The scan rejected this version. Only you can see it.
 <ul>{{range .Version.Findings}}<li><strong>{{.Kind}}</strong> {{.Rule}} {{.File}}{{if .Line}}:{{.Line}}{{end}} {{.Message}}</li>{{end}}</ul></div>{{end}}
 {{if and .IsOwner .Version.Warnings}}<div class="banner warn"><strong>Warnings</strong><ul>{{range .Version.Warnings}}<li>{{.Message}}</li>{{end}}</ul></div>{{end}}
 <div class="grid"><div>
 <div class="readme">{{.Readme}}</div>
+{{if .Version.Analysis}}<h2>Static analysis</h2><p class="muted">Heuristics over this rig's scripts, hooks, MCP definitions and instructions. They miss things and can be wrong; they never quote the code.</p>
+<table>{{range .Version.Analysis}}{{if ne .Level "notice"}}<tr><td><span class="tag {{if eq .Level "danger"}}bad{{else}}warn{{end}}">{{.Level}}</span></td><td>{{.File}}{{if .Line}}:{{.Line}}{{end}}</td><td>{{.Message}}</td></tr>{{end}}{{end}}</table>
+{{if .Trust}}<p class="muted">{{index .Trust.Analysis "notice"}} lower-level notices not listed.</p>{{end}}{{end}}
 <h2>Manifest</h2><pre><code>{{.Version.ManifestYAML}}</code></pre>
 <h2>Files</h2>
 <table>{{$r := .Rig}}{{$v := .Version}}{{range .Files}}<tr><td>{{if .IsText}}<a href="/r/{{$r.Owner}}/{{$r.Name}}/v/{{$v.Version}}/files/{{.Path}}">{{.Path}}</a>{{else}}{{.Path}}{{end}}</td><td class="muted">{{.Size}} bytes</td></tr>{{end}}</table>
@@ -22,6 +27,13 @@
 {{if .Layers}}<div>Builds on: {{range .Layers}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .Version.NeedsSecrets}}<div>Secrets you will be asked for: {{range .Version.NeedsSecrets}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .Version.NeedsLogins}}<div>Logins: {{range .Version.NeedsLogins}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}</div>
+{{if .Trust}}<div class="card"><strong>Trust</strong>
+<div>Publisher <a href="/u/{{.Trust.Publisher.Login}}">{{.Trust.Publisher.Login}}</a>{{if .Trust.Publisher.Verified}} <span class="tag ok">verified {{.Trust.Publisher.VerifiedKind}}</span>{{end}}</div>
+<div class="muted">first seen {{.Trust.Publisher.FirstSeen.Format "2006-01-02"}} · {{.Trust.Publisher.PublicRigs}} public rig(s)</div>
+<div>{{if .Trust.Signature.Signed}}{{if .Trust.Signature.ByPublisher}}<span class="ok">Signed by the publisher</span>{{else}}<span class="warn">Signed, but not by the publisher's identity</span>{{end}}<div class="muted">{{.Trust.Signature.Subject}}</div>{{else}}<span class="muted">Not signed</span>{{end}}</div>
+<div class="muted">{{.Trust.Versions}} version(s) · created {{.Trust.RigCreatedAt.Format "2006-01-02"}}</div>
+<div class="muted">analysis: {{index .Trust.Analysis "danger"}} danger, {{index .Trust.Analysis "caution"}} caution</div>
+{{if or .Trust.History.YankedVersions .Trust.History.RemovedVersionsPublisher}}<div class="warn">{{.Trust.History.YankedVersions}} yanked version(s); {{.Trust.History.RemovedVersionsPublisher}} removed by moderators across this publisher's rigs</div>{{end}}</div>{{end}}
 <div class="card"><strong>Versions</strong><ul>{{range .Versions}}<li><a href="/r/{{$r.Owner}}/{{$r.Name}}/v/{{.Version}}">{{.Version}}</a> <span class="muted">{{.Status}}</span></li>{{end}}</ul></div>
 {{if $.User}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/star" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button name="action" value="{{if .Rig.Starred}}unstar{{else}}star{{end}}" type="submit">{{if .Rig.Starred}}★ Unstar{{else}}☆ Star{{end}} ({{.Rig.Stars}})</button></form>{{else}}<div class="muted">★ {{.Rig.Stars}}</div>{{end}}
 {{if .IsOwner}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/visibility" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}">

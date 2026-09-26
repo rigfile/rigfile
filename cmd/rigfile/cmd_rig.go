@@ -7,9 +7,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
+	"github.com/digitaldreamer3462/rigfile/internal/analyze"
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
 	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
@@ -65,6 +67,7 @@ func cmdValidate(args []string, e env) int {
 type rigFlags struct {
 	layers, project, claudeDir, registry                                       string
 	overwrite, yes, updateLock, noTools, noGit, unsafeBase, sandbox, noSandbox bool
+	acceptDanger                                                               bool
 	targets                                                                    kvFlags
 	pulled                                                                     *pulledRig // set by `pull` and `update`
 }
@@ -90,6 +93,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 	fs.BoolVar(&f.overwrite, "overwrite", false, "replace hand-edited managed content and items Rigfile does not own")
 	if withApply {
 		fs.BoolVar(&f.yes, "yes", false, "apply without asking")
+		fs.BoolVar(&f.acceptDanger, "accept-danger", false, "with --yes: apply even though static analysis found danger-level patterns in a rig you pulled")
 		fs.BoolVar(&f.noTools, "no-tools", false, "do not install tools; only show what would be installed")
 		fs.BoolVar(&f.updateLock, "update-lock", false, "accept a changed rig: rewrite rigfile.lock")
 	}
@@ -191,6 +195,10 @@ func planApply(verb, rigDir string, f rigFlags, e env) int {
 		fmt.Fprintln(e.out)
 		p.GitPlan.Render(e.out)
 	}
+	dangers := 0
+	if f.pulled != nil {
+		dangers = printAnalysis(e, p)
+	}
 	printTools(e, p.Tools)
 	printNeeds(e, p)
 	if p.HasLock && len(p.LockDiffs) > 0 {
@@ -204,6 +212,10 @@ func planApply(verb, rigDir string, f rigFlags, e env) int {
 
 	if p.HasLock && len(p.LockDiffs) > 0 && !f.updateLock {
 		fmt.Fprintln(e.err, "\nrigfile: refusing to apply a rig that no longer matches its lockfile. Review the differences above, then re-run with --update-lock to accept them.")
+		return 1
+	}
+	if dangers > 0 && f.yes && !f.acceptDanger {
+		fmt.Fprintf(e.err, "\nrigfile: refusing to apply without asking: static analysis found %d danger-level pattern(s) in code you pulled (listed above). Read them, then run again without --yes, or add --accept-danger if you have reviewed them.\n", dangers)
 		return 1
 	}
 	runTools := p.Tools.Runnable()
@@ -584,4 +596,51 @@ func primaryApplied(st *state.State) *state.TargetState {
 		return a[0].TS
 	}
 	return nil
+}
+
+// printAnalysis runs static analysis over a pulled rig and the layers it inherited from remote sources, and prints the
+// findings (docs/trust.md §2). It returns the number of danger-level findings. Findings never quote the analysed text.
+func printAnalysis(e env, p *session.Prepared) int {
+	type unit struct{ name, dir string }
+	units := []unit{{p.Top.M.Name, p.Top.Dir}}
+	for name := range p.Layers.Remotes {
+		if l := p.Layers.Loaded[name]; l != nil {
+			units = append(units, unit{name, l.Dir})
+		}
+	}
+	sort.Slice(units, func(i, j int) bool { return units[i].name < units[j].name })
+	total, dangers := 0, 0
+	var lines []string
+	notices := 0
+	for _, u := range units {
+		rep, err := analyze.Dir(u.dir)
+		if err != nil {
+			continue
+		}
+		for _, f := range rep.Findings {
+			total++
+			switch f.Level {
+			case analyze.Danger:
+				dangers++
+			case analyze.Notice:
+				notices++
+				continue
+			}
+			loc := f.File
+			if f.Line > 0 {
+				loc = fmt.Sprintf("%s:%d", f.File, f.Line)
+			}
+			tag := strings.ToUpper(string(f.Level))
+			lines = append(lines, fmt.Sprintf("  %-8s %s: %s   [%s]", tag, loc, f.Message, f.Rule))
+		}
+	}
+	if total == 0 {
+		fmt.Fprintln(e.out, "\nANALYSIS  no suspicious patterns found in the rig's scripts, hooks or instructions (static analysis is a heuristic, not a guarantee)")
+		return 0
+	}
+	fmt.Fprintf(e.out, "\nANALYSIS  %d danger, %d caution, %d notice (heuristics: they miss things and can be wrong)\n", dangers, len(lines)-dangers, notices)
+	for _, l := range lines {
+		fmt.Fprintln(e.out, l)
+	}
+	return dangers
 }

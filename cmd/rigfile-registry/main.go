@@ -50,6 +50,12 @@ func usage(w io.Writer) {
       resolve-report --id N --status actioned|dismissed
       takedown --rig owner/name [--version V] --reason R   remove a version (or the whole rig)
       disable-user --login L | enable-user --login L
+      verify-publisher --login L --kind person|organisation|domain [--reason NOTE] | unverify-publisher --login L
+      held                                            list versions held for review
+      release --id N [--reason R] | reject --id N --reason R
+      approve-public --rig owner/name                 let a rig that needed review go public
+      publishing pause --reason R | publishing resume incident switch: refuse uploads
+      revoke-tokens --login L | revoke-tokens --all   revoke API tokens
       audit [--limit N]                               show the newest audit entries
 
 configuration: RIGFILE_REGISTRY_PUBLIC_URL, _DATABASE_URL, _BLOB (fs:/path | s3), _GITHUB_CLIENT_ID, _GITHUB_CLIENT_SECRET[_FILE],

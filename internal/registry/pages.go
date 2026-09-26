@@ -23,6 +23,11 @@ func (s *Server) pageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /r/{owner}/{name}/star", s.pageStar)
 	mux.HandleFunc("POST /r/{owner}/{name}/visibility", s.pageVisibility)
 	mux.HandleFunc("GET /legal/{doc}", s.pageLegal)
+	mux.HandleFunc("GET /admin", s.adminPage)
+	mux.HandleFunc("POST /admin/held/{id}", s.adminHeld)
+	mux.HandleFunc("POST /admin/approve/{owner}/{name}", s.adminApprove)
+	mux.HandleFunc("POST /admin/report/{id}", s.adminReport)
+	mux.HandleFunc("POST /admin/verify", s.adminVerify)
 	mux.HandleFunc("GET /report", s.reportForm)
 	mux.HandleFunc("POST /report", s.reportSubmit)
 	mux.HandleFunc("GET /", s.notFound)
@@ -90,6 +95,7 @@ type RigPage struct {
 	Install    string
 	InstallPin string
 	IsOwner    bool
+	Trust      *Trust
 	Registry   string
 	Layers     []string
 	Latest     string
@@ -144,6 +150,7 @@ func (s *Server) pageRig(w http.ResponseWriter, r *http.Request) {
 		page.Readme = renderMarkdown(page.Version.Readme)
 		page.Layers = page.Version.Layers
 		page.Install = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + " --registry " + s.Cfg.PublicURL
+		page.Trust, _ = s.Store.Trust(r.Context(), page.Rig, page.Version)
 		page.InstallPin = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + "@" + page.Version.Version + " --registry " + s.Cfg.PublicURL
 	}
 	title := page.Rig.Owner + "/" + page.Rig.Name
