@@ -1,0 +1,5 @@
+# Rigfile scans its own repository with its own scanner (dogfooding, working agreement 9).
+# Entries here are reviewed exceptions; every one needs a reason.
+
+# The windowed-scan equivalence test deliberately builds many key-looking lines; the values are made up.
+rule:generic-api-key internal/scan/engine_test.go
