@@ -9,8 +9,11 @@ import (
 	"strings"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
+	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/digitaldreamer3462/rigfile/internal/targets"
 )
 
 // cmdInit captures an existing Claude Code setup into a new rig directory. It only READS the Claude
@@ -21,6 +24,8 @@ func cmdInit(args []string, e env) int {
 	claudeDir := fs.String("claude-dir", "", "Claude Code config directory (default ~/.claude or $CLAUDE_CONFIG_DIR)")
 	out := fs.String("out", "rig", "directory to create the rig in (must be empty or absent)")
 	name := fs.String("name", "local/my-rig", "rig name, owner/name (lowercase)")
+	from := fs.String("from", "claude-code", "tool to capture: "+strings.Join(targets.Names(), ", "))
+	dirFlag := fs.String("dir", "", "config directory of the tool given by --from (default: its usual location)")
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
@@ -33,6 +38,9 @@ func cmdInit(args []string, e env) int {
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
 		return 1
+	}
+	if *from != "claude-code" {
+		return initFromTarget(e, pi, home, *from, *dirFlag, *out, *name)
 	}
 	cd := *claudeDir
 	if cd == "" {
@@ -89,13 +97,62 @@ func cmdInit(args []string, e env) int {
 		return 1
 	}
 
+	res := &capture.Result{Manifest: cp.Manifest, Files: cp.Files}
+	for _, f := range cp.Report {
+		res.Report = append(res.Report, capture.Finding(f))
+	}
+	return writeCaptured(e, res, *out)
+}
+
+// initFromTarget captures a non-Claude-Code tool. Items Rigfile applied earlier (state.json) are left out.
+func initFromTarget(e env, pi *platform.Info, home, from, dir, out, name string) int {
+	t, ok := targets.Get(from)
+	if !ok || t.Capture == nil {
+		fmt.Fprintf(e.err, "rigfile: cannot capture from %q (known: %s)\n", from, strings.Join(targets.Names(), ", "))
+		return 2
+	}
+	if ents, err := os.ReadDir(out); err == nil && len(ents) > 0 {
+		fmt.Fprintf(e.err, "rigfile: %s already has files; choose an empty --out directory\n", out)
+		return 1
+	}
+	sd, err := stateDirFor(e, pi)
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	st, err := state.Load(sd)
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	owned := map[string]bool{}
+	if ts := st.Targets[from]; ts != nil {
+		for _, it := range ts.Items {
+			owned[it.Category+"|"+it.Key] = true
+		}
+	}
+	res, err := t.Capture(targets.Ctx{Plat: pi, Getenv: e.getenv, Dir: dir}, capture.Options{
+		Home: home, Name: name, Skip: func(cat, key string) bool { return owned[cat+"|"+key] },
+	})
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	return writeCaptured(e, res, out)
+}
+
+func writeCaptured(e env, cp *capture.Result, out string) int {
+	if _, err := manifest.Parse(cp.Manifest); err != nil {
+		fmt.Fprintln(e.err, "rigfile: the captured rig does not validate (nothing written):", err)
+		return 1
+	}
 	paths := make([]string, 0, len(cp.Files)+1)
 	for p := range cp.Files {
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
 	write := func(rel string, data []byte) error {
-		dst := filepath.Join(*out, filepath.FromSlash(rel))
+		dst := filepath.Join(out, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err
 		}
@@ -117,9 +174,9 @@ func cmdInit(args []string, e env) int {
 	}
 
 	printCaptureReport(e, cp)
-	fmt.Fprintf(e.out, "\nWrote %s (%d file(s) plus rigfile.yaml)\n", *out, len(paths))
+	fmt.Fprintf(e.out, "\nWrote %s (%d file(s) plus rigfile.yaml)\n", out, len(paths))
 
-	loaded, err := manifest.Load(*out)
+	loaded, err := manifest.Load(out)
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
 		return 1
@@ -136,7 +193,7 @@ func cmdInit(args []string, e env) int {
 	return 0
 }
 
-func printCaptureReport(e env, cp *claudecode.Captured) {
+func printCaptureReport(e env, cp *capture.Result) {
 	order := []struct{ level, title string }{
 		{"captured", "Captured"}, {"redacted", "Secrets: values NOT captured"}, {"skipped", "Skipped"}, {"note", "Notes"},
 	}

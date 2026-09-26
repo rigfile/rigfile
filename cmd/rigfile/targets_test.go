@@ -245,3 +245,27 @@ func TestEveryDetectedTargetSaysHowMuchOfBaseSecureItEnforces(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestInitFromCodexCapturesHandWrittenSetupAndSkipsSecrets(t *testing.T) {
+	m := newMachine(t)
+	cdir := filepath.Join(m.home, ".codex")
+	_ = os.MkdirAll(cdir, 0o755)
+	tok := "sk-ant-" + strings.Repeat("TEST", 6)
+	_ = os.WriteFile(filepath.Join(cdir, "AGENTS.md"), []byte("# Mine\n- prefer small diffs\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(cdir, "config.toml"), []byte("[mcp_servers.tools]\ncommand = \"npx\"\nargs = [\"-y\", \"tools-mcp@1.0.0\"]\n\n[mcp_servers.tools.env]\nTOOLS_API_KEY = \""+tok+"\"\n"), 0o600)
+	out := filepath.Join(t.TempDir(), "rig")
+	r := m.run("", "init", "--from", "codex", "--out", out, "--name", "me/codex-rig")
+	if r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	yml := string(mustRead(t, filepath.Join(out, "rigfile.yaml")))
+	if strings.Contains(yml, tok) || strings.Contains(r.out, tok) || !strings.Contains(yml, "secret://tools/tools_api_key") {
+		t.Fatalf("the secret value must never be captured:\n%s", yml)
+	}
+	if !strings.Contains(string(mustRead(t, filepath.Join(out, "instructions", "agents-md.md"))), "prefer small diffs") {
+		t.Fatal("AGENTS.md was not captured")
+	}
+	if r := m.run("", "init", "--from", "nope", "--out", filepath.Join(t.TempDir(), "x")); r.code != 2 {
+		t.Fatalf("%+v", r)
+	}
+}

@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/adaptertest"
+	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
+	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
@@ -71,5 +73,24 @@ func TestStdioServersOnlyAndUserConfigSurvives(t *testing.T) {
 	got := r.Read("Library/Application Support/Claude/" + ConfigFile)
 	if !json.Valid([]byte(got)) || !strings.Contains(got, `"globalShortcut": "Cmd+Space"`) || !strings.Contains(got, `"fs"`) || !strings.Contains(got, `"alpaca"`) || strings.Contains(got, "mcp.example.test") || strings.Contains(got, "secret://") {
 		t.Fatalf("%s", got)
+	}
+}
+
+func TestRoundTripCaptureOfWhatWasApplied(t *testing.T) {
+	r := adaptertest.New(t, nil)
+	st := state.New()
+	p, dir := build(t, r, "windows", st)
+	r.Apply(p, st, StateTarget)
+	res, err := Capture(capture.Options{Dir: dir, Home: r.Home, IncludeManaged: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := manifest.Parse(res.Manifest)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, res.Manifest)
+	}
+	adaptertest.AssertCanonicalMCP(t, m, false) // remote connectors live in the app, not in this file
+	if _, ok := m.MCPServers["docs"]; ok {
+		t.Fatal("a remote server was never written, so it cannot be captured")
 	}
 }

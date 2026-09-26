@@ -19,6 +19,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/codex"
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/cursor"
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/gemini"
+	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
@@ -53,6 +54,9 @@ type Target struct {
 	Available func(*platform.Info) (bool, string)
 	Detect    func(Ctx) Detection
 	Plan      func(Ctx, *merge.Projection) (*engine.Plan, error)
+	// Capture reads the tool's existing setup (read-only) into a rig, the reverse of Plan (`rigfile init --from`).
+	// nil for Claude Code, whose capture also reads ~/.claude.json and has its own entry point in `init`.
+	Capture func(Ctx, capture.Options) (*capture.Result, error)
 	// Always is true for the target that is configured even when it is not detected (Claude Code: a fresh
 	// machine gets its config before the tool is installed).
 	Always bool
@@ -267,6 +271,18 @@ func codexTarget() Target {
 			}
 			return Detection{false, "no ~/.codex and no `codex` on PATH"}
 		},
+		Capture: func(c Ctx, o capture.Options) (*capture.Result, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			sk, err := codex.SkillsDir(c.Plat)
+			if err != nil {
+				return nil, err
+			}
+			o.Dir = d
+			return codex.Capture(o, sk)
+		},
 		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
 			d, err := dir(c)
 			if err != nil {
@@ -295,6 +311,14 @@ func geminiTarget() Target {
 				return Detection{true, "`gemini` is on PATH"}
 			}
 			return Detection{false, "no ~/.gemini and no `gemini` on PATH"}
+		},
+		Capture: func(c Ctx, o capture.Options) (*capture.Result, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			o.Dir = d
+			return gemini.Capture(o)
 		},
 		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
 			d, err := dir(c)
@@ -325,6 +349,14 @@ func cursorTarget() Target {
 			}
 			return Detection{false, "no ~/.cursor and no `cursor` on PATH"}
 		},
+		Capture: func(c Ctx, o capture.Options) (*capture.Result, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			o.Dir = d
+			return cursor.Capture(o)
+		},
 		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
 			d, err := dir(c)
 			if err != nil {
@@ -350,6 +382,14 @@ func claudeDesktopTarget() Target {
 				return Detection{true, d + " exists"}
 			}
 			return Detection{false, "no Claude app-data directory"}
+		},
+		Capture: func(c Ctx, o capture.Options) (*capture.Result, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			o.Dir = d
+			return claudedesktop.Capture(o)
 		},
 		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
 			d, err := dir(c)

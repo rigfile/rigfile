@@ -8,7 +8,9 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/adaptertest"
+	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
+	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
@@ -205,5 +207,43 @@ func TestArgvPrefix(t *testing.T) {
 		if _, ok := argvPrefix(in); ok {
 			t.Errorf("%q must not be expressible", in)
 		}
+	}
+}
+
+func TestRoundTripCaptureOfWhatWasApplied(t *testing.T) {
+	r := adaptertest.New(t, nil)
+	st := state.New()
+	p, err := build(t, r, "linux", st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Apply(p, st, StateTarget)
+	res, err := Capture(capture.Options{Dir: filepath.Join(r.Home, ".codex"), Home: r.Home, IncludeManaged: true, Name: "x/captured"}, filepath.Join(r.Home, ".agents", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := manifest.Parse(res.Manifest)
+	if err != nil {
+		t.Fatalf("captured manifest invalid: %v\n%s", err, res.Manifest)
+	}
+	adaptertest.AssertCanonicalMCP(t, m, true)
+	if got := adaptertest.ReadRig(res.Files, "instructions/coding-style.md"); got != "# Style\n- be terse\n" {
+		t.Fatalf("instruction text: %q", got)
+	}
+	if got := adaptertest.ReadRig(res.Files, "skills/pdf/scripts/run.sh"); got != adaptertest.Files["skills/pdf/scripts/run.sh"] {
+		t.Fatalf("skill tree: %q", got)
+	}
+	if got := adaptertest.ReadRig(res.Files, "skills/ship/SKILL.md"); !strings.Contains(got, "Run the tests, then push.") {
+		t.Fatalf("the command became a skill and is captured as one: %q", got)
+	}
+	ag := adaptertest.ReadRig(res.Files, "agents/reviewer.md")
+	if !strings.Contains(ag, "description: Reviews diffs") || !strings.Contains(ag, "Be strict.") || strings.Contains(ag, "tools:") {
+		t.Fatalf("agent (tools are a documented loss): %q", ag)
+	}
+	// without IncludeManaged, marked regions Rigfile wrote are left out (whole files such as skills carry no marker)
+	res2, _ := Capture(capture.Options{Dir: filepath.Join(r.Home, ".codex"), Home: r.Home}, filepath.Join(r.Home, ".agents", "skills"))
+	m2, _ := manifest.Parse(res2.Manifest)
+	if len(m2.MCPServers) != 0 || len(res2.Files["instructions/coding-style.md"]) != 0 {
+		t.Fatalf("managed content must not be swallowed by a plain init:\n%s", res2.Manifest)
 	}
 }

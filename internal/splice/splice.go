@@ -326,3 +326,8 @@ func StripAll(doc []byte, st Style) ([]byte, []string, error) {
 	}
 	return bytes.TrimRight(out, "\r\n \t"), ids, nil
 }
+
+// Regions lists every region in doc with its body, in file order.
+func Regions(doc []byte, st Style) ([]Region, error) {
+	return scan(splitLines(doc), st)
+}

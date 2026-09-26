@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/adaptertest"
+	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
+	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
@@ -127,5 +129,46 @@ func TestUnsupportedItemsAreReportedAndGeminiCliHomeIsHonoured(t *testing.T) {
 		return ""
 	}); d != filepath.Join("/x/gh", ".gemini") {
 		t.Fatalf("%s", d)
+	}
+}
+
+func TestRoundTripCaptureOfWhatWasApplied(t *testing.T) {
+	r := adaptertest.New(t, map[string]string{"commands/ship.md": "---\ndescription: Ship it\n---\nRun tests for $ARGUMENTS, then push.\n"})
+	st := state.New()
+	p, _ := build(t, r, "macos", st, nil)
+	r.Apply(p, st, StateTarget)
+	res, err := Capture(capture.Options{Dir: filepath.Join(r.Home, ".gemini"), Home: r.Home, IncludeManaged: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := manifest.Parse(res.Manifest)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, res.Manifest)
+	}
+	adaptertest.AssertCanonicalMCP(t, m, true)
+	if got := adaptertest.ReadRig(res.Files, "commands/ship.md"); got != "---\ndescription: Ship it\n---\nRun tests for $ARGUMENTS, then push.\n" {
+		t.Fatalf("command: %q", got)
+	}
+	if got := adaptertest.ReadRig(res.Files, "instructions/coding-style.md"); got != "# Style\n- be terse\n" {
+		t.Fatalf("%q", got)
+	}
+	// fixpoint: applying the captured rig again writes the same native files
+	dir := t.TempDir()
+	rig2 := &adaptertest.Rig{T: t, Dir: dir, Home: t.TempDir()}
+	rig2.Put(dir, "rigfile.yaml", string(res.Manifest), 0o644)
+	for rel, c := range res.Files {
+		rig2.Put(dir, rel, string(c), 0o644)
+	}
+	pi := rig2.Plat("macos")
+	p2, err := Build(Env{Plat: pi, GeminiDir: filepath.Join(rig2.Home, ".gemini")}, rig2.Projection(StateTarget, pi))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rig2.Apply(p2, state.New(), StateTarget)
+	if a, b := r.Read(".gemini/settings.json"), rig2.Read(".gemini/settings.json"); a != b {
+		t.Fatalf("apply(capture(apply(x))) differs from apply(x):\n%s\n---\n%s", a, b)
+	}
+	if a, b := r.Read(".gemini/commands/ship.toml"), rig2.Read(".gemini/commands/ship.toml"); a != b {
+		t.Fatalf("%s\n---\n%s", a, b)
 	}
 }

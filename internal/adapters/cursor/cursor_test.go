@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/adaptertest"
+	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
+	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
@@ -87,4 +89,31 @@ func TestMcpJsonKeepsUserServersAndSecretsOutOfTheFile(t *testing.T) {
 	if p2, _ := build(t, r, "windows", st, nil); p2.Changes() != 0 {
 		t.Fatal("second plan must change nothing")
 	}
+}
+
+func TestRoundTripCaptureOfWhatWasApplied(t *testing.T) {
+	r := adaptertest.New(t, nil)
+	st := state.New()
+	p, _ := build(t, r, "linux", st, nil)
+	r.Apply(p, st, StateTarget)
+	res, err := Capture(capture.Options{Dir: filepath.Join(r.Home, ".cursor"), Home: r.Home, IncludeManaged: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := manifest.Parse(res.Manifest)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, res.Manifest)
+	}
+	adaptertest.AssertCanonicalMCP(t, m, true)
+	if !strings.Contains(strings.Join(reportMsgs(res), "\n"), "User Rules inside the app") {
+		t.Fatal("the capture must say user rules cannot be read")
+	}
+}
+
+func reportMsgs(res *capture.Result) []string {
+	var out []string
+	for _, f := range res.Report {
+		out = append(out, f.Msg)
+	}
+	return out
 }

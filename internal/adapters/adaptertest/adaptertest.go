@@ -249,3 +249,25 @@ var OSes = []string{"macos", "linux", "windows"}
 
 // HostIsWindows reports whether the tests run on native Windows (a few path assertions differ there).
 func HostIsWindows() bool { return runtime.GOOS == "windows" }
+
+// AssertCanonicalMCP checks that a captured manifest describes the fixture's servers: `alpaca` (stdio, npx,
+// secret ref, literal env) and, when remote is true, `docs` (https). It is the "capture(apply(x)) == x" check for
+// the MCP category, shared by every adapter.
+func AssertCanonicalMCP(t *testing.T, m *manifest.Manifest, remote bool) {
+	t.Helper()
+	a, ok := m.MCPServers["alpaca"]
+	if !ok || a.Command != "npx" || strings.Join(a.Args, " ") != "-y alpaca-mcp@1.4.2" || a.Env["ALPACA_API_KEY"] != "secret://alpaca/api_key" || a.Env["ALPACA_PAPER"] != "true" {
+		t.Fatalf("alpaca did not round-trip: %+v", a)
+	}
+	if _, ok := m.Secrets["alpaca/api_key"]; !ok {
+		t.Fatalf("the secret declaration was lost: %v", m.Secrets)
+	}
+	if remote {
+		if d, ok := m.MCPServers["docs"]; !ok || d.URL != "https://mcp.example.test/mcp" || d.Transport != "http" {
+			t.Fatalf("docs did not round-trip: %+v", d)
+		}
+	}
+}
+
+// ReadRig returns a captured rig's file (rig-relative path) as text.
+func ReadRig(files map[string][]byte, rel string) string { return string(files[rel]) }
