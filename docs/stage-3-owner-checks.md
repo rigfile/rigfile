@@ -30,7 +30,7 @@ rigfile apply e2e\rig                     # review, approve; then:
 rigfile doctor                            # expect: secret store = windows-credential-manager, no warnings
 rigfile diff                              # expect: no drift
 git init t ; cd t ; "x" > f ; git add f ; git commit -m ok          # the hooks run through Git for Windows sh
-"token = 'ghp_" + ("A1b2C3d4E5"*4).Substring(0,36) + "'" > leak.py ; git add leak.py ; git commit -m leak   # expect: blocked (fake value)
+$tok = "gh" + "p_wJ4kP9xQm2Rt7VbN5cLd8HyZaE3sUfG6TiOo" ; "token = '$tok'" > leak.py ; git add leak.py ; git commit -m leak   # expect: blocked (fake value)
 git commit --no-verify -m sneaky          # expect: blocked by the reference-transaction backstop
 rigfile rollback --force
 ```
