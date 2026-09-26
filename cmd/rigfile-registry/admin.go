@@ -43,6 +43,8 @@ func admin(ctx context.Context, args []string, e env) int {
 	version := fs.String("version", "", "version (empty = the whole rig)")
 	reason := fs.String("reason", "", "reason (recorded in the audit log)")
 	limit := fs.Int("limit", 30, "how many entries")
+	fs.String("kind", "person", "verification kind: person, organisation or domain")
+	all := fs.Bool("all", false, "every account (revoke-tokens)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -96,6 +98,77 @@ func admin(ctx context.Context, args []string, e env) int {
 			return fail(err)
 		}
 		fmt.Fprintln(e.out, "removed", *rig, *version)
+	case "verify-publisher":
+		kind := fs.Lookup("kind").Value.String()
+		if err := st.SetVerified(ctx, *login, kind, *reason, operator); err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(e.out, "verified", *login, "as", kind)
+	case "unverify-publisher":
+		if err := st.ClearVerified(ctx, *login, operator); err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(e.out, "verification removed from", *login)
+	case "held":
+		hs, err := st.HeldVersions(ctx)
+		if err != nil {
+			return fail(err)
+		}
+		if len(hs) == 0 {
+			fmt.Fprintln(e.out, "nothing is held")
+		}
+		for _, h := range hs {
+			fmt.Fprintf(e.out, "#%d  %s@%s  %s\n     %s\n", h.ID, h.Ref, h.Version, h.CreatedAt.Format("2006-01-02"), h.Reason)
+		}
+	case "release", "reject":
+		if err := st.DecideHeld(ctx, *id, args[0] == "release", *reason, operator); err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(e.out, args[0]+"d held version", *id)
+	case "approve-public":
+		owner, n, ok := strings.Cut(*rig, "/")
+		if !ok {
+			return fail(fmt.Errorf("approve-public needs --rig owner/name"))
+		}
+		if err := st.ApprovePublic(ctx, owner, n, operator); err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(e.out, *rig, "approved to be public")
+	case "publishing":
+		if len(fs.Args()) == 0 {
+			return fail(fmt.Errorf("publishing pause --reason R | publishing resume"))
+		}
+		sub := fs.Args()[0]
+		if err := fs.Parse(fs.Args()[1:]); err != nil { // flags may follow the sub-command
+			return 2
+		}
+		switch sub {
+		case "pause":
+			if err := st.PausePublishing(ctx, *reason, operator); err != nil {
+				return fail(err)
+			}
+			fmt.Fprintln(e.out, "publishing paused")
+		case "resume":
+			if err := st.ResumePublishing(ctx, operator); err != nil {
+				return fail(err)
+			}
+			fmt.Fprintln(e.out, "publishing resumed")
+		default:
+			return fail(fmt.Errorf("publishing pause | resume"))
+		}
+	case "revoke-tokens":
+		if *login == "" && !*all {
+			return fail(fmt.Errorf("revoke-tokens needs --login L or --all"))
+		}
+		who := *login
+		if *all {
+			who = ""
+		}
+		n, err := st.RevokeTokens(ctx, who, operator)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(e.out, "revoked", n, "token(s)")
 	case "disable-user", "enable-user":
 		if err := st.SetDisabled(ctx, *login, args[0] == "disable-user"); err != nil {
 			return fail(err)

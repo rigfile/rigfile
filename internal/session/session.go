@@ -71,6 +71,7 @@ type Options struct {
 	// the stored sign-in token for it (private layers), or "".
 	Registry      string
 	RegistryToken func(base string) string
+	Signer        string // set by `pull`: the verified signer of the pulled version
 	Source        string // set by `pull`: the canonical source string of the rig itself, recorded in state.json
 	Commit        string
 	Tree          string
@@ -492,7 +493,7 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 	for _, tp := range p.Targets {
 		ts := p.State.Target(tp.T.Name)
 		ts.Rig = state.RigRef{Name: p.Top.M.Name, Version: p.Top.M.Version, Hash: tp.SHA, Dir: absDir,
-			Source: p.Opts.Source, Commit: p.Opts.Commit, TreeSHA256: p.Opts.Tree}
+			Source: p.Opts.Source, Commit: p.Opts.Commit, TreeSHA256: p.Opts.Tree, Signer: p.Opts.Signer}
 		ts.LockSHA = hashing.Bytes(lockBytes)
 		ts.Needs = p.Needs()
 		// A run that changed nothing must not rewrite state.json just to bump a timestamp.

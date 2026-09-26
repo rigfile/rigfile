@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
 )
 
 func (s *Server) apiRoutes(mux *http.ServeMux) {
@@ -17,6 +19,8 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}", s.apiVersion)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/manifest", s.apiManifest)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/tarball", s.apiTarball)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/trust", s.apiTrust)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/bundle", s.apiBundle)
 	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/versions", s.apiUpload)
 	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/versions/{version}/yank", s.apiYank)
 	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/visibility", s.apiVisibility)
@@ -36,26 +40,30 @@ func (s *Server) viewer(w http.ResponseWriter, r *http.Request) (Viewer, *User, 
 }
 
 type versionJSON struct {
-	Version    string    `json:"version"`
-	Status     string    `json:"status"`
-	SHA256     string    `json:"tarball_sha256"`
-	Size       int64     `json:"size"`
-	CreatedAt  time.Time `json:"created_at"`
-	YankReason string    `json:"yank_reason,omitempty"`
-	Targets    []string  `json:"targets,omitempty"`
-	Secrets    []string  `json:"needs_secrets,omitempty"`
-	Logins     []string  `json:"needs_logins,omitempty"`
-	Layers     []string  `json:"layers,omitempty"`
-	Findings   []Finding `json:"findings,omitempty"`
-	Warnings   []Finding `json:"warnings,omitempty"`
+	Version    string            `json:"version"`
+	Status     string            `json:"status"`
+	SHA256     string            `json:"tarball_sha256"`
+	Size       int64             `json:"size"`
+	CreatedAt  time.Time         `json:"created_at"`
+	YankReason string            `json:"yank_reason,omitempty"`
+	Targets    []string          `json:"targets,omitempty"`
+	Secrets    []string          `json:"needs_secrets,omitempty"`
+	Logins     []string          `json:"needs_logins,omitempty"`
+	Layers     []string          `json:"layers,omitempty"`
+	Findings   []Finding         `json:"findings,omitempty"`
+	Warnings   []Finding         `json:"warnings,omitempty"`
+	HeldReason string            `json:"held_reason,omitempty"`
+	Analysis   []AnalysisFinding `json:"analysis,omitempty"`
+	SimilarTo  []SimilarRig      `json:"similar_to,omitempty"`
 }
 
 func versionToJSON(v Version, owner bool) versionJSON {
 	j := versionJSON{Version: v.Version, Status: v.Status, SHA256: v.TarballSHA256, Size: v.Size, CreatedAt: v.CreatedAt, YankReason: v.YankReason,
 		Targets: v.Targets, Secrets: v.NeedsSecrets, Logins: v.NeedsLogins, Layers: v.Layers}
 	if owner { // findings are for the publisher (and admins); other people only learn that a version is published
-		j.Findings, j.Warnings = v.Findings, v.Warnings
+		j.Findings, j.Warnings, j.HeldReason = v.Findings, v.Warnings, v.HeldReason
 	}
+	j.Analysis, j.SimilarTo = v.Analysis, v.SimilarTo
 	return j
 }
 
@@ -165,6 +173,22 @@ func (s *Server) pullable(w http.ResponseWriter, r *http.Request) (*Rig, *Versio
 	return rig, ver, true
 }
 
+func (s *Server) apiTrust(w http.ResponseWriter, r *http.Request) {
+	if !s.limit(w, r, "trust", 240, 60) {
+		return
+	}
+	rig, ver, ok := s.pullable(w, r)
+	if !ok {
+		return
+	}
+	t, err := s.Store.Trust(r.Context(), rig, ver)
+	if err != nil {
+		apiError(w, http.StatusInternalServerError, "could not gather the facts")
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
 func (s *Server) apiManifest(w http.ResponseWriter, r *http.Request) {
 	_, ver, ok := s.pullable(w, r)
 	if !ok {
@@ -212,6 +236,11 @@ func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
+	if paused, why := s.Store.PublishingPaused(r.Context()); paused {
+		w.Header().Set("Retry-After", "3600")
+		apiError(w, http.StatusServiceUnavailable, "publishing is paused: "+why)
+		return
+	}
 	if !s.Lim.Allow("upload|"+strconv.FormatInt(u.ID, 10), 6, 10) {
 		w.Header().Set("Retry-After", "60")
 		apiError(w, http.StatusTooManyRequests, "too many uploads; slow down")
@@ -230,19 +259,29 @@ func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusForbidden, "the "+owner+"/ namespace is reserved")
 		return
 	}
-	if ct := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])); ct != "application/gzip" && ct != "application/x-gzip" {
-		apiError(w, http.StatusUnsupportedMediaType, "send the rig as a gzip tarball (Content-Type: application/gzip)")
+	ct := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0]))
+	if ct != "application/gzip" && ct != "application/x-gzip" && ct != "multipart/form-data" {
+		apiError(w, http.StatusUnsupportedMediaType, "send the rig as a gzip tarball (Content-Type: application/gzip), or as multipart/form-data with `tarball` and an optional Sigstore `bundle`")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, s.Cfg.MaxUpload)
-	data, err := io.ReadAll(r.Body)
+	r.Body = http.MaxBytesReader(w, r.Body, s.Cfg.MaxUpload+512<<10)
+	var data, bundleJSON []byte
+	var err error
+	if ct == "multipart/form-data" {
+		data, bundleJSON, err = readMultipart(r, s.Cfg.MaxUpload)
+	} else {
+		data, err = io.ReadAll(io.LimitReader(r.Body, s.Cfg.MaxUpload+1))
+		if err == nil && int64(len(data)) > s.Cfg.MaxUpload {
+			err = &http.MaxBytesError{}
+		}
+	}
 	if err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			apiError(w, http.StatusRequestEntityTooLarge, "the upload is larger than "+strconv.FormatInt(s.Cfg.MaxUpload>>20, 10)+" MiB")
 			return
 		}
-		apiError(w, http.StatusBadRequest, "could not read the upload")
+		apiError(w, http.StatusBadRequest, "could not read the upload: "+err.Error())
 		return
 	}
 	info, err := validateUpload(data, owner, name)
@@ -255,6 +294,25 @@ func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
 		s.Log.Error("upload validation", "err", err)
 		apiError(w, http.StatusInternalServerError, "could not check the upload")
 		return
+	}
+	if len(bundleJSON) > 0 {
+		verifyFn := s.VerifySignature
+		if verifyFn == nil {
+			tm, err := s.trustedRoot()
+			if err != nil {
+				s.Log.Error("sigstore root", "err", err)
+				apiError(w, http.StatusServiceUnavailable, "signatures cannot be verified right now; try again later or upload without one")
+				return
+			}
+			verifyFn = func(b, a []byte) (*sigverify.Result, error) { return sigverify.Verify(tm, b, a) }
+		}
+		res, err := verifyFn(bundleJSON, data)
+		if err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "the signature does not verify", "problems": []string{err.Error()}})
+			return
+		}
+		info.Bundle, info.SignerIssuer, info.SignerSubject = string(bundleJSON), res.Issuer, res.Subject
+		info.SignerIsPublisher = sigverify.PublisherIdentity(res.Issuer, res.Subject, owner)
 	}
 	sha, _, err := s.Blobs.Put(r.Context(), bytes.NewReader(data), s.Cfg.MaxUpload)
 	if err != nil || sha != info.TarballSHA {
@@ -278,6 +336,61 @@ func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Store.Audit(r.Context(), u, "version.upload", owner+"/"+name+"@"+info.Version, map[string]any{"sha256": sha, "size": info.Size})
 	writeJSON(w, http.StatusAccepted, map[string]any{"owner": owner, "name": name, "version": ver.Version, "status": "pending", "tarball_sha256": sha})
+}
+
+// readMultipart reads the `tarball` and optional `bundle` parts of a signed upload, each with its own size cap.
+func readMultipart(r *http.Request, maxTarball int64) (tarball, bundle []byte, err error) {
+	mr, err := r.MultipartReader()
+	if err != nil {
+		return nil, nil, err
+	}
+	for {
+		p, err := mr.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		limit := int64(256 << 10)
+		if p.FormName() == "tarball" {
+			limit = maxTarball
+		}
+		b, err := io.ReadAll(io.LimitReader(p, limit+1))
+		if err != nil {
+			return nil, nil, err
+		}
+		if int64(len(b)) > limit {
+			return nil, nil, &http.MaxBytesError{}
+		}
+		switch p.FormName() {
+		case "tarball":
+			tarball = b
+		case "bundle":
+			bundle = b
+		default:
+			return nil, nil, errors.New("unexpected part " + p.FormName())
+		}
+	}
+	if len(tarball) == 0 {
+		return nil, nil, errors.New("the upload has no tarball part")
+	}
+	return tarball, bundle, nil
+}
+
+func (s *Server) apiBundle(w http.ResponseWriter, r *http.Request) {
+	_, ver, ok := s.pullable(w, r)
+	if !ok {
+		return
+	}
+	b := s.Store.Bundle(r.Context(), ver.ID)
+	if b == "" {
+		apiError(w, http.StatusNotFound, "this version is not signed")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = io.WriteString(w, b)
 }
 
 func (s *Server) apiYank(w http.ResponseWriter, r *http.Request) {

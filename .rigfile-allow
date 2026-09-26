@@ -6,3 +6,7 @@ rule:generic-api-key internal/scan/engine_test.go
 
 # Fake OAuth token values served by the in-test provider; they only exist to prove they are never printed or logged.
 rule:generic-api-key internal/login/login_test.go
+
+# Made-up "real" secret values the broker tests substitute and then prove are never logged, returned or leaked.
+rule:generic-api-key internal/rigd/rigd_test.go
+rule:generic-api-key cmd/rigfile/exec_level2_test.go

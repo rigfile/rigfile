@@ -24,6 +24,9 @@ type Projection struct {
 	Hooks            []Prov[manifest.Hook]
 	Deny, Ask, Allow []Prov[manifest.PermissionRule]
 	Logins           []Prov[manifest.Login]
+	// SecretHosts maps a secret ref to the hosts its value may be sent to (secrets.<ref>.hosts); the Level 2 broker
+	// binds a surrogate to them.
+	SecretHosts map[string][]string
 
 	Skipped []Skipped
 	// Unrunnable lists hooks that apply here but have no per-OS command for this OS (plan §6.2).
@@ -81,6 +84,14 @@ func (m *Merged) Project(osName, target string) *Projection {
 			p.Unrunnable = append(p.Unrunnable, x.V.Key())
 		}
 		p.Hooks = append(p.Hooks, x)
+	}
+	for ref, d := range m.Secrets {
+		if len(d.V.Hosts) > 0 {
+			if p.SecretHosts == nil {
+				p.SecretHosts = map[string][]string{}
+			}
+			p.SecretHosts[ref] = d.V.Hosts
+		}
 	}
 	for _, n := range sortedKeys(m.MCPServers) {
 		s := m.MCPServers[n]

@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
 	"github.com/digitaldreamer3462/rigfile/internal/registry"
 	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
@@ -50,6 +51,12 @@ func usage(w io.Writer) {
       resolve-report --id N --status actioned|dismissed
       takedown --rig owner/name [--version V] --reason R   remove a version (or the whole rig)
       disable-user --login L | enable-user --login L
+      verify-publisher --login L --kind person|organisation|domain [--reason NOTE] | unverify-publisher --login L
+      held                                            list versions held for review
+      release --id N [--reason R] | reject --id N --reason R
+      approve-public --rig owner/name                 let a rig that needed review go public
+      publishing pause --reason R | publishing resume incident switch: refuse uploads
+      revoke-tokens --login L | revoke-tokens --all   revoke API tokens
       audit [--limit N]                               show the newest audit entries
 
 configuration: RIGFILE_REGISTRY_PUBLIC_URL, _DATABASE_URL, _BLOB (fs:/path | s3), _GITHUB_CLIENT_ID, _GITHUB_CLIENT_SECRET[_FILE],
@@ -141,7 +148,10 @@ func serve(ctx context.Context, e env) int {
 	gh := &registry.GitHubHTTP{ClientID: cfg.GitHubID, ClientSecret: cfg.GitHubSecret, WebBase: cfg.GitHubWeb, APIBase: cfg.GitHubAPI}
 	srv := registry.NewServer(cfg, store, blobs, gh, log)
 
-	sc := &registry.Scanner{Store: store, Blobs: blobs, Log: log, Limits: source.DefaultLimits, Scan: func() (*scan.Scanner, error) { return scan.New(scan.Options{}) }}
+	sc := &registry.Scanner{Store: store, Blobs: blobs, Log: log, Limits: source.DefaultLimits, PopularStars: cfg.PopularStars, Scan: func() (*scan.Scanner, error) { return scan.New(scan.Options{}) }}
+	if !cfg.OSVOff {
+		sc.Packages = &pkgcheck.Client{BaseURL: cfg.OSVURL}
+	}
 	go sc.Run(ctx, cfg.ScanWorkers)
 
 	hs := &http.Server{

@@ -33,6 +33,7 @@ type Fetched struct {
 	TreeSHA256 string
 	Yanked     bool // the pulled version was yanked by its publisher
 	YankReason string
+	Signer     *SignerInfo // registry sources: the local verification of the version's signature
 }
 
 // Pin is what a lock or state file remembers about a source.
@@ -107,6 +108,9 @@ func (c *Client) Get(ctx context.Context, spec Spec, pin *Pin) (*Fetched, error)
 	out := &Fetched{Spec: spec, Dir: dest, Commit: commit, TreeSHA256: sum}
 	if y, ok := f.(interface{ LastYank() (bool, string) }); ok {
 		out.Yanked, out.YankReason = y.LastYank()
+	}
+	if sg, ok := f.(interface{ LastSigner() *SignerInfo }); ok {
+		out.Signer = sg.LastSigner()
 	}
 	return out, nil
 }

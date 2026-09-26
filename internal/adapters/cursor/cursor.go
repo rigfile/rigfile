@@ -118,7 +118,7 @@ func (a *adapter) mcp(p *merge.Projection) {
 				a.b.Note("MCP server %q not installed for Cursor: cwd is not carried over yet", s.Name)
 				continue
 			}
-			cmd, args := common.ExecWrap(a.env.RigfileCmd, s.P.V)
+			cmd, args := common.ExecWrapFor(a.env.RigfileCmd, s.Name, s.P.V, p.SecretHosts)
 			m = map[string]any{"type": "stdio", "command": cmd, "args": args}
 		}
 		raw, err := json.Marshal(m)

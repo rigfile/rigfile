@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.rigfile.rigd</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/rigfile</string>
+    <string>broker</string>
+    <string>run</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/home/me/.rigfile/rigd/rigd.log</string>
+  <key>StandardErrorPath</key>
+  <string>/home/me/.rigfile/rigd/rigd.log</string>
+</dict>
+</plist>

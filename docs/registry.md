@@ -123,3 +123,11 @@ Configuration is environment variables (`RIGFILE_REGISTRY_*`): listen address, p
 - **Registry sources** are written `rigfile+https://host/owner/name[@range]` in `state.json` and the lock.
 - **The CLI's token** lives in the secret store under `registry/<host>/token`. `RIGFILE_SECRETS_BACKEND=file` forces the encrypted-file backend (scripts and CI must set it: they must never reach a developer's OS keychain).
 - **Not built (later):** organisations, forks ("use as base"), comments, download counts, verified publishers, typosquat detection (Stage 6), a shared rate limiter, email notifications.
+
+## 10. Stage 6 additions (see `docs/trust.md`)
+
+- **Statuses:** `held` joins the others; it is invisible except to the owner and admins, exactly like `pending`.
+- **Endpoints:** `GET /v1/rigs/{o}/{n}/versions/{v}/trust` (facts), `.../bundle` (the stored Sigstore bundle); `POST /v1/rigs/{o}/{n}/versions` also accepts `multipart/form-data` with parts `tarball` and `bundle`. Version JSON carries `analysis`, `similar_to` and (to the owner) `held_reason`.
+- **Web:** `/admin` for administrators (held versions, open reports, verify a publisher; session, same-origin and CSRF checked; a non-admin gets 404).
+- **Operator tools:** `verify-publisher`, `unverify-publisher`, `held`, `release`, `reject`, `approve-public`, `publishing pause|resume`, `revoke-tokens`.
+- **Uploads while paused** are refused with 503 and the reason.

@@ -302,7 +302,7 @@ func (a *adapter) configToml(p *merge.Projection) {
 				a.b.Note("MCP server %q not installed for Codex: cwd is not carried over yet", s.Name)
 				continue
 			}
-			entry.Command, entry.Args = common.ExecWrap(a.env.RigfileCmd, s.P.V)
+			entry.Command, entry.Args = common.ExecWrapFor(a.env.RigfileCmd, s.Name, s.P.V, p.SecretHosts)
 		}
 		body, err := mcpTable(s.Name, entry)
 		if err != nil {

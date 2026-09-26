@@ -27,6 +27,8 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/digitaldreamer3462/rigfile/internal/rigd"
+	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
 	"github.com/digitaldreamer3462/rigfile/internal/source"
 	"github.com/digitaldreamer3462/rigfile/internal/tools"
 )
@@ -38,18 +40,21 @@ type env struct {
 	in          io.Reader
 	out, err    io.Writer
 	getenv      func(string) string
-	stateDir    string                                         // "" = platform default
-	mcp         claudecode.MCPClient                           // nil = the real `claude` CLI
-	keyringOff  bool                                           // tests: force the encrypted-file secret backend
-	lookPath    func(string) (string, error)                   // nil = exec.LookPath
-	tools       tools.Host                                     // nil = run real package managers
-	interactive bool                                           // tests: behave as if stdin/stdout were a terminal
-	hidden      func(prompt string) ([]byte, error)            // tests: replaces the hidden-input prompt
-	sources     *source.Client                                 // nil = the real services, cached under the state directory
-	sleep       func(time.Duration)                            // tests: replaces the device-flow polling delay
-	pollEvery   time.Duration                                  // tests: how often publish checks the registry scan
-	runCmd      func(ctx context.Context, argv []string) error // tests: replaces running a vendor login command
-	openURL     func(string) error                             // tests: replaces opening the browser
+	stateDir    string                                                  // "" = platform default
+	mcp         claudecode.MCPClient                                    // nil = the real `claude` CLI
+	keyringOff  bool                                                    // tests: force the encrypted-file secret backend
+	lookPath    func(string) (string, error)                            // nil = exec.LookPath
+	tools       tools.Host                                              // nil = run real package managers
+	interactive bool                                                    // tests: behave as if stdin/stdout were a terminal
+	hidden      func(prompt string) ([]byte, error)                     // tests: replaces the hidden-input prompt
+	sources     *source.Client                                          // nil = the real services, cached under the state directory
+	sleep       func(time.Duration)                                     // tests: replaces the device-flow polling delay
+	pollEvery   time.Duration                                           // tests: how often publish checks the registry scan
+	runCmd      func(ctx context.Context, argv []string) error          // tests: replaces running a vendor login command
+	openURL     func(string) error                                      // tests: replaces opening the browser
+	verifySig   func(bundle, tarball []byte) (*sigverify.Result, error) // tests: replaces Sigstore verification
+	brokerAct   rigd.Activator                                          // tests: replaces launchctl / systemctl / schtasks
+	exe         string                                                  // tests: the path installed into service files ("" = this binary)
 }
 
 func (e env) look(name string) (string, error) {
@@ -106,6 +111,8 @@ func run(args []string, e env) int {
 		return cmdLock(rest, e)
 	case "doctor":
 		return cmdDoctor(rest, e)
+	case "broker":
+		return cmdBroker(rest, e)
 	case "secrets":
 		return cmdSecrets(rest, e)
 	case "exec":
@@ -140,6 +147,7 @@ func usage(w io.Writer) {
   lock [<rig-dir>]                   write or refresh rigfile.lock
   doctor                             health check
   secrets set|rm|status|list         manage secrets (values are never printed)
+  broker run|status|enable|exclude   Level 2: the secret broker (docs/rigd.md)
   exec [--secret ENV=ref]... -- cmd  run cmd with secrets injected into ITS environment only
   hook run <name>                    built-in agent hook (used by Claude Code)
 

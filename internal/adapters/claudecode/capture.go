@@ -93,6 +93,7 @@ type (
 		Command     string            `yaml:"command,omitempty"`
 		Args        []string          `yaml:"args,omitempty"`
 		Env         map[string]string `yaml:"env,omitempty"`
+		Network     *outNetwork       `yaml:"network,omitempty"`
 		URL         string            `yaml:"url,omitempty"`
 		Auth        string            `yaml:"auth,omitempty"`
 		BearerToken string            `yaml:"bearer_token,omitempty"`
@@ -116,7 +117,11 @@ type (
 		Allow []map[string]string `yaml:"allow,omitempty"`
 	}
 	outSecret struct {
-		Description string `yaml:"description"`
+		Description string   `yaml:"description"`
+		Hosts       []string `yaml:"hosts,omitempty"`
+	}
+	outNetwork struct {
+		Allow []string `yaml:"allow"`
 	}
 )
 
@@ -661,12 +666,13 @@ func (c *capturer) mcpStdio(name, command string, args []string, env map[string]
 	if strings.Contains(filepath.Base(command), "rigfile") && len(args) > 0 && args[0] == "exec" {
 		rest := args[1:]
 		env = map[string]string{}
+		binds := map[string][]string{}
 		for len(rest) > 0 && rest[0] != "--" {
 			if len(rest) < 2 {
 				return nil, "unrecognised rigfile exec wrapper"
 			}
 			kv := strings.SplitN(rest[1], "=", 2)
-			if len(kv) != 2 {
+			if len(kv) != 2 && rest[0] != "--server" && rest[0] != "--allow" {
 				return nil, "unrecognised rigfile exec wrapper"
 			}
 			switch rest[0] {
@@ -679,6 +685,12 @@ func (c *capturer) mcpStdio(name, command string, args []string, env map[string]
 				c.rig.Secrets[kv[1]] = outSecret{Description: kv[0] + " of the " + name + " MCP server"}
 			case "--env":
 				env[kv[0]] = kv[1]
+			case "--server":
+				// the server's name: implied by the entry it came from
+			case "--allow":
+				out.Network = &outNetwork{Allow: strings.Split(rest[1], ",")}
+			case "--bind":
+				binds[kv[0]] = strings.Split(kv[1], ",")
 			default:
 				return nil, "unrecognised rigfile exec wrapper"
 			}
@@ -686,6 +698,14 @@ func (c *capturer) mcpStdio(name, command string, args []string, env map[string]
 		}
 		if len(rest) < 2 {
 			return nil, "unrecognised rigfile exec wrapper"
+		}
+		for ref, hosts := range binds {
+			if c.rig.Secrets == nil {
+				c.rig.Secrets = map[string]outSecret{}
+			}
+			d := c.rig.Secrets[ref]
+			d.Hosts = hosts
+			c.rig.Secrets[ref] = d
 		}
 		command, args = rest[1], rest[2:]
 	}

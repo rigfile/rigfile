@@ -62,6 +62,38 @@ func TestAdminTools(t *testing.T) {
 	if c, _, _ := run2(t, dsn, "admin", "takedown", "--rig", "jia/none"); c != 1 {
 		t.Fatal("takedown needs a reason and an existing rig")
 	}
+	// trust and incident tools
+	if c, out, e := run2(t, dsn, "admin", "verify-publisher", "--login", "jia", "--kind", "organisation", "--reason", "checked"); c != 1 {
+		t.Fatalf("a disabled account cannot be verified: %d %s %s", c, out, e)
+	}
+	run2(t, dsn, "admin", "enable-user", "--login", "jia")
+	if c, out, _ := run2(t, dsn, "admin", "verify-publisher", "--login", "jia", "--kind", "organisation", "--reason", "checked"); c != 0 || !strings.Contains(out, "verified jia as organisation") {
+		t.Fatal(out)
+	}
+	if c, _, _ := run2(t, dsn, "admin", "verify-publisher", "--login", "jia", "--kind", "celebrity"); c != 1 {
+		t.Fatal("kind is validated")
+	}
+	if c, out, _ := run2(t, dsn, "admin", "held"); c != 0 || !strings.Contains(out, "nothing is held") {
+		t.Fatal(out)
+	}
+	if c, _, _ := run2(t, dsn, "admin", "publishing", "pause"); c != 1 {
+		t.Fatal("a pause needs a reason")
+	}
+	if c, out, _ := run2(t, dsn, "admin", "publishing", "pause", "--reason", "incident 1"); c != 0 || !strings.Contains(out, "paused") {
+		t.Fatal(out)
+	}
+	if paused, why := st.PublishingPaused(context.Background()); !paused || why != "incident 1" {
+		t.Fatal("the pause must be visible to the server")
+	}
+	if c, _, _ := run2(t, dsn, "admin", "publishing", "resume"); c != 0 {
+		t.Fatal("resume")
+	}
+	if c, _, _ := run2(t, dsn, "admin", "revoke-tokens"); c != 1 {
+		t.Fatal("revoke-tokens needs a target")
+	}
+	if c, out, _ := run2(t, dsn, "admin", "revoke-tokens", "--all"); c != 0 || !strings.Contains(out, "revoked") {
+		t.Fatal(out)
+	}
 	if c, _, _ := run2(t, dsn, "bogus"); c != 2 {
 		t.Fatal("unknown command")
 	}

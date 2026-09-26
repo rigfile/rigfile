@@ -4,6 +4,8 @@ package platform
 
 import (
 	"os"
+	"os/exec"
+	"syscall"
 	"time"
 )
 
@@ -23,4 +25,19 @@ func RenameReplace(oldpath, newpath string) error {
 		time.Sleep(time.Duration(25<<i) * time.Millisecond / 2)
 	}
 	return err
+}
+
+// Detach makes cmd start without a console and outside this process's group, so closing the terminal that launched it
+// does not stop it (DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP).
+func Detach(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x00000008 | 0x00000200, HideWindow: true}
+}
+
+// Terminate ends a process (Windows has no gentler cross-process signal).
+func Terminate(pid int) error {
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	return p.Kill()
 }

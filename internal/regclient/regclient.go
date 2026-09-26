@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -240,6 +241,56 @@ func (c *Client) Upload(ctx context.Context, owner, name string, tarball []byte)
 	return &v, nil
 }
 
+// UploadSigned publishes a tarball together with its Sigstore bundle (multipart), so the registry can verify the signature
+// before it accepts the version.
+func (c *Client) UploadSigned(ctx context.Context, owner, name string, tarball, bundle []byte) (*Version, error) {
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	w, err := mw.CreateFormFile("tarball", "rig.tar.gz")
+	if err != nil {
+		return nil, err
+	}
+	_, _ = w.Write(tarball)
+	bw, err := mw.CreateFormFile("bundle", "bundle.json")
+	if err != nil {
+		return nil, err
+	}
+	_, _ = bw.Write(bundle)
+	if err := mw.Close(); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, http.MethodPost, rigPath(owner, name)+"/versions", body.Bytes(), mw.FormDataContentType())
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		return nil, readAPIError(resp)
+	}
+	defer resp.Body.Close()
+	var v Version
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// Bundle fetches a version's Sigstore bundle: (nil, nil) when the version is not signed.
+func (c *Client) Bundle(ctx context.Context, owner, name, version string) ([]byte, error) {
+	resp, err := c.do(ctx, http.MethodGet, rigPath(owner, name)+"/versions/"+url.PathEscape(version)+"/bundle", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, readAPIError(resp)
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(io.LimitReader(resp.Body, 256<<10))
+}
+
 func (c *Client) postForm(ctx context.Context, path string, form url.Values) error {
 	resp, err := c.do(ctx, http.MethodPost, path, []byte(form.Encode()), "application/x-www-form-urlencoded")
 	if err != nil {
@@ -284,4 +335,54 @@ func (c *Client) Revoke(ctx context.Context) error {
 		return readAPIError(resp)
 	}
 	return nil
+}
+
+// Trust is the set of facts the registry gives about a version.
+type Trust struct {
+	RigCreatedAt string `json:"rig_created_at"`
+	Versions     int    `json:"versions"`
+	Stars        int    `json:"stars"`
+	Publisher    struct {
+		Login        string `json:"login"`
+		FirstSeen    string `json:"first_seen"`
+		PublicRigs   int    `json:"public_rigs"`
+		Verified     bool   `json:"verified"`
+		VerifiedKind string `json:"verified_kind"`
+	} `json:"publisher"`
+	Signature struct {
+		Signed      bool   `json:"signed"`
+		ByPublisher bool   `json:"by_publisher"`
+		Issuer      string `json:"issuer"`
+		Subject     string `json:"subject"`
+		Error       string `json:"error"`
+	} `json:"signature"`
+	Analysis  map[string]int `json:"analysis"`
+	SimilarTo []struct {
+		Ref      string `json:"ref"`
+		Kind     string `json:"kind"`
+		Stars    int    `json:"stars"`
+		Verified bool   `json:"verified"`
+	} `json:"similar_to"`
+	History struct {
+		Yanked  int `json:"yanked_versions"`
+		Removed int `json:"removed_versions_by_publisher"`
+	} `json:"history"`
+}
+
+// TrustFor returns the facts about the version whose tarball has the given hash.
+func (c *Client) TrustFor(ctx context.Context, owner, name, sha string) (*Trust, string, error) {
+	info, err := c.Rig(ctx, owner, name)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, v := range info.Versions {
+		if v.SHA256 == sha {
+			var t Trust
+			if err := c.getJSON(ctx, rigPath(owner, name)+"/versions/"+url.PathEscape(v.Version)+"/trust", &t); err != nil {
+				return nil, "", err
+			}
+			return &t, v.Version, nil
+		}
+	}
+	return nil, "", &APIError{Status: 404, Msg: "no such version"}
 }

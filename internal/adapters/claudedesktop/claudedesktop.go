@@ -73,7 +73,7 @@ func Build(env Env, p *merge.Projection) (*engine.Plan, error) {
 		case s.P.V.CWD != "":
 			b.Note("MCP server %q not installed for Claude Desktop: cwd is not carried over yet", s.Name)
 		default:
-			cmd, args := common.ExecWrap(env.RigfileCmd, s.P.V)
+			cmd, args := common.ExecWrapFor(env.RigfileCmd, s.Name, s.P.V, p.SecretHosts)
 			raw, err := json.Marshal(map[string]any{"command": cmd, "args": args})
 			if err != nil {
 				b.Fail(err)

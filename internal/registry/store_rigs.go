@@ -71,6 +71,32 @@ type Version struct {
 	ScannedAt     *time.Time
 	YankedAt      *time.Time
 	YankReason    string
+	Analysis      []AnalysisFinding // static analysis results (docs/trust.md §2)
+	SimilarTo     []SimilarRig
+	HeldReason    string
+	SignerIssuer  string
+	SignerSubject string
+	// SignerIsPublisher is true when the signature verified AND its certificate identity belongs to the publisher.
+	SignerIsPublisher bool
+	SignatureError    string
+}
+
+// AnalysisFinding is one static analysis result stored with a version (no file content, only where and which rule).
+type AnalysisFinding struct {
+	Level   string `json:"level"`
+	Rule    string `json:"rule"`
+	File    string `json:"file"`
+	Line    int    `json:"line"`
+	Count   int    `json:"count"`
+	Message string `json:"message"`
+}
+
+// SimilarRig is a rig whose name could be mistaken for this one.
+type SimilarRig struct {
+	Ref      string `json:"ref"`
+	Kind     string `json:"kind"`
+	Stars    int    `json:"stars"`
+	Verified bool   `json:"verified"`
 }
 
 // FileEntry is one line of a version's file index.
@@ -97,7 +123,7 @@ func isUnique(err error) bool {
 // $1 is the viewer id (0 = anonymous) and $2 whether the viewer is an admin.
 const (
 	rigVisibleAdm  = `(($2::boolean) OR r.removed_at IS NULL AND (r.visibility = 'public' OR r.created_by = $1))`
-	versionVisible = `(v.status IN ('published','yanked') OR (v.status IN ('pending','rejected') AND (r.created_by = $1 OR $2::boolean)) OR (v.status = 'removed' AND $2::boolean))`
+	versionVisible = `(v.status IN ('published','yanked') OR (v.status IN ('pending','rejected','held') AND (r.created_by = $1 OR $2::boolean)) OR (v.status = 'removed' AND $2::boolean))`
 )
 
 const rigCols = `r.id, r.owner, r.name, r.description, r.visibility, r.created_by, r.created_at,
@@ -122,18 +148,22 @@ func (s *Store) GetRig(ctx context.Context, owner, name string, v Viewer) (*Rig,
 }
 
 const versionCols = `v.id, v.rig_id, v.version, v.status, v.tarball_sha256, v.size, v.manifest_yaml, v.description, v.readme,
-	v.targets, v.needs_secrets, v.needs_logins, v.layers, v.scan_findings, v.scan_warnings, v.created_at, v.scanned_at, v.yanked_at, v.yank_reason`
+	v.targets, v.needs_secrets, v.needs_logins, v.layers, v.scan_findings, v.scan_warnings, v.created_at, v.scanned_at, v.yanked_at, v.yank_reason,
+	v.scan_analysis, v.similar_to, v.held_reason, v.signer_issuer, v.signer_subject, v.signer_is_publisher, v.signature_error`
 
 func scanVersion(row interface{ Scan(...any) error }) (*Version, error) {
 	var v Version
-	var findings, warnings []byte
+	var findings, warnings, analysis, similar []byte
 	var scanned, yanked sql.NullTime
 	if err := row.Scan(&v.ID, &v.RigID, &v.Version, &v.Status, &v.TarballSHA256, &v.Size, &v.ManifestYAML, &v.Description, &v.Readme,
-		pq.Array(&v.Targets), pq.Array(&v.NeedsSecrets), pq.Array(&v.NeedsLogins), pq.Array(&v.Layers), &findings, &warnings, &v.CreatedAt, &scanned, &yanked, &v.YankReason); err != nil {
+		pq.Array(&v.Targets), pq.Array(&v.NeedsSecrets), pq.Array(&v.NeedsLogins), pq.Array(&v.Layers), &findings, &warnings, &v.CreatedAt, &scanned, &yanked, &v.YankReason,
+		&analysis, &similar, &v.HeldReason, &v.SignerIssuer, &v.SignerSubject, &v.SignerIsPublisher, &v.SignatureError); err != nil {
 		return nil, err
 	}
 	_ = json.Unmarshal(findings, &v.Findings)
 	_ = json.Unmarshal(warnings, &v.Warnings)
+	_ = json.Unmarshal(analysis, &v.Analysis)
+	_ = json.Unmarshal(similar, &v.SimilarTo)
 	if scanned.Valid {
 		v.ScannedAt = &scanned.Time
 	}
@@ -209,6 +239,11 @@ type NewVersion struct {
 	NeedsLogins  []string
 	Layers       []string
 	Files        []FileEntry
+	// a verified Sigstore signature, if the upload carried one
+	Bundle            string
+	SignerIssuer      string
+	SignerSubject     string
+	SignerIsPublisher bool
 }
 
 // CreateVersion creates the rig on first upload (private), inserts the version as pending and queues its scan, in one
@@ -237,10 +272,12 @@ func (s *Store) CreateVersion(ctx context.Context, n NewVersion) (*Version, erro
 	}
 	var vid int64
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO versions (rig_id, version, status, tarball_sha256, size, manifest_yaml, description, readme, targets, needs_secrets, needs_logins, layers, created_at)
-		VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+		INSERT INTO versions (rig_id, version, status, tarball_sha256, size, manifest_yaml, description, readme, targets, needs_secrets, needs_logins, layers, created_at,
+		                      bundle, signer_issuer, signer_subject, signer_is_publisher)
+		VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, ''), $14, $15, $16) RETURNING id`,
 		rigID, n.Version, n.TarballSHA, n.Size, n.ManifestYAML, n.Description, n.Readme,
-		pq.Array(nz(n.Targets)), pq.Array(nz(n.NeedsSecrets)), pq.Array(nz(n.NeedsLogins)), pq.Array(nz(n.Layers)), s.now()).Scan(&vid)
+		pq.Array(nz(n.Targets)), pq.Array(nz(n.NeedsSecrets)), pq.Array(nz(n.NeedsLogins)), pq.Array(nz(n.Layers)), s.now(),
+		n.Bundle, n.SignerIssuer, n.SignerSubject, n.SignerIsPublisher).Scan(&vid)
 	if err != nil {
 		if isUnique(err) {
 			return nil, ErrConflict
@@ -368,6 +405,12 @@ func (s *Store) SetVisibility(ctx context.Context, owner, name, vis string, acto
 				return fmt.Errorf("%w: %s@%s has unpinned packages; a public rig must pin what it runs (publish a fixed version first)", ErrConflict, rig.Name, latest.Version)
 			}
 		}
+		if !rigApproved(ctx, s, rig.ID) {
+			if reasons := s.reviewReasons(ctx, rig, latest); len(reasons) > 0 {
+				s.autoReport(ctx, rig.ID, owner+"/"+name, strings.Join(reasons, "; "))
+				return fmt.Errorf("%w: this rig needs an administrator's review before it can be public (%s). A review request has been filed; you will be able to make it public once it is approved", ErrConflict, strings.Join(reasons, "; "))
+			}
+		}
 	}
 	if _, err := s.DB.ExecContext(ctx, `UPDATE rigs SET visibility = $2 WHERE id = $1`, rig.ID, vis); err != nil {
 		return err
@@ -451,4 +494,17 @@ func (s *Store) OwnedRigs(ctx context.Context, login string, viewer Viewer) ([]R
 	}
 	defer rows.Close()
 	return scanSummaries(rows)
+}
+
+func rigApproved(ctx context.Context, s *Store, id int64) bool {
+	var ok bool
+	_ = s.DB.QueryRowContext(ctx, `SELECT public_approved FROM rigs WHERE id = $1`, id).Scan(&ok)
+	return ok
+}
+
+// Bundle returns the stored Sigstore bundle of a version ("" when unsigned).
+func (s *Store) Bundle(ctx context.Context, versionID int64) string {
+	var b sql.NullString
+	_ = s.DB.QueryRowContext(ctx, `SELECT bundle FROM versions WHERE id = $1`, versionID).Scan(&b)
+	return b.String
 }

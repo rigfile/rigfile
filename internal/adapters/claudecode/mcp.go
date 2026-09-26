@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"sort"
 	"strings"
 	"time"
 
+	"github.com/digitaldreamer3462/rigfile/internal/adapters/common"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
 	"github.com/digitaldreamer3462/rigfile/internal/hashing"
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
@@ -32,7 +32,7 @@ type mcpHTTP struct {
 // `rigfile exec` so the server gets only its declared environment and its secrets come from the keychain
 // at launch, never from a config file (plan §7.2 Level 1, §8.3). ok=false with a reason means the server
 // cannot be expressed in Stage 1.
-func mcpEntry(env Env, s manifest.MCPServer) (doc string, reason string, ok bool) {
+func mcpEntry(env Env, name string, s manifest.MCPServer, secretHosts map[string][]string) (doc string, reason string, ok bool) {
 	if s.IsRemote() {
 		if s.Auth == "bearer" || s.BearerToken != "" {
 			return "", "bearer-token servers need a header helper or the Level-2 broker (not in Stage 1)", false
@@ -48,21 +48,7 @@ func mcpEntry(env Env, s manifest.MCPServer) (doc string, reason string, ok bool
 	if s.CWD != "" {
 		return "", "cwd is not expressible in Claude Code's MCP config", false
 	}
-	args := []string{"exec"}
-	keys := make([]string, 0, len(s.Env))
-	for k := range s.Env {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		if ref, isRef := manifest.SecretRef(s.Env[k]); isRef {
-			args = append(args, "--secret", k+"="+ref)
-		} else {
-			args = append(args, "--env", k+"="+s.Env[k])
-		}
-	}
-	args = append(args, "--", s.Command)
-	args = append(args, s.Args...)
+	_, args := common.ExecWrapFor("", name, s, secretHosts)
 	b, _ := json.Marshal(mcpStdio{Type: "stdio", Command: env.rigfile(), Args: args})
 	return string(b), "", true
 }
@@ -101,14 +87,14 @@ func (b *builder) mcp(p *merge.Projection) {
 	}
 	for _, s := range p.MCPServers {
 		name := s.Name
-		doc, reason, ok := mcpEntry(env, s.P.V)
+		doc, reason, ok := mcpEntry(env, name, s.P.V, p.SecretHosts)
 		if !ok {
 			b.plan.Ops = append(b.plan.Ops, engine.Op{Category: "mcp", Key: name, Symbol: engine.Conflict,
 				Summary: name + "   not installed: " + reason})
 			continue
 		}
 		hash := hashing.Bytes([]byte(doc))
-		item := state.Item{Category: "mcp", Key: name, Kind: state.KindMCP, Hash: hash, Detail: map[string]string{"name": name, "scope": "user"}}
+		item := state.Item{Category: "mcp", Key: name, Kind: state.KindMCP, Hash: hash, Detail: map[string]string{"name": name, "scope": "user", "value": doc}}
 		present, err := env.MCP.Present(name)
 		if err != nil {
 			b.fail(fmt.Errorf("mcp %s: %w", name, err))

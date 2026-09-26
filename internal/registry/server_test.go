@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
 	"github.com/digitaldreamer3462/rigfile/internal/registry"
 	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
 	"github.com/digitaldreamer3462/rigfile/internal/registry/dbtest"
@@ -56,6 +57,7 @@ type env struct {
 	gh    *fakeGitHub
 	clk   *clock
 	blobs blob.Store
+	osv   *pkgcheck.Client // package lookups during scans (nil = none)
 }
 
 func newEnv(t *testing.T, mut func(*registry.Config)) *env {
@@ -72,14 +74,14 @@ func newEnv(t *testing.T, mut func(*registry.Config)) *env {
 		mut(&cfg)
 	}
 	// the public URL must be the test server's own origin (the Origin check compares against it)
-	holder := &registry.Server{}
-	e.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { holder.Handler().ServeHTTP(w, r) }))
+	var handler http.Handler
+	e.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	t.Cleanup(e.srv.Close)
 	cfg.PublicURL = e.srv.URL
 	gcli := &registry.GitHubHTTP{ClientID: cfg.GitHubID, ClientSecret: cfg.GitHubSecret, WebBase: cfg.GitHubWeb, APIBase: cfg.GitHubAPI}
 	e.blobs = blob.FS{Root: t.TempDir()}
 	e.s = registry.NewServer(cfg, st, e.blobs, gcli, nil)
-	*holder = *e.s
+	handler = e.s.Handler()
 	return e
 }
 

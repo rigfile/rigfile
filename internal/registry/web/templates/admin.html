@@ -1,0 +1,14 @@
+{{template "head" .}}
+<h1>Administration</h1>
+<h2>Held for review ({{len .Data.Held}})</h2>
+{{range .Data.Held}}<div class="card"><strong>{{.Ref}}@{{.Version}}</strong> <span class="muted">{{.CreatedAt.Format "2006-01-02"}}</span><div>{{.Reason}}</div>
+<form action="/admin/held/{{.ID}}" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input name="note" placeholder="note" maxlength="200"> <button name="decision" value="release" type="submit">Release</button> <button class="danger" name="decision" value="reject" type="submit">Reject</button></form></div>{{else}}<p class="muted">Nothing is waiting.</p>{{end}}
+<h2>Open reports ({{len .Data.Reports}})</h2>
+{{range .Data.Reports}}<div class="card"><strong>#{{.ID}} {{.RigRef}}{{if .Version}}@{{.Version}}{{end}}</strong> <span class="tag">{{.Reason}}</span> <span class="muted">by {{if .Reporter}}{{.Reporter}}{{else}}the system{{end}}</span><div>{{.Details}}</div>
+<form action="/admin/report/{{.ID}}" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button name="status" value="actioned" type="submit">Actioned</button> <button name="status" value="dismissed" type="submit">Dismiss</button></form>
+<form action="/admin/approve/{{.RigRef}}" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button type="submit">Approve this rig to be public</button></form></div>{{else}}<p class="muted">No open reports.</p>{{end}}
+<h2>Verify a publisher</h2>
+<form action="/admin/verify" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}">
+<input name="login" placeholder="github login" required> <select name="kind"><option>person</option><option>organisation</option><option>domain</option></select> <input name="note" placeholder="how you verified (private)" maxlength="300"> <button type="submit">Verify</button></form>
+{{template "foot" .}}

@@ -31,6 +31,14 @@ type Config struct {
 	MaxUpload      int64 // compressed bytes
 	ScanWorkers    int
 	DeviceInterval int // seconds between device-flow polls (default 5)
+	// SigstoreRoot is a trusted_root.json to verify signatures against ('' = fetch the public-good root through TUF on first use).
+	SigstoreRoot string
+	// PopularStars: a public rig at or above this many stars needs every new version signed by the publisher's own GitHub
+	// Actions identity and a verified publisher (0 = off; docs/trust.md §5).
+	PopularStars int
+	// OSVURL is the OSV API to look pinned MCP packages up in ('' = https://api.osv.dev); OSVOff disables the lookup.
+	OSVURL string
+	OSVOff bool
 }
 
 // Origin returns scheme://host of the public URL.
@@ -83,6 +91,15 @@ func ConfigFromEnv(getenv func(string) string, readFile func(string) ([]byte, er
 			return c, errors.New("registry: RIGFILE_REGISTRY_MAX_UPLOAD_MB must be 1-200")
 		}
 		c.MaxUpload = int64(n) << 20
+	}
+	c.SigstoreRoot = getenv("RIGFILE_REGISTRY_SIGSTORE_ROOT")
+	c.OSVURL, c.OSVOff = getenv("RIGFILE_REGISTRY_OSV_URL"), getenv("RIGFILE_REGISTRY_OSV") == "off"
+	if v := getenv("RIGFILE_REGISTRY_POPULAR_STARS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return c, errors.New("registry: RIGFILE_REGISTRY_POPULAR_STARS must be a number, 0 to disable")
+		}
+		c.PopularStars = n
 	}
 	if c.Blob == "s3" {
 		c.S3 = blob.S3Config{Endpoint: getenv("RIGFILE_REGISTRY_S3_ENDPOINT"), Bucket: getenv("RIGFILE_REGISTRY_S3_BUCKET"),
