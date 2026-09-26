@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -503,6 +504,7 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 		}
 	}
 	p.State.Prefs.Sandbox = p.Sandbox
+	p.State.Broker = brokerPolicy(p)
 	switch {
 	case p.UnsafeBase && p.State.UnsafeBase == nil:
 		p.State.UnsafeBase = &state.UnsafeBase{Since: now().UTC().Format(time.RFC3339)}
@@ -597,4 +599,47 @@ func selectTargets(m *manifest.Manifest, o Options, ctxFor func(string) targets.
 		}
 	}
 	return sel, skipped, nil
+}
+
+// brokerPolicy is what this apply approves for the secret broker: every stdio MCP server that declares `network.allow`, with
+// its secrets and their bound hosts, taken from the rig itself. A server that two targets define differently is left out
+// (fail closed: the broker then refuses it), as is one whose secret has no bound hosts.
+func brokerPolicy(p *Prepared) map[string]state.ServerPolicy {
+	out := map[string]state.ServerPolicy{}
+	conflict := map[string]bool{}
+	for _, tp := range p.Targets {
+		for _, s := range tp.Proj.MCPServers {
+			v := s.P.V
+			if v.IsRemote() || len(v.Network.Allow) == 0 {
+				continue
+			}
+			pol := state.ServerPolicy{Command: v.Command, Allow: append([]string(nil), v.Network.Allow...), Secrets: map[string]state.SecretBinding{}}
+			complete := true
+			for env, val := range v.Env {
+				if ref, ok := manifest.SecretRef(val); ok {
+					hosts := tp.Proj.SecretHosts[ref]
+					if len(hosts) == 0 {
+						complete = false
+						continue
+					}
+					pol.Secrets[env] = state.SecretBinding{Ref: ref, Hosts: append([]string(nil), hosts...)}
+				}
+			}
+			if !complete {
+				conflict[s.Name] = true
+				continue
+			}
+			if old, ok := out[s.Name]; ok && !reflect.DeepEqual(old, pol) {
+				conflict[s.Name] = true
+			}
+			out[s.Name] = pol
+		}
+	}
+	for n := range conflict {
+		delete(out, n)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

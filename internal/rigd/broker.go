@@ -39,6 +39,8 @@ type Broker struct {
 	Version string
 	Now     func() time.Time
 	Audit   Audit // default: FileAudit in Dir
+	// Policy returns what the last apply approved (default: state.json next to Dir). Sessions are built from it.
+	Policy func() (Policies, error)
 
 	// Tests only.
 	Dial        func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -157,11 +159,26 @@ func (b *Broker) apiHandler() http.Handler {
 		writeJSON(w, 200, StatusReply{Info: b.info, Sessions: b.store.Live()})
 	})
 	mux.HandleFunc("POST /v1/sessions", func(w http.ResponseWriter, r *http.Request) {
-		var spec SessionSpec
+		var req SessionRequest
 		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&spec); err != nil {
+		dec.DisallowUnknownFields() // a request that carries hosts or an allowlist is refused, not ignored
+		if err := dec.Decode(&req); err != nil {
 			writeJSON(w, 400, map[string]string{"error": "bad request"})
+			return
+		}
+		load := b.Policy
+		if load == nil {
+			load = func() (Policies, error) { return LoadPolicy(stateDirOf(b.Dir)) }
+		}
+		pols, err := load()
+		if err != nil {
+			writeJSON(w, 500, map[string]string{"error": "the approved policy could not be read"})
+			return
+		}
+		spec, err := pols.Resolve(req)
+		if err != nil {
+			b.Audit.Log(Event{Time: b.Now().UTC(), Server: req.Server, Method: "session", Decision: "blocked", Reason: err.Error()})
+			writeJSON(w, 403, map[string]string{"error": err.Error()})
 			return
 		}
 		s, err := b.store.New(spec, b.Resolve)

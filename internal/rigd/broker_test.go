@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
 type brokerRig struct {
@@ -63,6 +64,7 @@ func newBrokerRig(t *testing.T) *brokerRig {
 			}
 			return []byte(r.real), nil
 		},
+		Policy:      func() (Policies, error) { return testPolicy, nil },
 		Dial:        func(_ context.Context, network, _ string) (net.Conn, error) { return net.Dial(network, upAddr) },
 		UpstreamTLS: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -78,11 +80,13 @@ func newBrokerRig(t *testing.T) *brokerRig {
 	return r
 }
 
-var spec = SessionSpec{
-	Server:  "srv",
-	Secrets: []SecretSpec{{Env: "API_KEY", Ref: "svc/key", Hosts: []string{"api.example.test"}}},
-	Allow:   []string{"api.example.test", "attacker.example.test"},
+// the policy the last apply approved for the test servers
+var testPolicy = Policies{
+	"srv":    {Command: "node", Allow: []string{"api.example.test", "attacker.example.test"}, Secrets: map[string]state.SecretBinding{"API_KEY": {Ref: "svc/key", Hosts: []string{"api.example.test"}}}},
+	"broken": {Allow: []string{"a.example.test"}, Secrets: map[string]state.SecretBinding{"K": {Ref: "svc/none", Hosts: []string{"a.example.test"}}}},
 }
+
+var spec = SessionRequest{Server: "srv", Secrets: []RequestedSecret{{Env: "API_KEY", Ref: "svc/key"}}}
 
 func TestBrokerSessionLifecycleAndNoRealValuesInReplies(t *testing.T) {
 	r := newBrokerRig(t)
@@ -138,22 +142,60 @@ func TestBrokerSessionLifecycleAndNoRealValuesInReplies(t *testing.T) {
 	}
 }
 
-func TestBrokerRefusesBadSpecsWithoutLeaking(t *testing.T) {
+func TestBrokerBuildsSessionsOnlyFromTheApprovedPolicy(t *testing.T) {
 	r := newBrokerRig(t)
-	for name, s := range map[string]SessionSpec{
-		"no allowlist": {Server: "srv", Secrets: spec.Secrets},
-		"no hosts":     {Server: "srv", Secrets: []SecretSpec{{Env: "K", Ref: "svc/key"}}, Allow: []string{"a.example.test"}},
-		"missing":      {Server: "srv", Secrets: []SecretSpec{{Env: "K", Ref: "svc/none", Hosts: []string{"a.example.test"}}}, Allow: []string{"a.example.test"}},
-		"tld wildcard": {Server: "srv", Allow: []string{"*.com"}},
+	for name, tc := range map[string]struct {
+		req    SessionRequest
+		status int
+	}{
+		"a server the apply never approved":  {SessionRequest{Server: "evil-server"}, 403},
+		"an env the policy gives no secret":  {SessionRequest{Server: "srv", Secrets: []RequestedSecret{{Env: "OTHER", Ref: "svc/key"}}}, 403},
+		"a secret other than the bound one":  {SessionRequest{Server: "srv", Secrets: []RequestedSecret{{Env: "API_KEY", Ref: "svc/other"}}}, 403},
+		"the same variable twice":            {SessionRequest{Server: "srv", Secrets: []RequestedSecret{{Env: "API_KEY", Ref: "svc/key"}, {Env: "API_KEY", Ref: "svc/key"}}}, 403},
+		"an approved secret the store lacks": {SessionRequest{Server: "broken", Secrets: []RequestedSecret{{Env: "K", Ref: "svc/none"}}}, 422},
 	} {
-		_, err := r.c.Open(s)
+		err := func() error { _, err := r.c.Open(tc.req); return err }()
 		var ae *APIError
-		if !errors.As(err, &ae) || ae.Status != 422 || strings.Contains(ae.Message, r.real) {
+		if !errors.As(err, &ae) || ae.Status != tc.status || strings.Contains(ae.Message, r.real) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
+	// a request that carries hosts or an allowlist is refused outright, not silently ignored
+	for name, body := range map[string]map[string]any{
+		"an allowlist":       {"server": "srv", "allow": []string{"attacker.test"}},
+		"secrets with hosts": {"server": "srv", "secrets": []map[string]any{{"env": "API_KEY", "ref": "svc/key", "hosts": []string{"attacker.test"}}}},
+	} {
+		if err := r.c.do("POST", "/v1/sessions", body, nil); err == nil || !strings.Contains(err.Error(), "bad request") {
+			t.Errorf("%s must be a bad request: %v", name, err)
+		}
+	}
 	if st, _ := r.c.Status(); st.Sessions != 0 {
-		t.Fatal("a refused spec must leave no session behind")
+		t.Fatal("a refused request must leave no session behind")
+	}
+	// the granted session uses the POLICY's hosts, whatever the launcher believes
+	rep, err := r.c.Open(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, _ := r.b.store.Get(rep.SessionID)
+	if !sess.Allowed("api.example.test", 443) || !sess.Allowed("attacker.example.test", 443) || sess.Allowed("evil.test", 443) {
+		t.Fatal("the allowlist is the policy's")
+	}
+	// the refusals are audited (names only)
+	raw, _ := os.ReadFile(filepath.Join(r.dir, AuditFile))
+	if !strings.Contains(string(raw), `"decision":"blocked"`) || !strings.Contains(string(raw), "evil-server") || strings.Contains(string(raw), r.real) {
+		t.Fatalf("a refused session request must be logged (names only): %s", raw)
+	}
+}
+
+func TestPoliciesResolveAddsLauncherHostsAndSortsSecrets(t *testing.T) {
+	ps := Policies{"s": {Command: `C:\Tools\npx.cmd`, Allow: []string{"api.x.test"}, Secrets: map[string]state.SecretBinding{"B": {Ref: "r/b", Hosts: []string{"api.x.test"}}, "A": {Ref: "r/a", Hosts: []string{"api.x.test"}}}}}
+	spec, err := ps.Resolve(SessionRequest{Server: "s", Secrets: []RequestedSecret{{"B", "r/b"}, {"A", "r/a"}}})
+	if err != nil || strings.Join(spec.Allow, ",") != "api.x.test,registry.npmjs.org" || spec.Secrets[0].Env != "A" {
+		t.Fatalf("%+v %v", spec, err)
+	}
+	if got := LauncherHosts("uvx"); len(got) != 2 || LauncherHosts("/usr/bin/node") != nil {
+		t.Fatalf("%v", got)
 	}
 }
 

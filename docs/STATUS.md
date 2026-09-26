@@ -162,3 +162,5 @@ Proven: unit and CLI tests for every part; the registry parts against a real Pos
 Not proven: real browsers, a real registry deployment, real teams, the editors' file formats. The riskiest change is the pair of visibility fragments in `internal/registry/store_rigs.go`, which every read now goes through.
 
 **Stage 8 addendum (branch `stage-8b`, from `stage-8`):** the GitHub Copilot in VS Code adapter is built, project-scoped (`docs/targets/vscode-copilot.md`). Matrix regenerated.
+
+**Broker-token gap (branch `stage-8b`):** closed as far as software on one account can: session requests carry no hosts, and the broker builds sessions from the policy `rigfile apply` writes into `state.json` (`docs/rigd.md` §3a). The red team is now 32 attempts with no "evades" row; the residue is "borrow another approved server's session" (spend its key at its own host), documented as not stopped.

@@ -45,6 +45,23 @@ type State struct {
 	UnsafeBase *UnsafeBase `json:"unsafeBase,omitempty"`
 	// Prefs are choices that persist across applies (so a later `apply` without the flag keeps them).
 	Prefs Prefs `json:"prefs,omitempty"`
+	// Broker is what the last apply approved for the secret broker (docs/rigd.md §3a): per MCP server, the hosts it may reach
+	// and which secrets may be bound to which hosts. The broker takes bindings from HERE, never from whoever asks for a
+	// session, so a compromised server cannot bind a key to a host of its choosing.
+	Broker map[string]ServerPolicy `json:"broker,omitempty"`
+}
+
+// ServerPolicy is one server's approved network policy.
+type ServerPolicy struct {
+	Command string                   `json:"command,omitempty"` // the program the server is launched with (npx, uvx ...): its package registries are allowed too
+	Allow   []string                 `json:"allow"`
+	Secrets map[string]SecretBinding `json:"secrets,omitempty"` // env variable -> secret and the hosts it may be sent to
+}
+
+// SecretBinding ties a secret reference to the hosts its value may reach.
+type SecretBinding struct {
+	Ref   string   `json:"ref"`
+	Hosts []string `json:"hosts"`
 }
 
 // Prefs are sticky options.

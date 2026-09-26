@@ -28,7 +28,8 @@ type SecretSpec struct {
 	Hosts []string `json:"hosts"` // where the real value may be sent (host patterns)
 }
 
-// SessionSpec is what `rigfile exec` asks for.
+// SessionSpec is a fully resolved session: hosts and allowlist included. It is built by the broker from the approved policy
+// (Policies.Resolve) and never accepted from a client.
 type SessionSpec struct {
 	Server  string       `json:"server"`
 	Secrets []SecretSpec `json:"secrets,omitempty"`

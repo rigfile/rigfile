@@ -93,10 +93,10 @@ func (c *Client) Status() (*StatusReply, error) {
 	return &r, nil
 }
 
-// Open creates a session.
-func (c *Client) Open(spec SessionSpec) (*OpenReply, error) {
+// Open asks for a session. The broker builds it from the policy `rigfile apply` approved.
+func (c *Client) Open(req SessionRequest) (*OpenReply, error) {
 	var r OpenReply
-	if err := c.do("POST", "/v1/sessions", spec, &r); err != nil {
+	if err := c.do("POST", "/v1/sessions", req, &r); err != nil {
 		return nil, err
 	}
 	return &r, nil
