@@ -77,7 +77,7 @@ Exit criteria (plan §12) and the evidence:
 | Criterion | Evidence |
 |---|---|
 | 100% of test-corpus secrets blocked at commit | Corpus: 223/223 core positives detected by the scanner (`docs/scanner-metrics.md`, gate in CI); the real pre-commit hook blocks a token, an encoded token, a credential file name and a secret in the commit message (`cmd/rigfile/githooks_e2e_test.go`, `docs/red-team.md` git layer) |
-| All red-team prompts blocked or requiring approval | Deterministic suite: 62 of 70 attempts blocked or asked, the 8 evasions are documented and each is covered by another layer or by the opt-in sandbox (`docs/red-team.md` Part 1). **Live run against a real Claude Code has not happened** (Part 2) |
+| All red-team prompts blocked or requiring approval | Deterministic suite: of 62 attack attempts, 39 are blocked and 15 ask first; the 8 evasions are documented (a further 8 rows are controls that must stay allowed) and each is covered by another layer or by the opt-in sandbox (`docs/red-team.md` Part 1). **Live run against a real Claude Code has not happened** (Part 2) |
 | False positives documented and below the agreed threshold | 0 of 550 hard negatives (gate 1%, decision O2); the corpus grows whenever a real false positive turns up |
 
 Your checklist, in order:
