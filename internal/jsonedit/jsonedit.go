@@ -716,3 +716,128 @@ func trimEnd(raw string, start, end int) int {
 	}
 	return end
 }
+
+// ReplaceRaw replaces the value of an EXISTING member at path with raw (JSON text), keeping everything else
+// byte-for-byte. replaced is false when the member does not exist. Use it only for members Rigfile owns.
+func ReplaceRaw(doc []byte, path []string, raw string) (out []byte, replaced bool, err error) {
+	if !gjson.Valid(raw) {
+		return nil, false, fmt.Errorf("jsonedit: %q is not a JSON value", raw)
+	}
+	if len(path) == 0 || !gjson.ValidBytes(doc) {
+		return nil, false, ErrInvalidJSON
+	}
+	r := lookup(doc, path)
+	if !r.Exists() {
+		return doc, false, nil
+	}
+	st := detectStyle(doc)
+	level := len(path)
+	if r.IsObject() || r.IsArray() {
+		f, ferr := formatRaw(st, level, raw)
+		if ferr != nil {
+			return nil, false, ferr
+		}
+		raw = f
+	}
+	var b bytes.Buffer
+	b.Write(doc[:r.Index])
+	b.WriteString(raw)
+	b.Write(doc[r.Index+len(r.Raw):])
+	return b.Bytes(), true, nil
+}
+
+// RemoveMember deletes the object member at path (its key, value and the comma that joined it to its
+// neighbours), keeping the rest of the document byte-for-byte, including the layout of the other members.
+// removed is false when the member does not exist.
+func RemoveMember(doc []byte, path []string) (out []byte, removed bool, err error) {
+	if len(path) == 0 || !gjson.ValidBytes(doc) {
+		return nil, false, ErrInvalidJSON
+	}
+	r := lookup(doc, path)
+	if !r.Exists() {
+		return doc, false, nil
+	}
+	valStart, valEnd := r.Index, r.Index+len(r.Raw)
+	// key start: walk back over spaces and the colon, then over the quoted key
+	i := valStart - 1
+	for i >= 0 && isSpace(doc[i]) {
+		i--
+	}
+	if i < 0 || doc[i] != ':' {
+		return nil, false, fmt.Errorf("jsonedit: cannot locate the key of %v", path)
+	}
+	i--
+	for i >= 0 && isSpace(doc[i]) {
+		i--
+	}
+	if i < 0 || doc[i] != '"' {
+		return nil, false, fmt.Errorf("jsonedit: cannot locate the key of %v", path)
+	}
+	keyStart := i
+	for keyStart--; keyStart >= 0; keyStart-- { // the opening quote: an unescaped '"'
+		if doc[keyStart] == '"' {
+			bs := 0
+			for k := keyStart - 1; k >= 0 && doc[k] == '\\'; k-- {
+				bs++
+			}
+			if bs%2 == 0 {
+				break
+			}
+		}
+	}
+	if keyStart < 0 {
+		return nil, false, fmt.Errorf("jsonedit: cannot locate the key of %v", path)
+	}
+	// what follows the value: optional comma
+	j := valEnd
+	for j < len(doc) && isSpace(doc[j]) {
+		j++
+	}
+	hasNext := j < len(doc) && doc[j] == ','
+	// what precedes the key: optional comma of the previous member
+	p := keyStart - 1
+	for p >= 0 && isSpace(doc[p]) {
+		p--
+	}
+	hasPrev := p >= 0 && doc[p] == ','
+	var from, to int
+	switch {
+	case hasNext: // remove `"key": value,` plus the whitespace up to the next member
+		from, to = keyStart, j+1
+		for to < len(doc) && (doc[to] == ' ' || doc[to] == '\t') {
+			to++
+		}
+		if to < len(doc) && doc[to] == '\r' {
+			to++
+		}
+		if to < len(doc) && doc[to] == '\n' {
+			to++
+		}
+		// also the indentation before the key when the member started its own line
+		for from > 0 && (doc[from-1] == ' ' || doc[from-1] == '\t') {
+			from--
+		}
+		if from > 0 && doc[from-1] != '\n' { // member shared its line with something before it: keep the indent
+			from = keyStart
+		}
+	case hasPrev: // last member: remove the previous comma and this member
+		from, to = p, valEnd
+	default: // the only member: leave an empty object with the original brace layout
+		from, to = keyStart, valEnd
+		for from > 0 && isSpace(doc[from-1]) {
+			from--
+		}
+		for to < len(doc) && isSpace(doc[to]) && doc[to] != '}' {
+			to++
+		}
+		// `{\n  "a": 1\n}` -> `{\n}`
+		if from > 0 && doc[from-1] == '{' {
+			out := append(append([]byte{}, doc[:from]...), doc[to:]...)
+			if bytes.HasPrefix(doc[to:], []byte("}")) && bytes.IndexByte(doc[from:keyStart+1], '\n') >= 0 {
+				out = append(append([]byte{}, doc[:from]...), append([]byte("\n"), doc[to:]...)...)
+			}
+			return out, true, nil
+		}
+	}
+	return append(append([]byte{}, doc[:from]...), doc[to:]...), true, nil
+}

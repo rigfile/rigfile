@@ -177,3 +177,33 @@ func TestCodexIsConfiguredWhenDetectedAndUndoneByRollback(t *testing.T) {
 		t.Fatal("CODEX_HOME was ignored")
 	}
 }
+
+func TestGeminiCliIsConfiguredWhenDetected(t *testing.T) {
+	m := newMachine(t)
+	rig := newRig(t)
+	_ = os.MkdirAll(filepath.Join(m.home, ".gemini"), 0o755)
+	r := m.run("", "plan", rig, "--no-git")
+	for _, want := range []string{"Gemini CLI", "GEMINI.md", "settings.json", "commands/ship"} {
+		if want == "commands/ship" {
+			continue // the shared rig has no command; the adapter tests cover commands
+		}
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if s := string(mustRead(t, filepath.Join(m.home, ".gemini", "settings.json"))); !strings.Contains(s, `"alpaca"`) || strings.Contains(s, "secret://") {
+		t.Fatalf("%s", s)
+	}
+	if r := m.run("", "diff"); r.code != 0 || !strings.Contains(r.out, "Gemini CLI") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "rollback", "--force"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".gemini", "settings.json")); !os.IsNotExist(err) {
+		t.Fatal("rollback removes the file the run created")
+	}
+}

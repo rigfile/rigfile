@@ -590,3 +590,67 @@ func TestSetMissingString(t *testing.T) {
 		t.Fatal("invalid JSON must be an error")
 	}
 }
+
+func TestReplaceRawAndRemoveMemberKeepTheRestOfTheLayout(t *testing.T) {
+	doc := "{\n  \"a\": 1,   // no comments in JSON, but odd spacing survives\n  \"mcpServers\": {\n    \"one\": {\"command\": \"x\"},\n    \"two\": {\n      \"command\": \"y\"\n    },\n    \"three\": {\"command\": \"z\"}\n  },\n  \"z\": [1, 2]\n}\n"
+	doc = strings.Replace(doc, "   // no comments in JSON, but odd spacing survives", "", 1)
+	p := func(name string) []string { return []string{"mcpServers", name} }
+
+	// replace an object value
+	out, ok, err := ReplaceRaw([]byte(doc), p("two"), `{"command":"y2","args":["-x"]}`)
+	if err != nil || !ok || !json.Valid(out) {
+		t.Fatalf("%v %v\n%s", err, ok, out)
+	}
+	if !strings.Contains(string(out), "\"one\": {\"command\": \"x\"},") || !strings.Contains(string(out), "\"three\": {\"command\": \"z\"}") || !strings.Contains(string(out), "\"z\": [1, 2]") {
+		t.Fatalf("neighbours must be untouched:\n%s", out)
+	}
+	if _, ok, _ := ReplaceRaw([]byte(doc), p("missing"), `1`); ok {
+		t.Fatal("replace must not create members")
+	}
+
+	// remove middle, first and last members; document stays valid and tidy
+	cases := map[string][]string{"two": {"one", "three"}, "one": {"two", "three"}, "three": {"one", "two"}}
+	for name, want := range cases {
+		out, removed, err := RemoveMember([]byte(doc), p(name))
+		if err != nil || !removed || !json.Valid(out) {
+			t.Fatalf("remove %s: %v %v\n%s", name, err, removed, out)
+		}
+		var v struct {
+			MCP map[string]any `json:"mcpServers"`
+		}
+		_ = json.Unmarshal(out, &v)
+		if len(v.MCP) != 2 {
+			t.Fatalf("remove %s left %v\n%s", name, v.MCP, out)
+		}
+		for _, w := range want {
+			if _, ok := v.MCP[w]; !ok {
+				t.Fatalf("remove %s lost %s:\n%s", name, w, out)
+			}
+		}
+		if !strings.Contains(string(out), "\"a\": 1,") || !strings.Contains(string(out), "\"z\": [1, 2]") {
+			t.Fatalf("the rest of the file changed:\n%s", out)
+		}
+	}
+	// removing a member and re-adding it round-trips the surrounding bytes for the common shapes
+	out, _, _ = RemoveMember([]byte(doc), p("three"))
+	if !strings.Contains(string(out), "    },\n  },\n") && !strings.Contains(string(out), "    }\n  },\n") {
+		t.Fatalf("unexpected layout after removing the last member:\n%s", out)
+	}
+	// the only member, compact docs, and missing members
+	only := "{\n  \"mcpServers\": {\n    \"one\": {\"c\": 1}\n  }\n}\n"
+	out, removed, _ := RemoveMember([]byte(only), p("one"))
+	if !removed || !json.Valid(out) || strings.Contains(string(out), "one") {
+		t.Fatalf("%s", out)
+	}
+	out, removed, _ = RemoveMember([]byte(`{"mcpServers":{"a":1,"b":2}}`), p("a"))
+	if !removed || string(out) != `{"mcpServers":{"b":2}}` {
+		t.Fatalf("%s", out)
+	}
+	out, removed, _ = RemoveMember([]byte(`{"mcpServers":{"a":1,"b":2}}`), p("b"))
+	if !removed || string(out) != `{"mcpServers":{"a":1}}` {
+		t.Fatalf("%s", out)
+	}
+	if _, removed, _ := RemoveMember([]byte(doc), p("nope")); removed {
+		t.Fatal("a missing member is not removed")
+	}
+}

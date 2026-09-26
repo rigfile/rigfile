@@ -16,6 +16,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/codex"
+	"github.com/digitaldreamer3462/rigfile/internal/adapters/gemini"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
@@ -55,7 +56,7 @@ type Target struct {
 	Always bool
 }
 
-var registry = []Target{claudeCode(), codexTarget()}
+var registry = []Target{claudeCode(), codexTarget(), geminiTarget()}
 
 // Register adds a target (adapters call it from init in their own packages; tests add fakes).
 func Register(t Target) { registry = append(registry, t) }
@@ -270,6 +271,35 @@ func codexTarget() Target {
 				return nil, err
 			}
 			return codex.Build(codex.Env{Plat: c.Plat, CodexDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
+		},
+	}
+}
+
+func geminiTarget() Target {
+	dir := func(c Ctx) (string, error) {
+		if c.Dir != "" {
+			return c.Dir, nil
+		}
+		return gemini.GeminiDirFor(c.Plat, c.Getenv)
+	}
+	return Target{
+		Name: "gemini-cli", Title: "Gemini CLI",
+		Available: func(*platform.Info) (bool, string) { return true, "" },
+		Detect: func(c Ctx) Detection {
+			if d, err := dir(c); err == nil && exists(d) {
+				return Detection{true, d + " exists"}
+			}
+			if have(c, "gemini") {
+				return Detection{true, "`gemini` is on PATH"}
+			}
+			return Detection{false, "no ~/.gemini and no `gemini` on PATH"}
+		},
+		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			return gemini.Build(gemini.Env{Plat: c.Plat, GeminiDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
 		},
 	}
 }
