@@ -1,0 +1,4 @@
+{{template "head" .}}
+<h1>{{if .Query}}Rigs matching “{{.Query}}”{{else}}All public rigs{{end}}</h1>
+{{template "rigs" .Data}}
+{{template "foot" .}}

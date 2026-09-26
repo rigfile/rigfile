@@ -46,6 +46,12 @@ func staticHandler() http.Handler {
 
 // render executes a template into a buffer first, so an error never leaves half a page on the wire.
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, p Page) {
+	if name == "home.html" {
+		if d, ok := p.Data.(listData); ok {
+			d.RegistryURL = s.Cfg.PublicURL
+			p.Data = d
+		}
+	}
 	if p.User == nil && p.CSRF == "" {
 		if u, csrf := s.webUser(r); u != nil {
 			p.User, p.CSRF = u, csrf

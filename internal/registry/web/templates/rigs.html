@@ -1,0 +1,2 @@
+{{define "rigs"}}{{range .Rigs}}<div class="card"><h3><a href="/r/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a> {{if .Latest}}<span class="tag">{{.Latest}}</span>{{end}}{{if eq .Visibility "private"}}<span class="tag">private</span>{{end}}</h3>
+<div>{{.Description}}</div><div class="muted">★ {{.Stars}}</div></div>{{else}}<p class="muted">{{.Empty}}</p>{{end}}{{end}}
