@@ -1,0 +1,16 @@
+target: gemini-cli
+title: Gemini CLI
+os: [macos, linux, windows]
+config_paths:
+  macos: "~/.gemini"
+  linux: "~/.gemini"
+  windows: "%USERPROFILE%\\.gemini"
+categories:
+  instructions: {support: yes, note: "marked section in ~/.gemini/GEMINI.md"}
+  skills: {support: no, note: "not documented for Gemini CLI"}
+  agents: {support: no, note: "not documented for Gemini CLI"}
+  commands: {support: yes, note: "TOML files in ~/.gemini/commands"}
+  mcp_servers: {support: yes, note: "mcpServers in ~/.gemini/settings.json"}
+  hooks: {support: no, note: "a hooks system exists but its settings contract is UNVERIFIED; skipped"}
+  permissions: {support: partial, note: "tools.exclude / confirmationRequired; rule syntax UNVERIFIED"}
+base_secure: instructions_only

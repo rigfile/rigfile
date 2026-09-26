@@ -1,0 +1,16 @@
+target: claude-code
+title: Claude Code
+os: [macos, linux, windows]
+config_paths:
+  macos: "~/.claude"
+  linux: "~/.claude"
+  windows: "%USERPROFILE%\\.claude"
+categories:
+  instructions: {support: yes, note: "marked section in CLAUDE.md"}
+  skills: {support: yes, note: "~/.claude/skills/<name>"}
+  agents: {support: yes, note: "~/.claude/agents/*.md"}
+  commands: {support: yes, note: "~/.claude/commands/*.md"}
+  mcp_servers: {support: yes, note: "claude mcp add-json --scope user (ADR 0002)"}
+  hooks: {support: yes, note: "settings.json hooks; built-in rigfile hooks"}
+  permissions: {support: yes, note: "settings.json permissions deny/ask/allow"}
+base_secure: enforced

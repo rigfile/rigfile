@@ -11,7 +11,6 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
 	"github.com/digitaldreamer3462/rigfile/internal/secrets"
-	"github.com/digitaldreamer3462/rigfile/internal/session"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
@@ -126,12 +125,19 @@ func cmdDoctor(args []string, e env) int {
 			add(lvFail, "git protections", "differ from what was applied: %s (see `rigfile diff`)", strings.Join(bad, "; "))
 		}
 	}
-	ts := st.Targets[session.Target]
-	if ts == nil || len(ts.Items) == 0 {
+	ts := primaryApplied(st)
+	if ts == nil {
 		add(lvWarn, "applied rig", "nothing applied yet: run `rigfile apply <rig-dir>`")
 	} else {
 		add(lvOK, "applied rig", "%s@%s   %s", ts.Rig.Name, ts.Rig.Version, ts.AppliedAt)
-		ds := state.Check(ts.Items, map[string]state.Probe{state.KindMCP: claudecode.MCPProbe(mcpClient(e))})
+		var ds []state.Drift
+		for _, at := range appliedTargets(st) {
+			probes := map[string]state.Probe{}
+			if at.T.Name == "claude-code" {
+				probes[state.KindMCP] = claudecode.MCPProbe(mcpClient(e))
+			}
+			ds = append(ds, state.Check(at.TS.Items, probes)...)
+		}
 		var bad []string
 		for _, d := range ds {
 			if d.Status != state.OK {
@@ -188,7 +194,7 @@ func cmdDoctor(args []string, e env) int {
 	}
 	code := printChecks(e, cs)
 	if *fix {
-		ts := st.Targets[session.Target]
+		ts := primaryApplied(st)
 		switch {
 		case !baseDrift && code == 0:
 			fmt.Fprintln(e.out, "nothing to fix")

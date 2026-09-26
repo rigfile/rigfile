@@ -1,0 +1,15 @@
+target: claude-desktop
+title: Claude Desktop
+os: [macos, windows]
+config_paths:
+  macos: "~/Library/Application Support/Claude"
+  windows: "%APPDATA%\\Claude"
+categories:
+  instructions: {support: no, note: "not supported by Claude Desktop"}
+  skills: {support: no, note: "not supported by Claude Desktop"}
+  agents: {support: no, note: "not supported by Claude Desktop"}
+  commands: {support: no, note: "not supported by Claude Desktop"}
+  mcp_servers: {support: partial, note: "local stdio servers in claude_desktop_config.json; remote connectors are added in the app"}
+  hooks: {support: no, note: "not supported by Claude Desktop"}
+  permissions: {support: no, note: "not supported by Claude Desktop"}
+base_secure: none

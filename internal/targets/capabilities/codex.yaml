@@ -1,0 +1,16 @@
+target: codex
+title: Codex CLI
+os: [macos, linux, windows]
+config_paths:
+  macos: "~/.codex"
+  linux: "~/.codex"
+  windows: "%USERPROFILE%\\.codex"
+categories:
+  instructions: {support: yes, note: "marked section in ~/.codex/AGENTS.md"}
+  skills: {support: yes, note: "~/.agents/skills (open Agent Skills format)"}
+  agents: {support: yes, note: "TOML files in ~/.codex/agents"}
+  commands: {support: partial, note: "custom prompts are deprecated; commands become skills"}
+  mcp_servers: {support: yes, note: "[mcp_servers.<name>] in ~/.codex/config.toml"}
+  hooks: {support: partial, note: "hooks need the user to review and trust them (hash-pinned); planned but not auto-trusted"}
+  permissions: {support: partial, note: "sandbox_mode / approval_policy, not per-rule deny; base-secure maps what it can"}
+base_secure: partial

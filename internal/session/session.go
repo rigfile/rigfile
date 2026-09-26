@@ -25,6 +25,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/digitaldreamer3462/rigfile/internal/targets"
 	"github.com/digitaldreamer3462/rigfile/internal/tools"
 )
 
@@ -55,6 +56,11 @@ type Options struct {
 	// SandboxOn / SandboxOff set the sticky opt-in for Claude Code's sandbox profile (S2-M5b); neither keeps the
 	// choice recorded by the last apply.
 	SandboxOn, SandboxOff bool
+
+	// Targets forces these targets on (`--target codex`), on top of Claude Code, the targets detected on the
+	// machine and the ones the rig names in `targets.include`. TargetDirs overrides a target's config directory.
+	Targets    []string
+	TargetDirs map[string]string
 }
 
 // Prepared is everything computed before anything is written.
@@ -65,21 +71,35 @@ type Prepared struct {
 	Top        *manifest.Loaded
 	Layers     *layers.Result
 	UnsafeBase bool
-	Merged     *merge.Merged
-	Proj       *merge.Projection
-	Problems   []manifest.Problem
-	State      *state.State
-	Plan       *engine.Plan // nil if the rig has errors
-	Tools      tools.Plan   // what apply would install (planned, never run here)
-	GitPlan    *engine.Plan // the git module (base-secure); nil with --no-git
-	cleanup    func()       // removes the extracted base-secure files
-	Sandbox    bool         // effective sandbox opt-in for this run
+	// Targets is one entry per selected target, in registry order. Merged, Proj, Plan and MergedSHA below are
+	// the PRIMARY target's (the first one) and exist for callers that only care about one.
+	Targets  []*TargetPlan
+	Skipped  []string // targets left out, with the reason ("cursor: not detected")
+	Merged   *merge.Merged
+	Proj     *merge.Projection
+	Problems []manifest.Problem
+	State    *state.State
+	Plan     *engine.Plan // nil if the rig has errors
+	Tools    tools.Plan   // what apply would install (planned, never run here)
+	GitPlan  *engine.Plan // the git module (base-secure); nil with --no-git
+	cleanup  func()       // removes the extracted base-secure files
+	Sandbox  bool         // effective sandbox opt-in for this run
 
 	Lock      *lock.Lock
 	LockPath  string
 	LockDiffs []string // differences against an existing lockfile (empty if none or identical)
 	HasLock   bool
 	MergedSHA string
+}
+
+// TargetPlan is the merged model, projection and plan for one selected target.
+type TargetPlan struct {
+	T      targets.Target
+	Reason string // why it was selected: always | detected | named in the rig | --target
+	Merged *merge.Merged
+	Proj   *merge.Projection
+	SHA    string
+	Plan   *engine.Plan
 }
 
 // ErrProblems is returned by Execute when the rig has errors.
@@ -172,23 +192,38 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 		return p.Problems[i].Level == manifest.Error && p.Problems[j].Level != manifest.Error
 	})
 
-	m, err := merge.Merge(res.Layers, Target)
-	if err != nil {
-		return nil, err
-	}
-	p.Merged = m
-	if p.MergedSHA, err = m.Hash(); err != nil {
-		return nil, err
-	}
-	p.Proj = m.Project(string(pi.OS), Target)
-
 	if p.State, err = state.Load(sd); err != nil {
 		return nil, err
 	}
+	sel, skipped, err := selectTargets(top.M, o, func(name string) targets.Ctx { return p.ctx(name) })
+	if err != nil {
+		return nil, err
+	}
+	p.Skipped = skipped
+	shas := map[string]string{}
+	for _, sl := range sel {
+		m, err := merge.Merge(res.Layers, sl.t.Name)
+		if err != nil {
+			return nil, err
+		}
+		h, err := m.Hash()
+		if err != nil {
+			return nil, err
+		}
+		tp := &TargetPlan{T: sl.t, Reason: sl.reason, Merged: m, SHA: h, Proj: m.Project(string(pi.OS), sl.t.Name)}
+		p.Targets = append(p.Targets, tp)
+		shas[sl.t.Name] = h
+	}
+	if len(p.Targets) == 0 {
+		return nil, errors.New("no target is selected: the rig's targets.include/exclude and --target leave nothing to configure")
+	}
+	prim := p.Targets[0]
+	p.Merged, p.Proj, p.MergedSHA = prim.Merged, prim.Proj, prim.SHA
+
 	if manifest.HasErrors(p.Problems) {
 		return p, nil // no lock, no plan: the caller prints the problems (hashing would trip over the same missing files)
 	}
-	fresh, err := lock.Build(res, map[string]string{Target: p.MergedSHA})
+	fresh, err := lock.Build(res, shas)
 	if err != nil {
 		return nil, err
 	}
@@ -205,13 +240,19 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 		return nil, err
 	}
 
-	env := claudecode.Env{
-		Plat: pi, ClaudeDir: claudeDir, ProjectDir: o.ProjectDir, State: p.State.Targets[Target],
-		MCP: o.MCP, Overwrite: o.Overwrite, BaseSecure: !o.UnsafeBase, Sandbox: p.Sandbox,
+	for _, tp := range p.Targets {
+		if tp.Plan, err = tp.T.Plan(p.ctx(tp.T.Name), tp.Proj); err != nil {
+			return nil, fmt.Errorf("%s: %w", tp.T.Title, err)
+		}
+		tp.Plan.Replaced = tp.Merged.Replaced
+		for _, w := range append(append([]string(nil), res.Warnings...), tp.Merged.Warnings...) {
+			tp.Plan.Notes = append(tp.Plan.Notes, w)
+		}
+		if tp.T.Title != "" {
+			tp.Plan.Target = tp.T.Title
+		}
 	}
-	if p.Plan, err = claudecode.Build(env, p.Proj); err != nil {
-		return nil, err
-	}
+	p.Plan = prim.Plan
 	if !o.NoGit {
 		bin := o.RigfileBin
 		if bin == "" {
@@ -244,10 +285,6 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 		}
 	}
 	p.Tools = tools.Build(cat, in, string(pi.OS), th)
-	p.Plan.Replaced = p.Merged.Replaced
-	for _, w := range append(append([]string(nil), res.Warnings...), m.Warnings...) {
-		p.Plan.Notes = append(p.Plan.Notes, w)
-	}
 	return p, nil
 }
 
@@ -259,9 +296,12 @@ func (p *Prepared) Close() {
 	}
 }
 
-// Changes counts every actionable change, including the git module's.
+// Changes counts every actionable change across all targets, including the git module's.
 func (p *Prepared) Changes() int {
-	n := p.Plan.Changes()
+	n := 0
+	for _, tp := range p.Targets {
+		n += tp.Plan.Changes()
+	}
 	if p.GitPlan != nil {
 		n += p.GitPlan.Changes()
 	}
@@ -270,7 +310,10 @@ func (p *Prepared) Changes() int {
 
 // Refused counts items left untouched because something else was in the way.
 func (p *Prepared) Refused() int {
-	n := len(p.Plan.Conflicts())
+	n := 0
+	for _, tp := range p.Targets {
+		n += len(tp.Plan.Conflicts())
+	}
 	if p.GitPlan != nil {
 		n += len(p.GitPlan.Conflicts())
 	}
@@ -289,11 +332,13 @@ func (p *Prepared) Needs() []state.Need {
 			out = append(out, n)
 		}
 	}
-	for _, s := range p.Proj.MCPServers {
-		for _, v := range s.P.V.Env {
-			if ref, ok := manifest.SecretRef(v); ok {
-				d := p.Merged.Secrets[ref].V
-				add(state.Need{Kind: "secret", Ref: ref, Description: d.Description, ObtainURL: d.ObtainURL})
+	for _, tp := range p.Targets {
+		for _, s := range tp.Proj.MCPServers {
+			for _, v := range s.P.V.Env {
+				if ref, ok := manifest.SecretRef(v); ok {
+					d := tp.Merged.Secrets[ref].V
+					add(state.Need{Kind: "secret", Ref: ref, Description: d.Description, ObtainURL: d.ObtainURL})
+				}
 			}
 		}
 	}
@@ -308,8 +353,10 @@ func (p *Prepared) Needs() []state.Need {
 			add(state.Need{Kind: "secret", Ref: k, Description: d.Description, ObtainURL: d.ObtainURL})
 		}
 	}
-	for _, l := range p.Proj.Logins {
-		add(state.Need{Kind: "login", Ref: l.V.Provider, Description: l.V.Reason, Method: l.V.Method})
+	for _, tp := range p.Targets {
+		for _, l := range tp.Proj.Logins {
+			add(state.Need{Kind: "login", Ref: l.V.Provider, Description: l.V.Reason, Method: l.V.Method})
+		}
 	}
 	return out
 }
@@ -320,7 +367,15 @@ func (p *Prepared) Header() string {
 	for _, l := range p.Layers.Layers {
 		chain = append(chain, l.Name)
 	}
-	return fmt.Sprintf("Rig: %s@%s   (layers: %s)\nTarget: claude-code on %s", p.Top.M.Name, p.Top.M.Version, strings.Join(chain, " → "), p.Plat.OS)
+	var ts []string
+	for _, tp := range p.Targets {
+		ts = append(ts, tp.T.Name)
+	}
+	label := "Target"
+	if len(ts) > 1 {
+		label = "Targets"
+	}
+	return fmt.Sprintf("Rig: %s@%s   (layers: %s)\n%s: %s on %s", p.Top.M.Name, p.Top.M.Version, strings.Join(chain, " → "), label, strings.Join(ts, ", "), p.Plat.OS)
 }
 
 // ExecOptions tune Execute.
@@ -369,11 +424,12 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 		}
 	}
 
-	ts := p.State.Target(Target)
-	if err := p.Plan.Apply(&engine.Exec{W: w}, ts); err != nil {
-		// whatever already happened is journaled: commit it so `rollback` can undo the partial run
-		_, _ = w.Commit("FAILED: " + x.Note)
-		return nil, err
+	for _, tp := range p.Targets {
+		if err := tp.Plan.Apply(&engine.Exec{W: w}, p.State.Target(tp.T.Name)); err != nil {
+			// whatever already happened is journaled: commit it so `rollback` can undo the partial run
+			_, _ = w.Commit("FAILED: " + x.Note)
+			return nil, err
+		}
 	}
 	// From here on the machine has changed: any failure must still commit the journal so `rollback` works.
 	fail := func(err error) (*Result, error) {
@@ -403,13 +459,16 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 		res.LockWritten = lr.Changed
 	}
 	absDir, _ := filepath.Abs(p.Top.Dir)
-	ts.Rig = state.RigRef{Name: p.Top.M.Name, Version: p.Top.M.Version, Hash: p.MergedSHA, Dir: absDir}
-	ts.LockSHA = hashing.Bytes(lockBytes)
-	ts.Needs = p.Needs()
-	// A run that changed nothing must not rewrite state.json just to bump a timestamp.
-	if res.Applied > 0 || res.LockWritten || ts.RunID == "" {
-		ts.AppliedAt = now().UTC().Format(time.RFC3339)
-		ts.RunID = runID
+	for _, tp := range p.Targets {
+		ts := p.State.Target(tp.T.Name)
+		ts.Rig = state.RigRef{Name: p.Top.M.Name, Version: p.Top.M.Version, Hash: tp.SHA, Dir: absDir}
+		ts.LockSHA = hashing.Bytes(lockBytes)
+		ts.Needs = p.Needs()
+		// A run that changed nothing must not rewrite state.json just to bump a timestamp.
+		if tp.Plan.Changes() > 0 || res.LockWritten || ts.RunID == "" {
+			ts.AppliedAt = now().UTC().Format(time.RFC3339)
+			ts.RunID = runID
+		}
 	}
 	p.State.Prefs.Sandbox = p.Sandbox
 	switch {
@@ -427,4 +486,83 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 	}
 	res.RunID, err = w.Commit(x.Note)
 	return res, err
+}
+
+// ctx builds the per-target context from the run's options.
+func (p *Prepared) ctx(name string) targets.Ctx {
+	o := p.Opts
+	dir := o.TargetDirs[name]
+	if name == "claude-code" && dir == "" {
+		dir = o.ClaudeDir
+	}
+	c := targets.Ctx{Plat: p.Plat, Getenv: o.Getenv, ProjectDir: o.ProjectDir, Overwrite: o.Overwrite, BaseSecure: !o.UnsafeBase,
+		Sandbox: p.Sandbox, Dir: dir, MCP: o.MCP}
+	if p.State != nil {
+		c.State = p.State.Targets[name]
+	}
+	return c
+}
+
+type selection struct {
+	t      targets.Target
+	reason string
+}
+
+// selectTargets decides which targets a run configures (docs/stage-3-plan.md design call 2): Claude Code always;
+// any other target when it is detected on this machine, named by the rig's targets.include or forced with
+// --target; never one the rig excludes or one that does not exist on this OS. targets.include is a whitelist.
+func selectTargets(m *manifest.Manifest, o Options, ctxFor func(string) targets.Ctx) ([]selection, []string, error) {
+	registered := map[string]bool{}
+	for _, n := range targets.Names() {
+		registered[n] = true
+	}
+	forced := map[string]bool{}
+	for _, n := range o.Targets {
+		if !registered[n] {
+			return nil, nil, fmt.Errorf("unknown target %q (known: %s)", n, strings.Join(targets.Names(), ", "))
+		}
+		forced[n] = true
+	}
+	inc, exc := map[string]bool{}, map[string]bool{}
+	for _, n := range m.Targets.Include {
+		inc[n] = true
+	}
+	for _, n := range m.Targets.Exclude {
+		exc[n] = true
+	}
+	var sel []selection
+	var skipped []string
+	for _, t := range targets.All() {
+		name := t.Name
+		switch {
+		case exc[name]:
+			skipped = append(skipped, name+": excluded by the rig (targets.exclude)")
+			continue
+		case len(inc) > 0 && !inc[name] && !forced[name]:
+			skipped = append(skipped, name+": not in the rig's targets.include")
+			continue
+		}
+		if t.Available != nil {
+			if ok, why := t.Available(ctxFor(name).Plat); !ok {
+				skipped = append(skipped, name+": "+why)
+				continue
+			}
+		}
+		switch {
+		case forced[name]:
+			sel = append(sel, selection{t, "--target"})
+		case inc[name]:
+			sel = append(sel, selection{t, "named in the rig"})
+		case t.Always:
+			sel = append(sel, selection{t, "always"})
+		default:
+			d := t.Detect(ctxFor(name))
+			if d.Installed {
+				sel = append(sel, selection{t, "detected: " + d.Why})
+			} else {
+				skipped = append(skipped, name+": not detected ("+d.Why+"); use --target "+name+" to configure it anyway")
+			}
+		}
+	}
+	return sel, skipped, nil
 }

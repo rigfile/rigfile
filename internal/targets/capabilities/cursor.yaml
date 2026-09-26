@@ -1,0 +1,16 @@
+target: cursor
+title: Cursor
+os: [macos, linux, windows]
+config_paths:
+  macos: "~/.cursor"
+  linux: "~/.cursor"
+  windows: "%USERPROFILE%\\.cursor"
+categories:
+  instructions: {support: partial, note: "no user rules file (UI only): printed for pasting; project rules go to .cursor/rules/*.mdc"}
+  skills: {support: no, note: "not covered by the documentation read"}
+  agents: {support: no, note: "not covered by the documentation read"}
+  commands: {support: no, note: "not covered by the documentation read"}
+  mcp_servers: {support: yes, note: "~/.cursor/mcp.json"}
+  hooks: {support: no, note: "UNVERIFIED; skipped"}
+  permissions: {support: no, note: "no documented permission rules"}
+base_secure: instructions_only
