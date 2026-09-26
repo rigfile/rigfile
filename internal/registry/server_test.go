@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
 	"github.com/digitaldreamer3462/rigfile/internal/registry"
 	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
 	"github.com/digitaldreamer3462/rigfile/internal/registry/dbtest"
@@ -56,6 +57,7 @@ type env struct {
 	gh    *fakeGitHub
 	clk   *clock
 	blobs blob.Store
+	osv   *pkgcheck.Client // package lookups during scans (nil = none)
 }
 
 func newEnv(t *testing.T, mut func(*registry.Config)) *env {

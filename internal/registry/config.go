@@ -36,6 +36,9 @@ type Config struct {
 	// PopularStars: a public rig at or above this many stars needs every new version signed by the publisher's own GitHub
 	// Actions identity and a verified publisher (0 = off; docs/trust.md §5).
 	PopularStars int
+	// OSVURL is the OSV API to look pinned MCP packages up in ('' = https://api.osv.dev); OSVOff disables the lookup.
+	OSVURL string
+	OSVOff bool
 }
 
 // Origin returns scheme://host of the public URL.
@@ -90,6 +93,7 @@ func ConfigFromEnv(getenv func(string) string, readFile func(string) ([]byte, er
 		c.MaxUpload = int64(n) << 20
 	}
 	c.SigstoreRoot = getenv("RIGFILE_REGISTRY_SIGSTORE_ROOT")
+	c.OSVURL, c.OSVOff = getenv("RIGFILE_REGISTRY_OSV_URL"), getenv("RIGFILE_REGISTRY_OSV") == "off"
 	if v := getenv("RIGFILE_REGISTRY_POPULAR_STARS"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {

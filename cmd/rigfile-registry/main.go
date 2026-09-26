@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
 	"github.com/digitaldreamer3462/rigfile/internal/registry"
 	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
@@ -148,6 +149,9 @@ func serve(ctx context.Context, e env) int {
 	srv := registry.NewServer(cfg, store, blobs, gh, log)
 
 	sc := &registry.Scanner{Store: store, Blobs: blobs, Log: log, Limits: source.DefaultLimits, PopularStars: cfg.PopularStars, Scan: func() (*scan.Scanner, error) { return scan.New(scan.Options{}) }}
+	if !cfg.OSVOff {
+		sc.Packages = &pkgcheck.Client{BaseURL: cfg.OSVURL}
+	}
 	go sc.Run(ctx, cfg.ScanWorkers)
 
 	hs := &http.Server{

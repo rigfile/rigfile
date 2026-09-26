@@ -15,6 +15,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/analyze"
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
 	"github.com/digitaldreamer3462/rigfile/internal/publish"
 	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
@@ -124,6 +125,8 @@ type Scanner struct {
 	Limits source.Limits
 	// PopularStars: see Config.PopularStars (0 = off).
 	PopularStars int
+	// Packages looks pinned MCP packages up in OSV (nil = no lookup).
+	Packages *pkgcheck.Client
 }
 
 // ScanVersion unpacks the stored tarball into a temporary directory and applies the publishing rules:
@@ -182,6 +185,32 @@ func (sc *Scanner) ScanVersion(ctx context.Context, versionID int64) (ScanResult
 			res.Findings = append(res.Findings, f)
 		} else {
 			res.Warnings = append(res.Warnings, f)
+		}
+	}
+	if sc.Packages != nil {
+		pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		unavailable := false
+		for _, pkg := range pkgcheck.Extract(a.Manifest) {
+			adv, err := sc.Packages.Check(pctx, pkg)
+			if err != nil {
+				unavailable = true
+				continue
+			}
+			for _, x := range adv {
+				if x.Malicious() {
+					res.Findings = append(res.Findings, Finding{Kind: "malicious-package", Rule: x.ID, File: "rigfile.yaml", Message: pkg.String() + " is listed as malicious (" + x.ID + ")"})
+				} else {
+					msg := pkg.String() + " has a known vulnerability: " + x.ID
+					if x.Severity != "" {
+						msg += " (" + x.Severity + ")"
+					}
+					res.Warnings = append(res.Warnings, Finding{Kind: "vulnerable-package", Rule: x.ID, File: "rigfile.yaml", Message: msg})
+				}
+			}
+		}
+		cancel()
+		if unavailable {
+			res.Warnings = append(res.Warnings, Finding{Kind: "package-check-unavailable", File: "rigfile.yaml", Message: "the package vulnerability lookup could not be completed; these packages were not checked"})
 		}
 	}
 	if public && sc.PopularStars > 0 && stars >= sc.PopularStars {

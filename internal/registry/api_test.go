@@ -106,7 +106,7 @@ func (c *client) upload(owner, name string, tarball []byte) (int, map[string]any
 
 func (e *env) scanAll() {
 	e.t.Helper()
-	sc := &registry.Scanner{Store: e.store, Blobs: e.blobs, Limits: source.DefaultLimits, PopularStars: e.s.Cfg.PopularStars,
+	sc := &registry.Scanner{Store: e.store, Blobs: e.blobs, Limits: source.DefaultLimits, PopularStars: e.s.Cfg.PopularStars, Packages: e.osv,
 		Scan: func() (*scan.Scanner, error) { return scan.New(scan.Options{}) }}
 	for i := 0; i < 50; i++ {
 		did, err := sc.RunOnce(e.t.Context(), "test-worker")

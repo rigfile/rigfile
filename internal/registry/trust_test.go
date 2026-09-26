@@ -3,11 +3,13 @@ package registry_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
 	"github.com/digitaldreamer3462/rigfile/internal/registry"
 )
 
@@ -330,5 +332,62 @@ func TestVerifiedPublisherNeedsAnAdminAndAValidKind(t *testing.T) {
 	}
 	if err := e.store.ClearVerified(t.Context(), "jia", adm); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPackageLookupsDuringTheScan(t *testing.T) {
+	osv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Package struct{ Name string } `json:"package"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		switch req.Package.Name {
+		case "evil-mcp":
+			_, _ = w.Write([]byte(`{"vulns":[{"id":"MAL-2026-1","summary":"Malicious code"}]}`))
+		case "old-mcp":
+			_, _ = w.Write([]byte(`{"vulns":[{"id":"GHSA-aaaa","summary":"x","database_specific":{"severity":"HIGH"}}]}`))
+		case "flaky-mcp":
+			w.WriteHeader(503)
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer osv.Close()
+	e := newEnv(t, nil)
+	e.osv = &pkgcheck.Client{BaseURL: osv.URL}
+	_, tok := e.userToken("jia", 1001)
+	c := e.as(tok)
+	with := func(name, pkg string) map[string]string {
+		f := goodRig("jia", name, "1.0.0")
+		f["rigfile.yaml"] = manifestYAML("jia", name, "1.0.0", "mcp_servers:\n  x:\n    command: npx\n    args: ['-y', '"+pkg+"@1.0.0']\n")
+		return f
+	}
+	for _, n := range []struct{ rig, pkg string }{{"a", "evil-mcp"}, {"b", "old-mcp"}, {"c", "flaky-mcp"}, {"d", "clean-mcp"}} {
+		if s, _ := c.upload("jia", n.rig, rigTar(t, with(n.rig, n.pkg))); s != 202 {
+			t.Fatal(s)
+		}
+	}
+	e.scanAll()
+	if got := c.versionStatus("jia", "a", "1.0.0"); got != "rejected" {
+		t.Fatalf("a package listed as malicious rejects the version: %s", got)
+	}
+	_, b := c.get("/v1/rigs/jia/a/versions/1.0.0")
+	if !strings.Contains(string(b), `"kind":"malicious-package"`) || !strings.Contains(string(b), "MAL-2026-1") {
+		t.Fatalf("%s", b)
+	}
+	if got := c.versionStatus("jia", "b", "1.0.0"); got != "published" {
+		t.Fatalf("a vulnerable package only warns: %s", got)
+	}
+	_, b = c.get("/v1/rigs/jia/b/versions/1.0.0")
+	if !strings.Contains(string(b), `"kind":"vulnerable-package"`) || !strings.Contains(string(b), "GHSA-aaaa") || !strings.Contains(string(b), "HIGH") {
+		t.Fatalf("%s", b)
+	}
+	_, b = c.get("/v1/rigs/jia/c/versions/1.0.0")
+	if !strings.Contains(string(b), `"status":"published"`) || !strings.Contains(string(b), "package-check-unavailable") {
+		t.Fatalf("an unreachable OSV is reported, not passed silently: %s", b)
+	}
+	_, b = c.get("/v1/rigs/jia/d/versions/1.0.0")
+	if strings.Contains(string(b), "package") && strings.Contains(string(b), "unavailable") {
+		t.Fatalf("a clean package has no warning: %s", b)
 	}
 }
