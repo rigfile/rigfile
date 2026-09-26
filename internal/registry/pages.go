@@ -72,6 +72,8 @@ type profileData struct {
 	Collections []Collection
 	Org         *Org
 	Members     []Member
+	Own         bool   // the signed-in user's own profile
+	MyRole      string // their role, on an organisation's page
 }
 
 func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +90,11 @@ func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
 			if u != nil {
 				members, _ = s.Store.Members(r.Context(), u, org) // only members get the list
 			}
-			s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs, Org: org, Members: members}})
+			role := ""
+			if u != nil {
+				role = s.Store.OrgRole(r.Context(), u, org.ID)
+			}
+			s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs, Org: org, Members: members, MyRole: role}})
 			return
 		}
 		s.notFound(w, r)
@@ -96,7 +102,7 @@ func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	rs, _ := s.Store.OwnedRigs(r.Context(), login, v)
 	cs, _ := s.Store.UserCollections(r.Context(), login, v)
-	s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs, Collections: cs}})
+	s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs, Collections: cs, Own: u != nil && u.Login == login}})
 }
 
 // RigPage is everything the rig page shows.

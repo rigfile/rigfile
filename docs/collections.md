@@ -23,6 +23,10 @@ A collection is a curated, titled list of rigs owned by one user ("Starter rigs"
 
 Changing a collection needs a token whose user is the path's owner (403 otherwise); admins do not edit other people's collections here.
 
+## Web
+
+The owner sees forms on their own profile (new collection) and collection page (add a rig with a note, remove, delete with a confirmation). They post to `/manage/collections...` and call the same store methods as the API, so every rule above applies; the forms add only the browser protections (a session, a same-origin request, a CSRF token) and the per-user write rate limit. Visitors are shown none of the controls. Test: `TestWebFormsForCollections`.
+
 ## CLI
 
 `rigfile collection create <slug> --title "..." [--description "..."] [--private]`, `add <slug> <owner/name> [--note ...]`, `rm`, `delete`, `show <owner/slug>`, `list [user]`.
