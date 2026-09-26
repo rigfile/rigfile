@@ -451,7 +451,7 @@
 
     "permissionRule": {
       "type": "object",
-      "description": "Exactly one of read / edit / bash / web_fetch / mcp, plus optional reason/os/targets.",
+      "description": "Exactly one of read / edit / bash / powershell / web_fetch / mcp, plus optional reason/os/targets.",
       "additionalProperties": false,
       "properties": {
         "read": { "$ref": "#/$defs/hostPath" },
@@ -459,6 +459,11 @@
         "bash": {
           "$ref": "#/$defs/plainText",
           "description": "Command prefix/glob, e.g. 'git push*'. Argument-constraining patterns are fragile in Claude Code (see docs/targets/claude-code.md §8).",
+          "maxLength": 240
+        },
+        "powershell": {
+          "$ref": "#/$defs/plainText",
+          "description": "PowerShell command prefix/glob, e.g. 'Get-ChildItem env:*'. Claude Code on Windows without Git Bash runs commands through the PowerShell tool, which the Bash rules do not cover.",
           "maxLength": 240
         },
         "web_fetch": {
@@ -479,6 +484,7 @@
         { "required": ["read"] },
         { "required": ["edit"] },
         { "required": ["bash"] },
+        { "required": ["powershell"] },
         { "required": ["web_fetch"] },
         { "required": ["mcp"] }
       ]

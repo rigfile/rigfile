@@ -277,3 +277,12 @@ func TestHostCovers(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowsReservedNames(t *testing.T) {
+	for name, want := range map[string]bool{"con": true, "NUL": true, "com1": true, "Lpt9": true, "aux.md": true, "trail.": true,
+		"com0": false, "console": false, "pdf": false, "com10": false} {
+		if got := windowsReserved(name); got != want {
+			t.Errorf("windowsReserved(%q) = %v", name, got)
+		}
+	}
+}

@@ -1,8 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 1 — Local CLI, Claude Code only, no network, macOS + Linux — BUILD COMPLETE on branch `stage-1` (M1–M9 done); awaiting owner checks below, then sign-off**
-**Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
-Last updated: 2026-09-25 (end of Stage 1 build session)
+**Current stage: Stage 3 (multi-vendor adapters + Windows): BUILD COMPLETE on branch `stage-3` (S3-M0 to S3-M9 done, S3-M10 = owner gate: `docs/stage-3-owner-checks.md`). Stage 2 (`stage-2`) still awaits its S2-M9 owner sign-off; `stage-3` is built on top of it. Neither branch is pushed (pushes are the owner's).**
+Last updated: 2026-09-26 (end of Stage 3 build session)
 
 ## Stage 0 result (signed off)
 
@@ -65,3 +64,44 @@ Working rules for Stage 1 are in `CLAUDE.md` (small PRs, threat note for securit
 - A Python scaffold (`pyproject.toml`, `src/rigfile`, `tests/`, `README.md`) existed before Stage 0 and was committed by the owner as `42bd6bc "stage 0"` (branch `stage-0-spec`, also pushed to `origin`). With Go chosen it is not the product; keep as dev tooling or delete: the owner's call. It is not part of the Stage 0 deliverables.
 - `origin/HEAD` currently points at `stage-0-spec` (first branch pushed). Local `main` is created from it at sign-off; pushing `main` and making it GitHub's default branch is left to the owner.
 - Global secret-scanning git hooks (gitleaks) are installed on the owner's machine outside this repo (`~/.config/git/hooks`); they run on commits and pushes here. This is a stopgap until base-secure (Stage 2).
+
+## Known limits (Stage 1/2)
+
+- `rigfile rollback` restores files but does not unregister MCP servers that `apply` added through the `claude` CLI; a re-apply after a rollback then reports "server exists and is not managed by Rigfile" (use `--overwrite`). Fix planned with the Stage 2 doctor/rollback work.
+- Hook cost: on this macOS machine (each `git` call ~14 ms) pre-commit ~50 ms, commit-msg ~16 ms, agent hooks ~7 ms, the reference-transaction backstop ~0-8 ms per invocation (git calls it 5 times per commit, the `sh` shim filters most). A clean `git commit` with all hooks measured 60-150 ms in the Linux containers (noisy, includes `git add`). Go start-up (~6 ms) and git subprocesses dominate; rules already compile lazily.
+
+## Stage 2: what the owner must do (S2-M9)
+
+Exit criteria (plan §12) and the evidence:
+
+| Criterion | Evidence |
+|---|---|
+| 100% of test-corpus secrets blocked at commit | Corpus: 223/223 core positives detected by the scanner (`docs/scanner-metrics.md`, gate in CI); the real pre-commit hook blocks a token, an encoded token, a credential file name and a secret in the commit message (`cmd/rigfile/githooks_e2e_test.go`, `docs/red-team.md` git layer) |
+| All red-team prompts blocked or requiring approval | Deterministic suite: of 62 attack attempts, 39 are blocked and 15 ask first; the 8 evasions are documented (a further 8 rows are controls that must stay allowed) and each is covered by another layer or by the opt-in sandbox (`docs/red-team.md` Part 1). **Live run against a real Claude Code has not happened** (Part 2) |
+| False positives documented and below the agreed threshold | 0 of 550 hard negatives (gate 1%, decision O2); the corpus grows whenever a real false positive turns up |
+
+Your checklist, in order:
+
+1. **Push and check CI:** `git push -u origin stage-2` (I cannot). The new `dogfood`, `e2e` (real git in Ubuntu/Fedora) and corpus/red-team gates run there.
+2. **Read** `docs/base-secure.md` (what it enforces, what it cannot, threat note) and skim `docs/red-team.md`.
+3. **Run the live red-team procedure** (`docs/red-team.md` Part 2) in a disposable VM/container with Claude Code logged in. It also settles the UNVERIFIED items: the PostToolUse `updatedToolOutput` shape and transcript contents, Write/Edit field names, whether `Read(~/.ssh/**)`/the sandbox stop a script, and `disableBypassPermissionsMode` in user settings.
+4. **Apply base-secure to your own machine** (I never touch your real config): `rigfile apply <your rig>` (or `./cmd/rigfile`), read the GIT section of the plan (it appends a block to `~/.gitconfig`, adds hooks under `~/.config/rigfile/git-hooks` that chain to your existing `~/.config/git/hooks`, and adds a block to your global excludes), approve, then `rigfile doctor` and try `git commit` in a scratch repo. Optional: `--sandbox`.
+5. **LICENSE** (§17 Q1) and merge `stage-2` into `main` when satisfied.
+
+Then Stage 3 (Codex/Cursor/Gemini adapters + Windows) is next in the plan; it starts on your go.
+
+Deviations from the Stage 2 plan worth knowing: `doctor --fix` re-applies your rig through the normal review screen instead of writing silently; the git protections are part of `apply` (opt out with `--no-git`); the sandbox is opt-in (`--sandbox`), sticky, and its enforcement is unverified until step 3.
+
+
+## Stage 3: what the owner must do (S3-M10)
+
+Built (plan: `docs/stage-3-plan.md`): target registry with per-target merge/projection/plan/state/lock; Codex, Gemini CLI, Cursor and Claude Desktop adapters on a shared toolkit; per-target base-secure mapping with honest "enforced / partly / instructions only" wording on every plan screen; `rigfile init --from <target>` capture with round-trip tests; Windows platform (user-only ACLs, `LockFileEx`, `.cmd` shim launching, PowerShell rules, Git-for-Windows hook paths, reserved-name check, CRLF/LF handling); WSL detection with cross-boundary denies; CI matrix with `windows-latest`; multi-target container E2E (Ubuntu and Fedora both pass locally).
+
+**Not verified by anyone yet:** every line of Windows code has been compiled, vetted and unit-tested through injected environments, but not run on Windows; no adapter has been loaded by the real vendor tool. Both are the checklist in `docs/stage-3-owner-checks.md`:
+
+1. Push (`git push -u origin stage-2 stage-3`), read the CI jobs, send me the `windows-latest` log if red.
+2. Windows 11 clean-VM procedure (section 2 there).
+3. Live vendor checks 1-7 (section 5), and the WSL glob check (section 4).
+4. Finish the Stage 2 checklist above, then merge `stage-2` and `stage-3` into `main`.
+
+Deviations worth knowing: Windows CI runs without `-race` and without the scanner timing gate; `init --from` cannot tell whole-file items Rigfile wrote (skills, agents) from yours unless `state.json` owns them, so run it before the first apply; Gemini CLI hooks/permissions and Cursor rules/hooks are not written at all (contracts unverified; the plan screen says so).

@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
+	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
 	"github.com/digitaldreamer3462/rigfile/internal/secrets"
-	"github.com/digitaldreamer3462/rigfile/internal/session"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
@@ -39,9 +40,22 @@ func (c check) mark() string {
 
 // cmdDoctor health-checks everything Rigfile depends on. Exit 1 if anything is red (✘).
 func cmdDoctor(args []string, e env) int {
-	if len(args) != 0 {
-		fmt.Fprintln(e.err, "usage: rigfile doctor")
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(e.err)
+	gitScan := fs.Bool("git", false, "scan a repository's whole history for committed secrets and walk through rotation (read-only)")
+	fix := fs.Bool("fix", false, "re-apply the last applied rig to repair drift (shows the plan and asks first)")
+	maxCommits := fs.Int("max-commits", 5000, "with --git: scan at most this many commits (newest)")
+	pos, err := parseInterspersed(fs, args)
+	if err != nil || len(pos) > 1 || (len(pos) == 1 && !*gitScan) {
+		fmt.Fprintln(e.err, "usage: rigfile doctor [--fix] | rigfile doctor --git [<repo>] [--max-commits N]")
 		return 2
+	}
+	if *gitScan {
+		dir := ""
+		if len(pos) == 1 {
+			dir = pos[0]
+		}
+		return doctorGit(e, dir, *maxCommits)
 	}
 	var cs []check
 	add := func(l checkLevel, name, format string, a ...any) {
@@ -92,12 +106,38 @@ func cmdDoctor(args []string, e env) int {
 		add(lvFail, "state", "%v", err)
 		return printChecks(e, cs)
 	}
-	ts := st.Targets[session.Target]
-	if ts == nil || len(ts.Items) == 0 {
+	baseDrift := false
+	if st.UnsafeBase != nil {
+		add(lvFail, "base-secure", "DISABLED since %s (applied with --i-understand-unsafe-base); run `rigfile apply` without the flag to restore it", st.UnsafeBase.Since)
+	} else {
+		baseDrift = doctorBase(e, pi, st, add)
+	}
+	if gts := st.Targets[gitmod.Target]; gts != nil && len(gts.Items) > 0 {
+		var bad []string
+		for _, d := range state.Check(gts.Items, nil) {
+			if d.Status != state.OK {
+				bad = append(bad, fmt.Sprintf("%s (%s)", d.Item.Key, d.Status))
+			}
+		}
+		if len(bad) == 0 {
+			add(lvOK, "git protections", "hooks, core.hooksPath and the global gitignore match what was applied")
+		} else {
+			add(lvFail, "git protections", "differ from what was applied: %s (see `rigfile diff`)", strings.Join(bad, "; "))
+		}
+	}
+	ts := primaryApplied(st)
+	if ts == nil {
 		add(lvWarn, "applied rig", "nothing applied yet: run `rigfile apply <rig-dir>`")
 	} else {
 		add(lvOK, "applied rig", "%s@%s   %s", ts.Rig.Name, ts.Rig.Version, ts.AppliedAt)
-		ds := state.Check(ts.Items, map[string]state.Probe{state.KindMCP: claudecode.MCPProbe(mcpClient(e))})
+		var ds []state.Drift
+		for _, at := range appliedTargets(st) {
+			probes := map[string]state.Probe{}
+			if at.T.Name == "claude-code" {
+				probes[state.KindMCP] = claudecode.MCPProbe(mcpClient(e))
+			}
+			ds = append(ds, state.Check(at.TS.Items, probes)...)
+		}
 		var bad []string
 		for _, d := range ds {
 			if d.Status != state.OK {
@@ -152,7 +192,21 @@ func cmdDoctor(args []string, e env) int {
 	default:
 		add(lvWarn, "secret store", "no OS keychain available; the encrypted-file fallback will be used (weaker)")
 	}
-	return printChecks(e, cs)
+	code := printChecks(e, cs)
+	if *fix {
+		ts := primaryApplied(st)
+		switch {
+		case !baseDrift && code == 0:
+			fmt.Fprintln(e.out, "nothing to fix")
+		case ts == nil || ts.Rig.Dir == "":
+			fmt.Fprintln(e.err, "rigfile: cannot fix: no rig directory is recorded; run `rigfile apply <rig-dir>` yourself")
+			return 1
+		default:
+			fmt.Fprintf(e.out, "\nre-applying %s (%s)\n\n", ts.Rig.Name, ts.Rig.Dir)
+			return cmdPlanApply("apply", []string{ts.Rig.Dir}, e)
+		}
+	}
+	return code
 }
 
 func printChecks(e env, cs []check) int {

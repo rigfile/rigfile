@@ -44,12 +44,14 @@ func TranslateRule(pi *platform.Info, r manifest.PermissionRule) (rule string, o
 		return fmt.Sprintf("%s(%s)", tool, p), true, nil
 	case "bash":
 		return fmt.Sprintf("Bash(%s)", val), true, nil
+	case "powershell":
+		return fmt.Sprintf("PowerShell(%s)", val), true, nil
 	case "web_fetch":
 		return fmt.Sprintf("WebFetch(domain:%s)", val), true, nil
 	case "mcp":
 		return "mcp__" + strings.ReplaceAll(val, ":", "__"), true, nil
 	default:
-		return "", false, fmt.Errorf("permission rule must set exactly one of read/edit/bash/web_fetch/mcp")
+		return "", false, fmt.Errorf("permission rule must set exactly one of read/edit/bash/powershell/web_fetch/mcp")
 	}
 }
 

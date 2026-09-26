@@ -249,7 +249,7 @@ func TestFreshApplyCreatesEverything(t *testing.T) {
 		t.Fatalf("PreToolUse hook: %v", pre)
 	}
 	stop := hooks["Stop"].([]any)[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
-	if !strings.HasSuffix(stop["command"].(string), "rigfile/hooks/notify/notify.sh") || len(stop["args"].([]any)) != 0 {
+	if !strings.HasSuffix(filepath.ToSlash(stop["command"].(string)), "rigfile/hooks/notify/notify.sh") || len(stop["args"].([]any)) != 0 {
 		t.Fatalf("Stop hook must use exec form with the owned script path: %v", stop)
 	}
 	// MCP: stdio server wrapped in rigfile exec with secret by reference only
@@ -586,7 +586,7 @@ func TestPlanRenderIsDeterministic(t *testing.T) {
 	if render(a) != render(b) {
 		t.Fatal("plan rendering must be deterministic")
 	}
-	out := render(a)
+	out := strings.ReplaceAll(render(a), `\`, "/") // the screen uses the OS separator
 	for _, want := range []string{"INSTRUCTIONS", "SKILLS", "AGENTS", "COMMANDS", "MCP SERVERS", "HOOKS", "PERMISSIONS", "~/.claude/skills/pdf"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("render missing %q:\n%s", want, out)

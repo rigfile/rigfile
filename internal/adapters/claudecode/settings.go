@@ -59,13 +59,16 @@ func matcherFor(m manifest.HookMatch) (matcher, ifRule string, err error) {
 			return "", "", fmt.Errorf("unknown tool %q in hook match", m.Tool)
 		}
 		matcher = n
+		if m.Tool == "edit" {
+			matcher = "Edit|MultiEdit|NotebookEdit" // every tool that edits files (S2-M5): a hook must not miss MultiEdit
+		}
 	}
 	switch {
 	case m.Command != "" && (m.Tool == "bash" || m.Tool == "powershell"):
 		ifRule = fmt.Sprintf("%s(%s)", matcher, m.Command)
 	case m.Path != "" && (m.Tool == "read" || m.Tool == "edit" || m.Tool == "write"):
-		n := matcher
-		if m.Tool == "write" {
+		n := toolNames[m.Tool]
+		if m.Tool == "write" || m.Tool == "edit" {
 			n = "Edit" // path rules for Write are never consulted; Edit(path) covers all writers (§8)
 		}
 		ifRule = fmt.Sprintf("%s(%s)", n, m.Path)
@@ -89,7 +92,14 @@ func (b *builder) settings(p *merge.Projection) {
 	var ops []engine.Op
 
 	// ---- permissions (add-only union; provably shadowed allows are dropped and reported) ----
-	pp, err := PlanPermissions(env.Plat, work, p.Permissions())
+	perms := p.Permissions()
+	if env.BaseSecure {
+		if wsl := WSLDenies(env.Plat); len(wsl) > 0 {
+			perms.Deny = append(perms.Deny, wsl...)
+			b.note("WSL detected: base-secure also denies reads of the Windows profile under /mnt/c/Users/*/ (SSH keys, cloud credentials, DPAPI). A Claude Code installed on the Windows side is a separate install: run rigfile there too.")
+		}
+	}
+	pp, err := PlanPermissions(env.Plat, work, perms)
 	if err != nil {
 		b.fail(fmt.Errorf("%s: %w", env.short(path), err))
 		return
@@ -129,6 +139,26 @@ func (b *builder) settings(p *merge.Projection) {
 		ops = append(ops, permOp)
 	}
 
+	// ---- base-secure settings ----
+	if env.BaseSecure {
+		if op, ok := b.settingOp(path, &work, "permissions.disableBypassPermissionsMode", `"disable"`,
+			"bypassPermissions mode skips the prompts that protect .git, .claude and shell rc files; base-secure turns it off (decision O8)"); ok {
+			ops = append(ops, op)
+		}
+	}
+
+	// ---- opt-in sandbox (S2-M5b) ----
+	if env.Sandbox {
+		ops = append(ops, b.sandboxOps(path, &work)...)
+	} else if env.State != nil {
+		for _, it := range env.State.Items {
+			if it.Path == path && it.Kind == state.KindJSONValue && strings.HasPrefix(it.Detail["path"], "sandbox.") {
+				b.note("sandbox.enabled and its companion settings that Rigfile added earlier are still in %s (their entry lists were removed); delete the \"sandbox\" block by hand to turn the sandbox off completely", env.short(path))
+				break
+			}
+		}
+	}
+
 	// ---- hooks ----
 	for _, h := range p.Hooks {
 		op, ok := b.hookOp(path, &work, h, p.OS)
@@ -142,7 +172,7 @@ func (b *builder) settings(p *merge.Projection) {
 
 	// ---- things Rigfile added earlier that the rig no longer wants ----
 	b.keepOwnedOnConflict(ops)
-	if env.State != nil {
+	if env.State != nil && !env.CheckOnly {
 		ids := b.plan.Identities()
 		for _, o := range ops {
 			for _, it := range append(append([]state.Item(nil), o.Items...), o.Keep...) {
@@ -178,7 +208,7 @@ func (b *builder) settings(p *merge.Projection) {
 				}
 				if n > 0 {
 					work = next
-					ops = append(ops, engine.Op{Category: "hook", Key: prev.Key, Symbol: engine.Removal, Runs: true,
+					ops = append(ops, engine.Op{Category: prev.Category, Key: prev.Key, Symbol: engine.Removal, Runs: prev.Category == "hook",
 						Summary: prev.Key + "   (no longer in the rig)"})
 				} else {
 					b.note("hook %q is no longer in the rig but its settings entry was edited or removed by hand; nothing removed", prev.Key)
@@ -198,6 +228,38 @@ func (b *builder) settings(p *merge.Projection) {
 		}
 	}
 	b.plan.Ops = append(b.plan.Ops, ops...)
+}
+
+// settingOp ensures a scalar setting exists with the wanted value, without ever overwriting the user's own
+// choice: an existing different value is reported and left alone.
+func (b *builder) settingOp(settingsPath string, work *[]byte, dotted, want, why string) (engine.Op, bool) {
+	env := b.env
+	segs := strings.Split(dotted, ".")
+	next, existing, added, err := jsonedit.SetMissingRaw(*work, segs, want)
+	if err != nil {
+		b.fail(fmt.Errorf("%s: %w", env.short(settingsPath), err))
+		return engine.Op{}, false
+	}
+	item := state.Item{Category: "setting", Key: dotted, Kind: state.KindJSONValue, Path: settingsPath, Hash: hashing.Bytes([]byte(want)),
+		Detail: map[string]string{"path": dotted, "value": want}}
+	op := engine.Op{Category: "setting", Key: dotted, Detail: []string{why}}
+	label := env.short(settingsPath) + "   " + dotted + " = " + want
+	switch {
+	case added:
+		*work = next
+		op.Symbol, op.Summary, op.Items = engine.Update, label, []state.Item{item}
+	case existing == strings.Trim(want, `"`):
+		op.Symbol, op.Summary = engine.Unchanged, label+"   (up to date)"
+		if _, mine := env.owned("setting", dotted, settingsPath); mine {
+			op.Items = []state.Item{item}
+		}
+	default:
+		op.Symbol, op.Summary = engine.Conflict, label+"   your settings already say "+existing+"; not changed"
+		if prev, mine := env.owned("setting", dotted, settingsPath); mine {
+			op.Keep = []state.Item{prev}
+		}
+	}
+	return op, true
 }
 
 func appendUniqueItem(list []state.Item, it state.Item) []state.Item {

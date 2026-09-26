@@ -542,3 +542,115 @@ func TestAddThenRemoveRestoresOriginal(t *testing.T) {
 		}
 	}
 }
+
+func TestSetMissingString(t *testing.T) {
+	path := []string{"permissions", "disableBypassPermissionsMode"}
+	// creates parents, in the document's own style; never touches other members
+	doc := "{\n  \"model\": \"opus\",\n  \"env\": {\"A\": \"1\"}\n}\n"
+	out, existing, added, err := SetMissingString([]byte(doc), path, "disable")
+	if err != nil || !added || existing != "" {
+		t.Fatalf("%v %v %q", err, added, existing)
+	}
+	want := "{\n  \"model\": \"opus\",\n  \"env\": {\"A\": \"1\"},\n  \"permissions\": {\n    \"disableBypassPermissionsMode\": \"disable\"\n  }\n}\n"
+	if string(out) != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", out, want)
+	}
+	// member into an existing object
+	doc = "{\n  \"permissions\": {\n    \"deny\": [\"x\"]\n  }\n}\n"
+	out, _, added, err = SetMissingString([]byte(doc), path, "disable")
+	if err != nil || !added || !strings.Contains(string(out), "\"deny\": [\"x\"],\n    \"disableBypassPermissionsMode\": \"disable\"") {
+		t.Fatalf("%v %v\n%s", err, added, out)
+	}
+	if v, ok := ReadString(out, path); !ok || v != "disable" {
+		t.Fatalf("%q %v", v, ok)
+	}
+	// an existing value is reported and never changed, whatever its type
+	for _, d := range []string{`{"permissions":{"disableBypassPermissionsMode":"other"}}`, `{"permissions":{"disableBypassPermissionsMode":true}}`} {
+		out, existing, added, err := SetMissingString([]byte(d), path, "disable")
+		if err != nil || added || string(out) != d || existing == "" {
+			t.Fatalf("%s: %v %v %q %s", d, err, added, existing, out)
+		}
+	}
+	// empty and compact documents; same value is a no-op
+	out, _, added, _ = SetMissingString(nil, path, "disable")
+	if !added || !strings.Contains(string(out), "\"permissions\": {") || !json.Valid(out) {
+		t.Fatalf("%s", out)
+	}
+	if _, _, added, _ := SetMissingString(out, path, "disable"); added {
+		t.Fatal("second call must be a no-op")
+	}
+	if out, _, _, _ := SetMissingString([]byte(`{}`), path, "disable"); string(out) != `{"permissions":{"disableBypassPermissionsMode":"disable"}}` {
+		t.Fatalf("%s", out)
+	}
+	// wrong shapes are errors, not overwrites
+	if _, _, _, err := SetMissingString([]byte(`{"permissions": 3}`), path, "x"); err == nil {
+		t.Fatal("a non-object parent must be an error")
+	}
+	if _, _, _, err := SetMissingString([]byte(`not json`), path, "x"); err == nil {
+		t.Fatal("invalid JSON must be an error")
+	}
+}
+
+func TestReplaceRawAndRemoveMemberKeepTheRestOfTheLayout(t *testing.T) {
+	doc := "{\n  \"a\": 1,   // no comments in JSON, but odd spacing survives\n  \"mcpServers\": {\n    \"one\": {\"command\": \"x\"},\n    \"two\": {\n      \"command\": \"y\"\n    },\n    \"three\": {\"command\": \"z\"}\n  },\n  \"z\": [1, 2]\n}\n"
+	doc = strings.Replace(doc, "   // no comments in JSON, but odd spacing survives", "", 1)
+	p := func(name string) []string { return []string{"mcpServers", name} }
+
+	// replace an object value
+	out, ok, err := ReplaceRaw([]byte(doc), p("two"), `{"command":"y2","args":["-x"]}`)
+	if err != nil || !ok || !json.Valid(out) {
+		t.Fatalf("%v %v\n%s", err, ok, out)
+	}
+	if !strings.Contains(string(out), "\"one\": {\"command\": \"x\"},") || !strings.Contains(string(out), "\"three\": {\"command\": \"z\"}") || !strings.Contains(string(out), "\"z\": [1, 2]") {
+		t.Fatalf("neighbours must be untouched:\n%s", out)
+	}
+	if _, ok, _ := ReplaceRaw([]byte(doc), p("missing"), `1`); ok {
+		t.Fatal("replace must not create members")
+	}
+
+	// remove middle, first and last members; document stays valid and tidy
+	cases := map[string][]string{"two": {"one", "three"}, "one": {"two", "three"}, "three": {"one", "two"}}
+	for name, want := range cases {
+		out, removed, err := RemoveMember([]byte(doc), p(name))
+		if err != nil || !removed || !json.Valid(out) {
+			t.Fatalf("remove %s: %v %v\n%s", name, err, removed, out)
+		}
+		var v struct {
+			MCP map[string]any `json:"mcpServers"`
+		}
+		_ = json.Unmarshal(out, &v)
+		if len(v.MCP) != 2 {
+			t.Fatalf("remove %s left %v\n%s", name, v.MCP, out)
+		}
+		for _, w := range want {
+			if _, ok := v.MCP[w]; !ok {
+				t.Fatalf("remove %s lost %s:\n%s", name, w, out)
+			}
+		}
+		if !strings.Contains(string(out), "\"a\": 1,") || !strings.Contains(string(out), "\"z\": [1, 2]") {
+			t.Fatalf("the rest of the file changed:\n%s", out)
+		}
+	}
+	// removing a member and re-adding it round-trips the surrounding bytes for the common shapes
+	out, _, _ = RemoveMember([]byte(doc), p("three"))
+	if !strings.Contains(string(out), "    },\n  },\n") && !strings.Contains(string(out), "    }\n  },\n") {
+		t.Fatalf("unexpected layout after removing the last member:\n%s", out)
+	}
+	// the only member, compact docs, and missing members
+	only := "{\n  \"mcpServers\": {\n    \"one\": {\"c\": 1}\n  }\n}\n"
+	out, removed, _ := RemoveMember([]byte(only), p("one"))
+	if !removed || !json.Valid(out) || strings.Contains(string(out), "one") {
+		t.Fatalf("%s", out)
+	}
+	out, removed, _ = RemoveMember([]byte(`{"mcpServers":{"a":1,"b":2}}`), p("a"))
+	if !removed || string(out) != `{"mcpServers":{"b":2}}` {
+		t.Fatalf("%s", out)
+	}
+	out, removed, _ = RemoveMember([]byte(`{"mcpServers":{"a":1,"b":2}}`), p("b"))
+	if !removed || string(out) != `{"mcpServers":{"a":1}}` {
+		t.Fatalf("%s", out)
+	}
+	if _, removed, _ := RemoveMember([]byte(doc), p("nope")); removed {
+		t.Fatal("a missing member is not removed")
+	}
+}

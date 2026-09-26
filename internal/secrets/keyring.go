@@ -23,6 +23,10 @@ func (KeyringStore) Set(ref string, value []byte) error {
 		return errors.New("secrets: value must be UTF-8 text without NUL bytes")
 	}
 	if err := keyring.Set(Service, ref, string(value)); err != nil {
+		if errors.Is(err, keyring.ErrSetDataTooBig) {
+			// Windows Credential Manager caps a secret at 2560 bytes (macOS at ~3000): a certificate or a JSON key file needs the file itself kept outside Rigfile.
+			return fmt.Errorf("keychain set %s: the value is too large for the OS keychain (about 2.5 KB); store a shorter value (a token rather than a whole key file)", ref)
+		}
 		return fmt.Errorf("keychain set %s: %w", ref, redact(err))
 	}
 	return nil

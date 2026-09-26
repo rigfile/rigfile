@@ -27,25 +27,42 @@ const Version = 1
 
 // Item kinds.
 const (
-	KindFile     = "file"      // a whole file Rigfile wrote; Hash = sha256 of content
-	KindTree     = "tree"      // a directory (a skill); Hash = hashing.Tree
-	KindRegion   = "region"    // a marker-delimited region inside a user file; Hash = marker hash; Detail: region, style
-	KindJSONList = "json-list" // one string inside a JSON array; Detail: list ("permissions.deny"), value
-	KindJSONRaw  = "json-raw"  // one structured entry in a JSON array (a hook definition); Detail: list, raw (compacted JSON)
-	KindMCP      = "mcp"       // an MCP server registered through the vendor CLI; Detail: name; checked by a probe
+	KindFile      = "file"       // a whole file Rigfile wrote; Hash = sha256 of content
+	KindTree      = "tree"       // a directory (a skill); Hash = hashing.Tree
+	KindRegion    = "region"     // a marker-delimited region inside a user file; Hash = marker hash; Detail: region, style
+	KindJSONList  = "json-list"  // one string inside a JSON array; Detail: list ("permissions.deny"), value
+	KindJSONRaw   = "json-raw"   // one structured entry in a JSON array (a hook definition); Detail: list, raw (compacted JSON)
+	KindJSONValue = "json-value" // a scalar member Rigfile added to a JSON file; Detail: path ("permissions.x"), value (raw JSON text)
+	KindMCP       = "mcp"        // an MCP server registered through the vendor CLI; Detail: name; checked by a probe
 )
 
 // State is the whole file.
 type State struct {
 	Version int                     `json:"version"`
 	Targets map[string]*TargetState `json:"targets"`
+	// UnsafeBase is set while the last apply skipped rigfile/base-secure (--i-understand-unsafe-base). doctor
+	// shows it as a red item until a normal apply clears it.
+	UnsafeBase *UnsafeBase `json:"unsafeBase,omitempty"`
+	// Prefs are choices that persist across applies (so a later `apply` without the flag keeps them).
+	Prefs Prefs `json:"prefs,omitempty"`
+}
+
+// Prefs are sticky options.
+type Prefs struct {
+	Sandbox bool `json:"sandbox,omitempty"` // opt-in Claude Code sandbox settings (S2-M5b)
+}
+
+// UnsafeBase records that the safety base layer was deliberately skipped.
+type UnsafeBase struct {
+	Since string `json:"since"` // RFC 3339
 }
 
 // RigRef identifies what was applied.
 type RigRef struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
-	Hash    string `json:"hash"` // hash of the merged model for this target
+	Hash    string `json:"hash"`          // hash of the merged model for this target
+	Dir     string `json:"dir,omitempty"` // absolute rig directory of the last apply (so `doctor --fix` can re-apply it)
 }
 
 // TargetState is what was applied for one target (e.g. "claude-code").
@@ -274,6 +291,23 @@ func checkOne(it Item, probes map[string]Probe) (Status, string) {
 		}
 		return Missing, "the entry was removed"
 	}
+	if it.Kind == KindJSONValue {
+		doc, err := os.ReadFile(it.Path)
+		if errors.Is(err, os.ErrNotExist) {
+			return Missing, "file is gone"
+		}
+		if err != nil {
+			return Unknown, err.Error()
+		}
+		v, ok := jsonedit.ReadValueRaw(doc, splitPath(it.Detail["path"]))
+		switch {
+		case !ok:
+			return Missing, "the setting was removed"
+		case v != it.Detail["value"]:
+			return Modified, "the setting was changed to " + v
+		}
+		return OK, ""
+	}
 	if it.Kind == KindJSONRaw {
 		doc, err := os.ReadFile(it.Path)
 		if errors.Is(err, os.ErrNotExist) {
@@ -315,5 +349,5 @@ func splitPath(p string) []string {
 
 // Identity is a stable key for an item: two records with the same identity describe the same owned thing.
 func Identity(it Item) string {
-	return it.Category + "|" + it.Key + "|" + it.Kind + "|" + it.Path + "|" + it.Detail["list"] + "|" + it.Detail["value"] + "|" + it.Detail["raw"] + "|" + it.Detail["region"] + "|" + it.Detail["name"]
+	return it.Category + "|" + it.Key + "|" + it.Kind + "|" + it.Path + "|" + it.Detail["list"] + "|" + it.Detail["value"] + "|" + it.Detail["raw"] + "|" + it.Detail["region"] + "|" + it.Detail["name"] + "|" + it.Detail["path"]
 }

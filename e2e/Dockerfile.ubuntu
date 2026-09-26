@@ -1,4 +1,5 @@
 FROM ubuntu:24.04
+RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git ca-certificates >/dev/null && rm -rf /var/lib/apt/lists/*
 RUN useradd -m dev
 COPY build/rigfile /usr/local/bin/rigfile
 COPY fake-claude /usr/local/bin/claude

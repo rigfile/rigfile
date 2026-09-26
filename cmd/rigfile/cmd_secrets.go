@@ -170,7 +170,7 @@ func secretsList(e env, pi *platform.Info) int {
 		fmt.Fprintln(e.err, "rigfile:", err)
 		return 1
 	}
-	ts := s.Targets[session.Target]
+	ts := primaryApplied(s)
 	if ts == nil || len(ts.Needs) == 0 {
 		fmt.Fprintln(e.out, "no secrets or logins are required by the applied rig")
 		return 0

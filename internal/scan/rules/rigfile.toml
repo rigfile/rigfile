@@ -1,0 +1,30 @@
+# Rigfile's own rules, in gitleaks' format, for credential shapes the pinned gitleaks default config does not
+# cover (found by the S2-M2 corpus; see docs/scanner-metrics.md). Same evaluation semantics as gitleaks rules.
+# Every rule needs a corpus family that exercises it.
+
+title = "rigfile additions"
+
+[[rules]]
+id = "rigfile-url-credentials"
+description = "Detected a password embedded in a URL (database, broker or basic-auth URL)."
+regex = '''(?i)\b[a-z][a-z0-9+.-]{1,20}://[^\s:/@'"`<>{}$]{0,64}:([^\s:/@'"`<>{}$]{8,128})@[a-z0-9._\[\]-]+'''
+entropy = 3.0
+keywords = ["://"]
+[[rules.allowlists]]
+stopwords = ["password", "passwd", "changeme", "change-me", "example", "placeholder", "yourpass", "xxxx", "secret", "redacted", "12345678"]
+
+[[rules]]
+id = "rigfile-netrc-password"
+description = "Detected a password in a netrc-style machine/login/password entry."
+regex = '''(?i)\bmachine\s+\S+(?:\s+login\s+\S+)?\s+password\s+(\S{6,})'''
+entropy = 3.0
+keywords = ["machine"]
+[[rules.allowlists]]
+stopwords = ["password", "changeme", "example", "placeholder", "xxxx"]
+
+# A value assigned to a name that ENDS in hash/digest/fingerprint/checksum/etag/shaNNN is a derived
+# value, not a credential (password_hash, token_hash, key_fingerprint). Found by the S2-M2 corpus.
+[[allowlists]]
+description = "hash-like assignment names"
+regexTarget = "line"
+regexes = ['''(?i)(?:hash|digest|fingerprint|checksum|etag|sha(?:1|224|256|384|512)?)["']?\s*[:=]''']

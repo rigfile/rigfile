@@ -7,22 +7,23 @@ import (
 )
 
 // PermissionRule is one canonical permission rule (schema $defs/permissionRule). Exactly one of
-// Read/Edit/Bash/WebFetch/MCP is set on a valid manifest.
+// Read/Edit/Bash/PowerShell/WebFetch/MCP is set on a valid manifest.
 type PermissionRule struct {
-	Read     string   `yaml:"read"`
-	Edit     string   `yaml:"edit"`
-	Bash     string   `yaml:"bash"`
-	WebFetch string   `yaml:"web_fetch"`
-	MCP      string   `yaml:"mcp"`
-	Reason   string   `yaml:"reason"`
-	OS       []string `yaml:"os"`
-	Targets  []string `yaml:"targets"`
+	Read       string   `yaml:"read"`
+	Edit       string   `yaml:"edit"`
+	Bash       string   `yaml:"bash"`
+	PowerShell string   `yaml:"powershell"`
+	WebFetch   string   `yaml:"web_fetch"`
+	MCP        string   `yaml:"mcp"`
+	Reason     string   `yaml:"reason"`
+	OS         []string `yaml:"os"`
+	Targets    []string `yaml:"targets"`
 }
 
 // Kind returns which single field is set ("" if none or several).
 func (r PermissionRule) Kind() (kind, value string) {
 	n := 0
-	for k, v := range map[string]string{"read": r.Read, "edit": r.Edit, "bash": r.Bash, "web_fetch": r.WebFetch, "mcp": r.MCP} {
+	for k, v := range map[string]string{"read": r.Read, "edit": r.Edit, "bash": r.Bash, "powershell": r.PowerShell, "web_fetch": r.WebFetch, "mcp": r.MCP} {
 		if v != "" {
 			n++
 			kind, value = k, v

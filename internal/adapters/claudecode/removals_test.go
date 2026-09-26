@@ -118,7 +118,7 @@ func TestHandEditedOrphansAreLeftInPlaceAndDisowned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	notes := strings.Join(p2.Notes, "\n")
+	notes := strings.ReplaceAll(strings.Join(p2.Notes, "\n"), `\`, "/")
 	for _, want := range []string{`agent "reviewer" is no longer in the rig but was edited by hand`, `skill "pdf" is no longer in the rig but was edited by hand`, `section "coding-style" in ~/.claude/CLAUDE.md is no longer in the rig but was edited by hand`} {
 		if !strings.Contains(notes, want) {
 			t.Errorf("missing note %q in:\n%s", want, notes)
@@ -201,5 +201,37 @@ func TestEnginePlanApplyReplacesOwnership(t *testing.T) {
 	bad := &engine.Plan{Ops: []engine.Op{{Category: "c", Key: "k", Symbol: engine.New, Do: func(*engine.Exec) error { return os.ErrPermission }}}}
 	if err := bad.Apply(&engine.Exec{}, ts2); err == nil || len(ts2.Items) != 1 {
 		t.Fatalf("failed apply must not modify state: %v %+v", err, ts2.Items)
+	}
+}
+
+func TestSandboxProfileNotesMissingLinuxDependenciesAndSkipsWindows(t *testing.T) {
+	r := newRig(t, nil)
+	p, err := r.plan(Env{Sandbox: true, Have: func(string) bool { return false }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(p.Notes, "\n")
+	if !strings.Contains(joined, "bubblewrap and socat") || !strings.Contains(joined, "UNSANDBOXED") || !strings.Contains(joined, "Rigfile never runs sudo") {
+		t.Fatalf("missing bwrap/socat must be explained, not silently ignored:\n%s", joined)
+	}
+	if !strings.Contains(p.Notes[0], "sandbox") {
+		t.Fatalf("%v", p.Notes)
+	}
+	// dependencies present: no note
+	p, _ = r.plan(Env{Sandbox: true, Have: func(string) bool { return true }})
+	for _, n := range p.Notes {
+		if strings.Contains(n, "bubblewrap") {
+			t.Fatalf("unexpected note: %s", n)
+		}
+	}
+	// native Windows: skipped with a note, no sandbox settings
+	win, _ := r.plan(Env{Sandbox: true, Plat: r.plat("windows")})
+	for _, o := range win.Ops {
+		if strings.HasPrefix(o.Key, "sandbox.") {
+			t.Fatalf("sandbox settings must not be planned on Windows: %+v", o)
+		}
+	}
+	if !strings.Contains(strings.Join(win.Notes, "\n"), "not available on native Windows") {
+		t.Fatalf("%v", win.Notes)
 	}
 }

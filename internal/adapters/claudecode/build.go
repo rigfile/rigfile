@@ -46,7 +46,9 @@ func Build(env Env, p *merge.Projection) (*engine.Plan, error) {
 	b.commands(p)
 	b.mcp(p)
 	b.settings(p)
-	b.fileOrphans()
+	if !b.env.CheckOnly {
+		b.fileOrphans()
+	}
 	if b.err != nil {
 		return nil, b.err
 	}
@@ -85,7 +87,7 @@ func (b *builder) instructions(p *merge.Projection) {
 		groups[dest] = append(groups[dest], it)
 	}
 	// files that hold sections from an earlier apply but no longer receive any: still need cleaning
-	if b.env.State != nil {
+	if b.env.State != nil && !b.env.CheckOnly {
 		for _, it := range b.env.State.Items {
 			if it.Kind == state.KindRegion {
 				addDest(it.Path)
@@ -157,7 +159,7 @@ func (b *builder) instructionFile(dest string, items []merge.Prov[manifest.Instr
 		current[it.V.ID] = true
 	}
 	removedAny := false
-	if b.env.State != nil {
+	if b.env.State != nil && !b.env.CheckOnly {
 		for _, prev := range b.env.State.Items {
 			if prev.Kind != state.KindRegion || prev.Path != dest || current[prev.Detail["region"]] {
 				continue

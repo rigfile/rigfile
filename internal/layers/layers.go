@@ -73,6 +73,25 @@ func (d DirSource) Resolve(ref Ref) (*manifest.Loaded, error) {
 	return l, nil
 }
 
+// WithBase makes rigfile/base-secure resolve to the given (embedded) layer instead of anything on disk, so no
+// directory can stand in for it. Every other reference goes to next.
+func WithBase(base *manifest.Loaded, next Source) Source { return baseSource{base, next} }
+
+type baseSource struct {
+	base *manifest.Loaded
+	next Source
+}
+
+func (b baseSource) Resolve(ref Ref) (*manifest.Loaded, error) {
+	if ref.Name == merge.BaseSecure {
+		if b.base == nil {
+			return nil, &NotFoundError{ref}
+		}
+		return b.base, nil
+	}
+	return b.next.Resolve(ref)
+}
+
 // Result is the resolved layer list plus notes for the plan screen.
 type Result struct {
 	Layers   []merge.Layer
@@ -96,7 +115,7 @@ func Resolve(top *manifest.Loaded, src Source) (*Result, error) {
 		if !errors.As(err, &nf) {
 			return nil, err
 		}
-		r.Warnings = append(r.Warnings, merge.BaseSecure+" is not available yet (arrives in Stage 2); applying without the safety base layer")
+		r.Warnings = append(r.Warnings, merge.BaseSecure+" is not part of this run")
 	}
 	if err := r.walk(top, src, done, nil, 0, false); err != nil {
 		return nil, err

@@ -71,7 +71,7 @@ func (b *builder) mcp(p *merge.Projection) {
 	env := b.env
 	defer func() { b.keepOwnedOnConflict(b.plan.Ops) }()
 	// servers Rigfile registered earlier that the rig no longer has: removed if the CLI is available
-	if env.State != nil {
+	if env.State != nil && !env.CheckOnly {
 		current := map[string]bool{}
 		for _, s := range p.MCPServers {
 			current[s.Name] = true

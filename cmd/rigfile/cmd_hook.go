@@ -3,12 +3,47 @@ package main
 import (
 	"fmt"
 
+	"github.com/digitaldreamer3462/rigfile/internal/githook"
 	"github.com/digitaldreamer3462/rigfile/internal/hook"
 )
+
+// cmdGitHook runs the git-side checks (plan §8.1b-c). The files git executes are one-line shims that call
+// `rigfile hook <name> "$@"`; all logic lives here.
+func cmdGitHook(args []string, e env) int {
+	g := githook.Git{}
+	switch args[0] {
+	case "pre-commit":
+		return githook.PreCommit(g, githook.DefaultScanner, e.err)
+	case "commit-msg":
+		if len(args) < 2 {
+			fmt.Fprintln(e.err, "usage: rigfile hook commit-msg <message-file>")
+			return 2
+		}
+		return githook.CommitMsg(githook.DefaultScanner, args[1], e.err)
+	case "pre-push":
+		remote := ""
+		if len(args) > 1 {
+			remote = args[1]
+		}
+		return githook.PrePush(g, githook.DefaultScanner, remote, e.in, e.err)
+	default: // reference-transaction <state>
+		if len(args) < 2 {
+			fmt.Fprintln(e.err, "usage: rigfile hook reference-transaction <state>")
+			return 2
+		}
+		return githook.ReferenceTransaction(g, githook.DefaultScanner, args[1], e.in, e.err)
+	}
+}
 
 // cmdHook runs a built-in agent hook. Claude Code passes the event JSON on stdin. `hook run <name>` is
 // what the adapter writes into settings.json; `hook pre-tool-use` is kept as an alias for `run guard`.
 func cmdHook(args []string, e env) int {
+	if len(args) > 0 {
+		switch args[0] {
+		case "pre-commit", "commit-msg", "pre-push", "reference-transaction":
+			return cmdGitHook(args, e)
+		}
+	}
 	name := ""
 	switch {
 	case len(args) == 2 && args[0] == "run":
@@ -16,7 +51,7 @@ func cmdHook(args []string, e env) int {
 	case len(args) == 1 && args[0] == "pre-tool-use":
 		name = "guard"
 	default:
-		fmt.Fprintln(e.err, "usage: rigfile hook run <name>")
+		fmt.Fprintln(e.err, "usage: rigfile hook run <name> | pre-commit | pre-push <remote> | reference-transaction <state>")
 		return 2
 	}
 	if !hook.KnownBuiltin(name) {
@@ -29,17 +64,37 @@ func cmdHook(args []string, e env) int {
 		fmt.Fprintln(e.err, "rigfile hook: could not read hook input; blocking:", err)
 		return 2
 	}
+	scf := hook.ScannerFunc(githook.DefaultScanner)
 	switch name {
-	case "guard":
+	case "guard", "write-guard":
 		if in.HookEventName != "" && in.HookEventName != "PreToolUse" {
 			return 0 // not our event: no opinion
 		}
-		out, err := hook.PreToolUse(in).Output()
+		var d hook.Decision
+		if name == "guard" {
+			d = hook.PreToolUse(in)
+		} else {
+			d = hook.WriteGuard(in, scf)
+		}
+		out, err := d.Output()
 		if err != nil {
 			fmt.Fprintln(e.err, "rigfile hook:", err)
 			return 2
 		}
 		if out != nil {
+			fmt.Fprintln(e.out, string(out))
+		}
+	case "redact":
+		if in.HookEventName != "" && in.HookEventName != "PostToolUse" {
+			return 0
+		}
+		out, ok, err := hook.Redact(in, scf)
+		if err != nil {
+			// PostToolUse cannot un-run the tool and exit 2 would only add noise: fail open, loudly.
+			fmt.Fprintln(e.err, "rigfile hook: WARNING: could not check tool output for secrets:", err)
+			return 0
+		}
+		if ok {
 			fmt.Fprintln(e.out, string(out))
 		}
 	}

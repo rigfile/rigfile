@@ -210,9 +210,6 @@ func TestOpenPrefersKeychainThenFallsBackToFile(t *testing.T) {
 }
 
 func TestConcurrentWritersDoNotLoseUpdates(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("advisory locking arrives with Windows support (Stage 3)")
-	}
 	path := filepath.Join(t.TempDir(), "secrets.age")
 	newStore := func() *FileStore {
 		return &FileStore{Path: path, WorkFactor: 10, Passphrase: func() (string, error) { return "correct horse battery staple", nil }}

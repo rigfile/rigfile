@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
+	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
 )
 
@@ -70,7 +72,8 @@ type machine struct {
 
 func newMachine(t *testing.T) *machine {
 	h := t.TempDir()
-	return &machine{t: t, home: h, mcp: newFakeMCP(), tools: &fakeTools{have: map[string]bool{"npm": true}}, env: map[string]string{"HOME": h, "USERPROFILE": h, "PATH": os.Getenv("PATH")}}
+	return &machine{t: t, home: h, mcp: newFakeMCP(), tools: &fakeTools{have: map[string]bool{"npm": true}}, env: map[string]string{"HOME": h, "USERPROFILE": h, "PATH": os.Getenv("PATH"),
+		"APPDATA": filepath.Join(h, "AppData", "Roaming"), "LOCALAPPDATA": filepath.Join(h, "AppData", "Local")}}
 }
 
 type result struct {
@@ -90,7 +93,30 @@ func (m *machine) run(stdin string, args ...string) result {
 			return "", errors.New("not found")
 		},
 	})
-	return result{code, out.String(), errb.String()}
+	// Plan screens print paths with the OS separator; the assertions are written with "/", so compare like with like.
+	return result{code, portable(out.String()), portable(errb.String())}
+}
+
+// portable turns Windows path separators in program output into "/" (a no-op elsewhere).
+func portable(s string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ReplaceAll(s, `\`, "/")
+	}
+	return s
+}
+
+// stateDir is where Rigfile keeps state.json and backups on this OS for this machine's environment
+// (~/.rigfile on macOS/Linux, %LOCALAPPDATA%\rigfile on Windows).
+func (m *machine) stateDir() string {
+	pi, err := platform.New(platform.Options{Getenv: func(k string) string { return m.env[k] }})
+	if err != nil {
+		m.t.Fatal(err)
+	}
+	d, err := pi.StateDir()
+	if err != nil {
+		m.t.Fatal(err)
+	}
+	return d
 }
 
 func put(t *testing.T, root, rel, content string, mode os.FileMode) {
@@ -174,8 +200,8 @@ func TestPlanShowsTheReviewScreenAndWritesNothing(t *testing.T) {
 			t.Errorf("plan output missing %q:\n%s", want, r.out)
 		}
 	}
-	for _, p := range []string{".claude", ".rigfile"} {
-		if _, err := os.Stat(filepath.Join(m.home, p)); !os.IsNotExist(err) {
+	for _, p := range []string{filepath.Join(m.home, ".claude"), m.stateDir()} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
 			t.Fatalf("plan created %s", p)
 		}
 	}
@@ -205,7 +231,7 @@ func TestApplyThenIdempotentThenDriftThenRollback(t *testing.T) {
 		t.Fatal("lockfile not written next to the rig")
 	}
 	if runtime.GOOS != "windows" {
-		if st, _ := os.Stat(filepath.Join(m.home, ".rigfile", "state.json")); st.Mode().Perm() != 0o600 {
+		if st, _ := os.Stat(filepath.Join(m.stateDir(), "state.json")); st.Mode().Perm() != 0o600 {
 			t.Fatalf("state.json mode %v", st.Mode().Perm())
 		}
 	}
@@ -214,12 +240,12 @@ func TestApplyThenIdempotentThenDriftThenRollback(t *testing.T) {
 	}
 
 	// second apply changes nothing and creates no new run
-	runsBefore, _ := apply.ListRuns(filepath.Join(m.home, ".rigfile", "backups"))
+	runsBefore, _ := apply.ListRuns(filepath.Join(m.stateDir(), "backups"))
 	r = m.run("", "apply", rig, "--yes")
 	if r.code != 0 || !strings.Contains(r.out, "nothing to change") || !strings.Contains(r.out, "no changes") {
 		t.Fatalf("%+v", r)
 	}
-	if runsAfter, _ := apply.ListRuns(filepath.Join(m.home, ".rigfile", "backups")); len(runsAfter) != len(runsBefore) {
+	if runsAfter, _ := apply.ListRuns(filepath.Join(m.stateDir(), "backups")); len(runsAfter) != len(runsBefore) {
 		t.Fatalf("a no-op apply must not create a run: %d -> %d", len(runsBefore), len(runsAfter))
 	}
 
@@ -731,5 +757,429 @@ func TestJiaRigFixture(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(m.home, ".claude")); !os.IsNotExist(err) {
 		t.Fatal("plan wrote to the machine")
+	}
+}
+
+func TestGitProtectionsArePartOfApplyDiffDoctorAndRollback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("git module targets macOS and Linux in Stage 2")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	m := newMachine(t)
+	rig := newRig(t)
+
+	r := m.run("", "plan", rig)
+	for _, want := range []string{"Git protections (base-secure)", "GIT", "core.hooksPath", "⚠ executes code", "reference-transaction"} {
+		if r.code != 0 || !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".gitconfig")); !os.IsNotExist(err) {
+		t.Fatal("plan must not write the git config")
+	}
+
+	if r := m.run("", "apply", rig, "--yes"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	conf := string(mustRead(t, filepath.Join(m.home, ".gitconfig")))
+	hooks := filepath.Join(m.home, ".config", "rigfile", "git-hooks")
+	if !strings.Contains(conf, "hooksPath") || !strings.Contains(conf, hooks) {
+		t.Fatalf("global config lacks the hooks path:\n%s", conf)
+	}
+	if !strings.Contains(string(mustRead(t, filepath.Join(m.home, ".config", "git", "ignore"))), "!.env.example") {
+		t.Fatal("global gitignore block missing")
+	}
+	if r := m.run("", "diff"); r.code != 0 || !strings.Contains(r.out, "Git protections") || !strings.Contains(r.out, "no drift") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "doctor"); !strings.Contains(r.out, "git protections") || strings.Contains(r.out, "✘ git protections") {
+		t.Fatalf("%+v", r)
+	}
+	// a hand-edit of a hook shows as drift
+	_ = os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	if r := m.run("", "diff"); r.code != 1 || !strings.Contains(r.out, "hooks") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "doctor"); r.code != 1 || !strings.Contains(r.out, "✘ git protections") {
+		t.Fatalf("%+v", r)
+	}
+	// rollback removes the git changes together with everything else from that run
+	if r := m.run("", "rollback", "--force"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	for _, p := range []string{filepath.Join(m.home, ".gitconfig"), hooks} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("%s should be gone after rollback", p)
+		}
+	}
+}
+
+func TestNoGitFlagSkipsTheGitModule(t *testing.T) {
+	m := newMachine(t)
+	rig := newRig(t)
+	r := m.run("", "plan", rig, "--no-git")
+	if strings.Contains(r.out, "Git protections") {
+		t.Fatalf("%s", r.out)
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	for _, p := range []string{".gitconfig", ".config/git", ".config/rigfile"} {
+		if _, err := os.Stat(filepath.Join(m.home, p)); !os.IsNotExist(err) {
+			t.Fatalf("--no-git must not create %s", p)
+		}
+	}
+}
+
+func TestHookWriteGuardAndRedactCommands(t *testing.T) {
+	m := newMachine(t)
+	tok := "gh" + "p_" + "wJ4kP9xQm2Rt7VbN5cLd8HyZaE3sUfG6TiOo"
+	pre, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_input": map[string]string{"file_path": "a.py", "content": "token = \"" + tok + "\"\n"}})
+	r := m.run(string(pre), "hook", "run", "write-guard")
+	if r.code != 0 || !strings.Contains(r.out, `"permissionDecision":"deny"`) || strings.Contains(r.out, tok) {
+		t.Fatalf("%+v", r)
+	}
+	clean, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_input": map[string]string{"file_path": "a.py", "content": "print(1)\n"}})
+	if r := m.run(string(clean), "hook", "run", "write-guard"); r.code != 0 || r.out != "" {
+		t.Fatalf("%+v", r)
+	}
+	post, _ := json.Marshal(map[string]any{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": map[string]string{"stdout": "K=" + tok + "\n"}})
+	r = m.run(string(post), "hook", "run", "redact")
+	if r.code != 0 || !strings.Contains(r.out, "updatedToolOutput") || !strings.Contains(r.out, "[REDACTED:github-pat]") || strings.Contains(r.out, tok) {
+		t.Fatalf("%+v", r)
+	}
+	// wrong event: no opinion
+	if r := m.run(string(post), "hook", "run", "write-guard"); r.code != 0 || r.out != "" {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run(string(pre), "hook", "run", "redact"); r.code != 0 || r.out != "" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+const plainRigYAML = `apiVersion: rigfile.dev/v1
+name: jiaxu/plain
+version: 1.0.0
+commands:
+  - {path: commands/hi.md}
+`
+
+func plainRig(t *testing.T, extra string) string {
+	dir := t.TempDir()
+	put(t, dir, "rigfile.yaml", plainRigYAML+extra, 0o644)
+	put(t, dir, "commands/hi.md", "hi", 0o644)
+	return dir
+}
+
+func TestBaseSecureIsAppliedToEveryRig(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp) // the embedded layer is extracted here for the run and must be cleaned up
+	m := newMachine(t)
+	rig := plainRig(t, "")
+
+	r := m.run("", "plan", rig, "--no-git")
+	for _, want := range []string{"rigfile/base-secure → jiaxu/plain", "security-baseline", "Read(~/.ssh/**)", "Bash(git*--no-verify*)", "Bash(git push*)",
+		"base-secure-guard", "base-secure-write-guard", "base-secure-redact", "disableBypassPermissionsMode", "⚠ executes code"} {
+		if r.code != 0 || !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if left, _ := filepath.Glob(filepath.Join(tmp, "rigfile-base-secure-*")); len(left) != 0 {
+		t.Fatalf("the extracted base layer was not cleaned up: %v", left)
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".claude")); !os.IsNotExist(err) {
+		t.Fatal("plan wrote to the machine")
+	}
+
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	settings := string(mustRead(t, filepath.Join(m.home, ".claude", "settings.json")))
+	for _, want := range []string{`"Read(~/.ssh/**)"`, `"Bash(git*--no-verify*)"`, `"Bash(git push*)"`, `"Edit(~/.config/rigfile/**)"`,
+		`"disableBypassPermissionsMode": "disable"`, `"matcher": "Edit|MultiEdit|NotebookEdit"`, `"PostToolUse"`, `"write-guard"`, `"redact"`, `"guard"`} {
+		if !strings.Contains(settings, want) {
+			t.Errorf("settings.json missing %s:\n%s", want, settings)
+		}
+	}
+	if md := string(mustRead(t, filepath.Join(m.home, ".claude", "CLAUDE.md"))); !strings.Contains(md, "Security baseline (managed by rigfile/base-secure") {
+		t.Fatalf("instructions snippet missing:\n%s", md)
+	}
+	if r := m.run("", "diff"); r.code != 0 || !strings.Contains(r.out, "no drift") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "doctor"); strings.Contains(r.out, "✘ base-secure") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestBaseSecureCannotBeReplacedOrImpersonatedByARig(t *testing.T) {
+	m := newMachine(t)
+	// a rig cannot replace a locked base hook
+	rig := plainRig(t, "hooks:\n  - {id: base-secure-guard, event: pre_tool_use, match: {tool: bash}, run: 'builtin:guard'}\n")
+	if r := m.run("", "plan", rig, "--no-git"); r.code != 1 || !strings.Contains(r.err, "base-secure") {
+		t.Fatalf("replacing a locked item must be refused: %+v", r)
+	}
+	// a rig cannot take the reserved name, and a same-named layer on disk cannot stand in for the embedded one
+	bad := t.TempDir()
+	put(t, bad, "rigfile.yaml", "apiVersion: rigfile.dev/v1\nname: rigfile/base-secure\nversion: 9.9.9\n", 0o644)
+	if r := m.run("", "plan", bad, "--no-git"); r.code != 1 || !strings.Contains(r.err, "reserved") {
+		t.Fatalf("%+v", r)
+	}
+	layers := t.TempDir()
+	put(t, layers, "rigfile/base-secure/rigfile.yaml", "apiVersion: rigfile.dev/v1\nname: rigfile/base-secure\nversion: 9.9.9\n", 0o644)
+	good := plainRig(t, "")
+	r := m.run("", "plan", good, "--layers", layers, "--no-git")
+	if r.code != 0 || !strings.Contains(r.out, "Read(~/.ssh/**)") || strings.Contains(r.out, "9.9.9") {
+		t.Fatalf("the embedded base must win over a directory layer:\n%+v", r)
+	}
+	// an allow rule that base-secure denies has no effect and says so (deny always wins)
+	rig = plainRig(t, "permissions:\n  allow:\n    - {read: '~/.ssh/**'}\n")
+	if r := m.run("", "plan", rig, "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	settings := string(mustRead(t, filepath.Join(m.home, ".claude", "settings.json")))
+	var doc struct {
+		Permissions struct{ Allow []string } `json:"permissions"`
+	}
+	_ = json.Unmarshal([]byte(settings), &doc)
+	for _, a := range doc.Permissions.Allow {
+		if strings.Contains(a, ".ssh") {
+			t.Fatalf("an allow shadowed by a base deny must not be written: %v", doc.Permissions.Allow)
+		}
+	}
+}
+
+func TestUnsafeBaseFlagIsLoudRecordedAndReversible(t *testing.T) {
+	m := newMachine(t)
+	rig := plainRig(t, "")
+	r := m.run("", "plan", rig, "--no-git", "--i-understand-unsafe-base")
+	if r.code != 0 || !strings.Contains(r.out, "--i-understand-unsafe-base") || !strings.Contains(r.out, "SKIPPED") || strings.Contains(r.out, "Read(~/.ssh/**)") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git", "--i-understand-unsafe-base"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	sd := filepath.Join(m.stateDir(), "state.json")
+	if !strings.Contains(string(mustRead(t, sd)), `"unsafeBase"`) {
+		t.Fatal("the unsafe apply must be recorded in state.json")
+	}
+	if r := m.run("", "doctor"); r.code != 1 || !strings.Contains(r.out, "✘ base-secure") || !strings.Contains(r.out, "DISABLED") {
+		t.Fatalf("doctor must show it red: %+v", r)
+	}
+	// a normal apply restores the layer and clears the record (the lockfile changed: the base layer is back)
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 1 || !strings.Contains(r.err, "lockfile") {
+		t.Fatalf("restoring the base layer changes the lock, which must be accepted explicitly: %+v", r)
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git", "--update-lock"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if strings.Contains(string(mustRead(t, sd)), `"unsafeBase"`) {
+		t.Fatal("a normal apply must clear the unsafe record")
+	}
+	if r := m.run("", "doctor"); strings.Contains(r.out, "✘ base-secure") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestExistingBypassModeSettingIsNeverOverwritten(t *testing.T) {
+	m := newMachine(t)
+	put(t, filepath.Join(m.home, ".claude"), "settings.json", "{\n  \"permissions\": {\n    \"disableBypassPermissionsMode\": \"other\"\n  }\n}\n", 0o644)
+	rig := plainRig(t, "")
+	r := m.run("", "apply", rig, "--yes", "--no-git")
+	if r.code != 3 || !strings.Contains(r.out, "your settings already say other") {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(string(mustRead(t, filepath.Join(m.home, ".claude", "settings.json"))), `"other"`) {
+		t.Fatal("the user's own value was overwritten")
+	}
+}
+
+func TestSandboxProfileIsOptInStickyAndNeverOverwritesUserSettings(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sandbox profile is macOS/Linux")
+	}
+	m := newMachine(t)
+	rig := plainRig(t, "")
+	settingsPath := filepath.Join(m.home, ".claude", "settings.json")
+
+	// off by default
+	if r := m.run("", "plan", rig, "--no-git"); strings.Contains(r.out, "sandbox.") {
+		t.Fatalf("the sandbox must be opt-in:\n%s", r.out)
+	}
+	// opt in
+	r := m.run("", "plan", rig, "--no-git", "--sandbox")
+	for _, want := range []string{"sandbox.enabled = true", "sandbox.allowUnsandboxedCommands = false", "sandbox.credentials.files", "sandbox.credentials.envVars"} {
+		if r.code != 0 || !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git", "--sandbox"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	var doc struct {
+		Sandbox struct {
+			Enabled                  bool `json:"enabled"`
+			AllowUnsandboxedCommands bool `json:"allowUnsandboxedCommands"`
+			Credentials              struct {
+				Files   []struct{ Path, Mode string } `json:"files"`
+				EnvVars []struct{ Name, Mode string } `json:"envVars"`
+			} `json:"credentials"`
+		} `json:"sandbox"`
+	}
+	if err := json.Unmarshal(mustRead(t, settingsPath), &doc); err != nil || !doc.Sandbox.Enabled || doc.Sandbox.AllowUnsandboxedCommands || len(doc.Sandbox.Credentials.Files) < 10 || len(doc.Sandbox.Credentials.EnvVars) < 5 {
+		t.Fatalf("%v %+v", err, doc)
+	}
+	for _, f := range doc.Sandbox.Credentials.Files {
+		if f.Mode != "deny" {
+			t.Fatalf("only deny entries: %+v", f)
+		}
+	}
+	// sticky: a later plain apply keeps it and changes nothing
+	if r := m.run("", "plan", rig, "--no-git"); r.code != 0 || !strings.Contains(r.out, "sandbox.enabled") || strings.Contains(r.out, "+ ") && strings.Contains(r.out, "SETTINGS   +") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "diff"); r.code != 0 || !strings.Contains(r.out, "no drift") {
+		t.Fatalf("%+v", r)
+	}
+	// turning it off removes the entry lists and says the scalars stay
+	r = m.run("", "apply", rig, "--yes", "--no-git", "--no-sandbox")
+	if r.code != 0 || !strings.Contains(r.out, "still in") {
+		t.Fatalf("%+v", r)
+	}
+	after := string(mustRead(t, settingsPath))
+	if strings.Contains(after, `"~/.ssh"`) || !strings.Contains(after, `"enabled": true`) {
+		t.Fatalf("lists should be gone, scalars should stay:\n%s", after)
+	}
+}
+
+func TestSandboxDoesNotOverwriteAUserChoice(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+	m := newMachine(t)
+	put(t, filepath.Join(m.home, ".claude"), "settings.json", "{\n  \"sandbox\": {\n    \"enabled\": false\n  }\n}\n", 0o644)
+	rig := plainRig(t, "")
+	r := m.run("", "apply", rig, "--yes", "--no-git", "--sandbox")
+	if r.code != 3 || !strings.Contains(r.out, "your settings already say false") {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(string(mustRead(t, filepath.Join(m.home, ".claude", "settings.json"))), `"enabled": false`) {
+		t.Fatal("the user's own sandbox choice was overwritten")
+	}
+}
+
+func TestDoctorVerifiesBaseSecureAndFixReappliesTheRig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("macOS/Linux")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	m := newMachine(t)
+	rig := plainRig(t, "")
+	if r := m.run("", "doctor"); !strings.Contains(r.out, "⚠ base-secure") || !strings.Contains(r.out, "not applied") {
+		t.Fatalf("before apply: %+v", r)
+	}
+	if r := m.run("", "apply", rig, "--yes"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	r := m.run("", "doctor")
+	for _, want := range []string{"✔ base-secure ", "✔ base-secure git", "✔ scanner", "✔ git protections"} {
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("doctor missing %q:\n%s", want, r.out)
+		}
+	}
+	if strings.Contains(r.out, "✘") {
+		t.Fatalf("a fresh apply must be all green:\n%s", r.out)
+	}
+
+	// someone removes a deny rule from settings.json
+	sp := filepath.Join(m.home, ".claude", "settings.json")
+	b := mustRead(t, sp)
+	if !strings.Contains(string(b), `"Read(~/.ssh/**)",`) {
+		t.Fatalf("test assumption: %s", b)
+	}
+	_ = os.WriteFile(sp, []byte(strings.Replace(string(b), `"Read(~/.ssh/**)",`, "", 1)), 0o644)
+	r = m.run("", "doctor")
+	if r.code != 1 || !strings.Contains(r.out, "✘ base-secure") || !strings.Contains(r.out, "Read(~/.ssh/**)") || !strings.Contains(r.out, "doctor --fix") {
+		t.Fatalf("a missing deny must be named:\n%+v", r)
+	}
+	// --fix re-applies the recorded rig (the plan is shown; "a" approves)
+	r = m.run("a\n", "doctor", "--fix")
+	if !strings.Contains(r.out, "re-applying jiaxu/plain") || !strings.Contains(r.out, "applied") {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(string(mustRead(t, sp)), `"Read(~/.ssh/**)"`) {
+		t.Fatal("--fix did not restore the deny rule")
+	}
+	if r := m.run("", "doctor"); r.code != 0 || strings.Contains(r.out, "✘") {
+		t.Fatalf("%+v", r)
+	}
+
+	// hooks switched off, and the git hooks binary gone
+	b = mustRead(t, sp)
+	_ = os.WriteFile(sp, []byte(strings.Replace(string(b), "{\n", "{\n  \"disableAllHooks\": true,\n", 1)), 0o644)
+	if r := m.run("", "doctor"); r.code != 1 || !strings.Contains(r.out, "✘ hooks enabled") || !strings.Contains(r.out, "disableAllHooks") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "doctor", "--fix", "extra"); r.code != 2 {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestDoctorGitScansHistoryAndWalksThroughRotation(t *testing.T) {
+	g := newGitEnv(t)
+	g.write("README.md", "hello\n")
+	g.mustGit("add", "-A")
+	g.mustGit("commit", "-q", "--no-verify", "-m", "init")
+	m := newMachine(t)
+
+	if r := m.run("", "doctor", "--git", g.dir); r.code != 0 || !strings.Contains(r.out, "no secrets found") {
+		t.Fatalf("clean repo: %+v", r)
+	}
+	g.write("old.py", "token = \""+e2eSecret+"\"\n")
+	g.write("still.py", "key = \""+e2eSecret+"\"\n")
+	g.mustGit("add", "-A")
+	g.mustGit("commit", "-q", "--no-verify", "-m", "oops")
+	os.Remove(filepath.Join(g.dir, "old.py"))
+	g.mustGit("add", "-A")
+	g.mustGit("commit", "-q", "--no-verify", "-m", "remove old")
+
+	r := m.run("", "doctor", "--git", g.dir)
+	if r.code != 1 || !strings.Contains(r.out, "old.py:1") || !strings.Contains(r.out, "removed since") || !strings.Contains(r.out, "still.py:1") || !strings.Contains(r.out, "STILL IN HEAD") {
+		t.Fatalf("%+v", r)
+	}
+	for _, want := range []string{"ROTATE every credential", "github-pat", "Personal access tokens", "filter-repo", "never rewrites history"} {
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("walkthrough missing %q:\n%s", want, r.out)
+		}
+	}
+	if strings.Contains(r.out, e2eSecret) || strings.Contains(r.out, "wJ4kP9xQm2Rt7V") {
+		t.Fatal("doctor --git printed the secret")
+	}
+	if r := m.run("", "doctor", "--git", g.dir, "--max-commits", "1"); !strings.Contains(r.out, "only the newest 1 commits") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestDoctorBaseCheckIgnoresTheUsersOwnRigContent(t *testing.T) {
+	// regression (found by the container E2E): a rig with its own CLAUDE.md sections, skills and MCP servers
+	// must not make the base-only integrity check report drift
+	if runtime.GOOS == "windows" {
+		t.Skip("macOS/Linux")
+	}
+	m := newMachine(t)
+	rig := newRig(t)
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	r := m.run("", "doctor")
+	if !strings.Contains(r.out, "✔ base-secure ") || strings.Contains(r.out, "✘ base-secure") {
+		t.Fatalf("%s", r.out)
 	}
 }

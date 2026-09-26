@@ -100,7 +100,13 @@ func Run(ctx context.Context, s Spec) (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	cmd := exec.CommandContext(ctx, s.Command[0], s.Command[1:]...)
+	// Resolve through PATH/PATHEXT so that on Windows `npx` finds npx.cmd; Go runs .cmd/.bat files through
+	// cmd.exe with its own argument escaping and refuses arguments it cannot escape safely (no shell injection).
+	prog, err := exec.LookPath(s.Command[0])
+	if err != nil {
+		return 127, fmt.Errorf("%s was not found on PATH (install it, or fix the server's command): %w", s.Command[0], err)
+	}
+	cmd := exec.CommandContext(ctx, prog, s.Command[1:]...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = s.Stdin, s.Stdout, s.Stderr
 
@@ -116,7 +122,7 @@ func Run(ctx context.Context, s Spec) (int, error) {
 	for {
 		select {
 		case sig := <-sigs:
-			_ = cmd.Process.Signal(sig)
+			_ = platform.ForwardSignal(cmd.Process, sig)
 		case err := <-done:
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {

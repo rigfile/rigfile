@@ -78,6 +78,9 @@ func Check(l *Loaded) []Problem {
 				continue
 			}
 			seen[k] = i
+			if windowsReserved(k) {
+				add(Error, where, "id %q is a reserved device name on Windows (CON, NUL, COM1, ...) and cannot be a file or directory name there", k)
+			}
 			if prev, ok := seenFold[strings.ToLower(k)]; ok && prev != k {
 				add(Error, where, "id %q differs from %q only by case; they collide on case-insensitive file systems", k, prev)
 			}
@@ -379,3 +382,23 @@ func hostCovers(p, h string) bool {
 
 // HostCovers is exported for the merge engine (secrets `hosts` may only narrow).
 func HostCovers(p, h string) bool { return hostCovers(p, h) }
+
+// windowsReserved reports whether a name (ignoring any extension) is one of the DOS device names Windows refuses
+// as a file name, or ends in a dot or space, which Windows silently strips.
+func windowsReserved(name string) bool {
+	if strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+		return true
+	}
+	base := strings.ToLower(name)
+	if i := strings.IndexByte(base, '.'); i >= 0 {
+		base = base[:i]
+	}
+	switch base {
+	case "con", "prn", "aux", "nul":
+		return true
+	}
+	if len(base) == 4 && (strings.HasPrefix(base, "com") || strings.HasPrefix(base, "lpt")) && base[3] >= '1' && base[3] <= '9' {
+		return true
+	}
+	return false
+}

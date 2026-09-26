@@ -68,7 +68,8 @@ func New(o Options) (*Info, error) {
 		i.OS = MacOS
 	case "linux":
 		i.OS = Linux
-		i.WSL = getenv("WSL_DISTRO_NAME") != "" // referenced in the Codex WSL docs; see docs/platforms.md §5
+		// WSL_DISTRO_NAME is referenced in the Codex WSL docs; WSL_INTEROP is set by WSL2 for every process (docs/platforms.md §5)
+		i.WSL = getenv("WSL_DISTRO_NAME") != "" || getenv("WSL_INTEROP") != ""
 	case "windows":
 		i.OS = Windows
 	default:

@@ -32,6 +32,7 @@ func findings(c *Captured, level, cat string) []string {
 
 func TestCaptureEverythingAndRoundTrip(t *testing.T) {
 	home := t.TempDir()
+	hs := filepath.ToSlash(home) // JSON must not contain raw Windows backslashes
 	cd := filepath.Join(home, ".claude")
 	wr(t, cd, "CLAUDE.md", "# Mine\nbe terse\n\n<!-- rigfile:begin x sha256=aaaaaaaaaaaa -->\nmanaged\n<!-- rigfile:end x -->\n")
 	wr(t, cd, "skills/pdf/SKILL.md", "---\nname: pdf\ndescription: PDFs\n---\nbody\n")
@@ -41,14 +42,14 @@ func TestCaptureEverythingAndRoundTrip(t *testing.T) {
 	wr(t, cd, "settings.json", `{
   "env": {"FOO": "bar"},
   "permissions": {
-    "deny": ["Read(~/.ssh/**)", "Read(//etc/shadow)", "Read(`+home+`/private/**)", "Bash(rm -rf *)"],
+    "deny": ["Read(~/.ssh/**)", "Read(//etc/shadow)", "Read(`+hs+`/private/**)", "Bash(rm -rf *)"],
     "ask": ["Bash(git push*)", "WebFetch(domain:example.com)", "mcp__alpaca__place_stock_order"],
     "allow": ["Bash(git status)", "Bash", "Write(x)"]
   },
   "hooks": {
     "PreToolUse": [
       {"matcher": "Bash", "hooks": [{"type": "command", "if": "Bash(git commit*)", "command": "rigfile", "args": ["hook", "run", "guard"]}]},
-      {"matcher": "Edit", "hooks": [{"type": "command", "command": "echo hi >> `+home+`/log.txt"}]}
+      {"matcher": "Edit", "hooks": [{"type": "command", "command": "echo hi >> `+hs+`/log.txt"}]}
     ],
     "PostToolUse": [{"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "prettier", "args": ["--write", "my file"]}]}],
     "Weird": [{"hooks": [{"type": "command", "command": "x"}]}],
@@ -60,7 +61,7 @@ func TestCaptureEverythingAndRoundTrip(t *testing.T) {
   "wrapped": {"type": "stdio", "command": "/usr/local/bin/rigfile", "args": ["exec", "--secret", "TOKEN_X=w/token", "--env", "A=b", "--", "uvx", "w-mcp==1.0"]},
   "remote": {"type": "http", "url": "https://mcp.example.test/v1", "headers": {"Authorization": "Bearer `+fakeKey+`", "X-Team": "core"}},
   "leaky": {"type": "stdio", "command": "npx", "args": ["--token=`+fakeKey+`"]},
-  "local": {"type": "stdio", "command": "uvx", "args": ["tool", "--config", "`+home+`/proj/cfg.yaml"]},
+  "local": {"type": "stdio", "command": "uvx", "args": ["tool", "--config", "`+hs+`/proj/cfg.yaml"]},
   "old": {"type": "sse", "url": "https://x.test/sse"},
   "http": {"type": "http", "url": "http://insecure.test"}
 }}`)
@@ -119,7 +120,7 @@ func TestCaptureEverythingAndRoundTrip(t *testing.T) {
 		t.Fatalf("%+v", m.Hooks[1])
 	}
 	sh := string(c.Files["hooks/"+m.Hooks[2].ID+".sh"])
-	if !strings.HasPrefix(sh, "#!/bin/sh\n") || strings.Contains(sh, home) || !strings.Contains(sh, "$HOME/log.txt") {
+	if !strings.HasPrefix(sh, "#!/bin/sh\n") || strings.Contains(sh, hs) || !strings.Contains(sh, "$HOME/log.txt") {
 		t.Fatalf("script %q", sh)
 	}
 	if got := string(c.Files["hooks/"+m.Hooks[0].ID+".sh"]); !strings.Contains(got, "prettier --write 'my file'") {
@@ -216,7 +217,7 @@ func TestCaptureSkipsWhatRigfileAlreadyManagesAndEmptyDirs(t *testing.T) {
 	cd := filepath.Join(home, ".claude")
 	wr(t, cd, "agents/mine.md", "---\nname: mine\ndescription: d\n---\n")
 	wr(t, cd, "agents/managed.md", "---\nname: managed\ndescription: d\n---\n")
-	wr(t, cd, "settings.json", `{"permissions":{"deny":["Bash(rm -rf *)"]},"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"`+cd+`/rigfile/hooks/g/x.sh"}]}]}}`)
+	wr(t, cd, "settings.json", `{"permissions":{"deny":["Bash(rm -rf *)"]},"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"`+filepath.ToSlash(cd)+`/rigfile/hooks/g/x.sh"}]}]}}`)
 	c, _ = Capture(CaptureOptions{ClaudeDir: cd, Home: home, Skip: func(cat, key string) bool {
 		return (cat == "agent" && key == "managed") || (cat == "permission" && key == "deny:Bash(rm -rf *)")
 	}})

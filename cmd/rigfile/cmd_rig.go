@@ -11,9 +11,11 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
+	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/session"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/digitaldreamer3462/rigfile/internal/targets"
 	"github.com/digitaldreamer3462/rigfile/internal/tools"
 )
 
@@ -61,8 +63,9 @@ func cmdValidate(args []string, e env) int {
 // ---- plan / apply -----------------------------------------------------------------------------
 
 type rigFlags struct {
-	layers, project, claudeDir          string
-	overwrite, yes, updateLock, noTools bool
+	layers, project, claudeDir                                                 string
+	overwrite, yes, updateLock, noTools, noGit, unsafeBase, sandbox, noSandbox bool
+	targets                                                                    kvFlags
 }
 
 func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
@@ -71,6 +74,11 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 	fs.StringVar(&f.layers, "layers", "", "directory holding inherited layers: <dir>/<owner>/<name>/rigfile.yaml")
 	fs.StringVar(&f.project, "project", "", "project directory for scope: project instructions")
 	fs.StringVar(&f.claudeDir, "claude-dir", "", "Claude Code config directory (default ~/.claude or $CLAUDE_CONFIG_DIR)")
+	fs.BoolVar(&f.unsafeBase, "i-understand-unsafe-base", false, "DANGEROUS: skip rigfile/base-secure (local only; recorded in state; doctor shows it red)")
+	fs.BoolVar(&f.sandbox, "sandbox", false, "also turn on Claude Code's OS-level sandbox with base-secure's credential denies (remembered; macOS/Linux/WSL2)")
+	fs.BoolVar(&f.noSandbox, "no-sandbox", false, "stop managing the sandbox profile (settings already added stay until you delete them)")
+	fs.Var(&f.targets, "target", "also configure this target even if it is not detected (repeatable): "+strings.Join(targets.Names(), ", "))
+	fs.BoolVar(&f.noGit, "no-git", false, "skip the git protections (global gitignore and secret-scanning hooks)")
 	fs.BoolVar(&f.overwrite, "overwrite", false, "replace hand-edited managed content and items Rigfile does not own")
 	if withApply {
 		fs.BoolVar(&f.yes, "yes", false, "apply without asking")
@@ -83,7 +91,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools,
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -111,9 +119,15 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	if p == nil {
 		return code
 	}
+	defer p.Close()
 
 	fmt.Fprintln(e.out, p.Header())
 	fmt.Fprintln(e.out)
+	if f.unsafeBase {
+		fmt.Fprintln(e.out, "!!! --i-understand-unsafe-base: rigfile/base-secure is SKIPPED. Nothing protects secrets from the agent or from git")
+		fmt.Fprintln(e.out, "!!! beyond what you already have. This is recorded in state.json and shown as a red item by `rigfile doctor`.")
+		fmt.Fprintln(e.out)
+	}
 	for _, pr := range p.Problems {
 		fmt.Fprintln(e.out, pr)
 	}
@@ -124,7 +138,19 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	if len(p.Problems) > 0 {
 		fmt.Fprintln(e.out)
 	}
-	p.Plan.Render(e.out)
+	for i, tp := range p.Targets {
+		if i > 0 {
+			fmt.Fprintln(e.out)
+		}
+		tp.Plan.Render(e.out)
+	}
+	for _, sk := range p.Skipped {
+		fmt.Fprintf(e.out, "\nNOT CONFIGURED  %s\n", sk)
+	}
+	if p.GitPlan != nil && (len(p.GitPlan.Ops) > 0 || len(p.GitPlan.Notes) > 0) {
+		fmt.Fprintln(e.out)
+		p.GitPlan.Render(e.out)
+	}
 	printTools(e, p.Tools)
 	printNeeds(e, p)
 	if p.HasLock && len(p.LockDiffs) > 0 {
@@ -144,8 +170,8 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	if f.noTools {
 		runTools = nil
 	}
-	if (p.Plan.Changes() > 0 || len(runTools) > 0) && !f.yes {
-		if !confirm(e, fmt.Sprintf("\nApply %d change(s)%s?  [a]pply  [q]uit ", p.Plan.Changes(), plural(len(runTools), " and install 1 tool", fmt.Sprintf(" and install %d tools", len(runTools))))) {
+	if (p.Changes() > 0 || len(runTools) > 0) && !f.yes {
+		if !confirm(e, fmt.Sprintf("\nApply %d change(s)%s?  [a]pply  [q]uit ", p.Changes(), plural(len(runTools), " and install 1 tool", fmt.Sprintf(" and install %d tools", len(runTools))))) {
 			fmt.Fprintln(e.out, "aborted; nothing changed")
 			return 1
 		}
@@ -309,13 +335,25 @@ func cmdDiff(args []string, e env) int {
 		fmt.Fprintln(e.err, "rigfile:", err)
 		return 1
 	}
-	ts := st.Targets[session.Target]
-	if ts == nil || len(ts.Items) == 0 {
+	gts := st.Targets[gitmod.Target]
+	applied := appliedTargets(st)
+	if len(applied) == 0 && (gts == nil || len(gts.Items) == 0) {
 		fmt.Fprintln(e.out, "nothing has been applied yet")
 		return 0
 	}
-	fmt.Fprintf(e.out, "Claude Code   %s@%s   applied %s   run %s\n", ts.Rig.Name, ts.Rig.Version, ts.AppliedAt, ts.RunID)
-	ds := state.Check(ts.Items, map[string]state.Probe{state.KindMCP: claudecode.MCPProbe(mcpClient(e))})
+	var ds []state.Drift
+	for _, at := range applied {
+		fmt.Fprintf(e.out, "%-13s %s@%s   applied %s   run %s\n", at.T.Title, at.TS.Rig.Name, at.TS.Rig.Version, at.TS.AppliedAt, at.TS.RunID)
+		probes := map[string]state.Probe{}
+		if at.T.Name == "claude-code" {
+			probes[state.KindMCP] = claudecode.MCPProbe(mcpClient(e))
+		}
+		ds = append(ds, state.Check(at.TS.Items, probes)...)
+	}
+	if gts != nil && len(gts.Items) > 0 {
+		fmt.Fprintf(e.out, "Git protections (base-secure)   applied %s   run %s\n", gts.AppliedAt, gts.RunID)
+		ds = append(ds, state.Check(gts.Items, nil)...)
+	}
 	bad := 0
 	for _, d := range ds {
 		mark := "✔"
@@ -440,6 +478,7 @@ func cmdLock(args []string, e env) int {
 	if p == nil {
 		return code
 	}
+	defer p.Close()
 	if manifest.HasErrors(p.Problems) {
 		for _, pr := range p.Problems {
 			fmt.Fprintln(e.err, pr)
@@ -473,4 +512,29 @@ func cmdLock(args []string, e env) int {
 var loginHints = map[string]string{
 	"claude-code": "run `claude`, then use /login (or set up an API key / gateway)",
 	"github":      "run `gh auth login`",
+}
+
+type appliedTarget struct {
+	T  targets.Target
+	TS *state.TargetState
+}
+
+// appliedTargets lists the registered targets that have something applied, in registry order.
+func appliedTargets(st *state.State) []appliedTarget {
+	var out []appliedTarget
+	for _, t := range targets.All() {
+		if ts := st.Targets[t.Name]; ts != nil && len(ts.Items) > 0 {
+			out = append(out, appliedTarget{t, ts})
+		}
+	}
+	return out
+}
+
+// primaryApplied is the first applied target (Claude Code when present): it carries the rig identity and
+// the secrets/logins the rig needs.
+func primaryApplied(st *state.State) *state.TargetState {
+	if a := appliedTargets(st); len(a) > 0 {
+		return a[0].TS
+	}
+	return nil
 }
