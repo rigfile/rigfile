@@ -45,7 +45,15 @@ func TestReleaseBuildsVerifiableReproducibleArtifacts(t *testing.T) {
 		t.Skip("cross-compiles")
 	}
 	k := testKey()
-	targets := []Target{hostTarget(), {"linux", "amd64"}, {"windows", "amd64"}}
+	// the host target may equal one of the cross targets (windows/amd64 on a Windows runner): build each once
+	var targets []Target
+	seen := map[Target]bool{}
+	for _, tg := range []Target{hostTarget(), {"linux", "amd64"}, {"windows", "amd64"}} {
+		if !seen[tg] {
+			seen[tg] = true
+			targets = append(targets, tg)
+		}
+	}
 	mk := func() (string, Config) {
 		cfg := Config{Version: "9.9.9", Out: filepath.Join(t.TempDir(), "dist"), Targets: targets, PubKey: pubLine(k), Module: "github.com/digitaldreamer3462/rigfile",
 			Repo: "example-owner/rigfile", Epoch: 1700000000}
@@ -109,7 +117,7 @@ func TestReleaseBuildsVerifiableReproducibleArtifacts(t *testing.T) {
 	}
 	checkPackaging(t, out)
 	checkDeb(t, filepath.Join(out, "rigfile_9.9.9_amd64.deb"))
-	checkWheel(t, out, exe)
+	checkWheel(t, out, exe, len(targets))
 }
 
 func extract(t *testing.T, base, goos string) []byte {
@@ -260,9 +268,9 @@ func tarNames(t *testing.T, gzData []byte) map[string]string {
 	}
 }
 
-func checkWheel(t *testing.T, out, hostExe string) {
+func checkWheel(t *testing.T, out, hostExe string, want int) {
 	whl, _ := filepath.Glob(filepath.Join(out, "packaging/pip/*.whl"))
-	if len(whl) != 3 {
+	if len(whl) != want {
 		t.Fatalf("wheels: %v", whl)
 	}
 	tag, _ := wheelTag(hostTarget())

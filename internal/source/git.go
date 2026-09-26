@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -126,6 +127,11 @@ func (g *GitFetcher) Fetch(ctx context.Context, spec Spec, commit, dest string) 
 	}
 	pw.Close()
 	xerr := Extract(&capReader{r: pr, left: MaxDownload}, dest, false, g.Limits)
+	if xerr == nil {
+		// the tar reader stops at the end-of-archive marker; git still writes padding after it. Closing the pipe now
+		// would kill git with SIGPIPE (exit 141, seen on Windows), so read to the end first.
+		_, _ = io.Copy(io.Discard, &capReader{r: pr, left: MaxDownload})
+	}
 	pr.Close()
 	werr := c.Wait()
 	if xerr != nil {
