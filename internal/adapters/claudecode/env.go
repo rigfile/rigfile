@@ -38,6 +38,9 @@ type Env struct {
 	BaseSecure bool               // rigfile/base-secure is part of this run: add its non-rule settings (S2-M5)
 	Sandbox    bool               // opt-in: also turn on Claude Code's OS-level sandbox with base-secure's credential denies (S2-M5b)
 	Have       func(string) bool  // is this command on PATH? nil = exec.LookPath
+	// CheckOnly is for judging a PARTIAL plan (doctor plans base-secure alone): things Rigfile owns that the
+	// plan does not contain are the rest of the user's rig, not orphans, so nothing is planned for removal.
+	CheckOnly bool
 }
 
 func (e Env) rigfile() string {

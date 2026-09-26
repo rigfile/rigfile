@@ -58,6 +58,8 @@ git reset -q; rm leak.py
 s=$(date +%s%N); for i in 1 2 3 4 5; do echo $i > f$i; git add -A; git commit -q -m c$i; done; e=$(date +%s%N)
 echo "  5 clean commits with hooks: $(( (e - s) / 5000000 )) ms each"
 cd - > /dev/null
+rigfile doctor > $out || { cat $out >&2; fail "doctor is not green with base-secure and git protections applied"; }
+has "base-secure git" $out
 rigfile rollback --force > $out;                                    has "rolled back" $out
 [ -z "$(git config --global --get core.hooksPath)" ] || fail "core.hooksPath should be gone after rollback"
 echo "E2E OK"

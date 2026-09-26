@@ -61,7 +61,7 @@ func Check(o Options) (*Result, error) {
 
 	cts := o.State.Targets[claudecode.StateTarget]
 	res.ClaudeApplied = cts != nil && len(cts.Items) > 0
-	cplan, err := claudecode.Build(claudecode.Env{Plat: o.Plat, ClaudeDir: o.ClaudeDir, State: cts, BaseSecure: true, Sandbox: o.Sandbox, Have: o.Have}, proj)
+	cplan, err := claudecode.Build(claudecode.Env{Plat: o.Plat, ClaudeDir: o.ClaudeDir, State: cts, BaseSecure: true, Sandbox: o.Sandbox, Have: o.Have, CheckOnly: true}, proj)
 	if err != nil {
 		return nil, err
 	}

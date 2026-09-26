@@ -46,7 +46,10 @@ func TestEmbeddedRulesMatchRecordedHash(t *testing.T) {
 func TestEveryEmbeddedRuleCompilesUnderGoRE2(t *testing.T) {
 	rs, err := DefaultRuleset()
 	if err != nil {
-		t.Fatal(err) // ParseRules fails on ANY rule Go cannot compile: no silent holes
+		t.Fatal(err)
+	}
+	if err := rs.CompileAll(); err != nil { // the default set compiles lazily; this forces every pattern: no silent holes
+		t.Fatal(err)
 	}
 	if rs.NumRules() < 200 {
 		t.Fatalf("only %d rules loaded", rs.NumRules())
@@ -314,7 +317,7 @@ func TestWindowedMatchesEqualFullScan(t *testing.T) {
 	}
 	b.WriteString("last_secret_key = 'LAST0123456789abcdefLAST'") // no trailing newline
 	text := b.String()
-	full := r.re.FindAllStringIndex(text, -1)
+	full := r.re.get().FindAllStringIndex(text, -1)
 	win := findMatches(r, text, strings.ToLower(text))
 	if len(full) == 0 {
 		t.Fatal("test text should produce matches")

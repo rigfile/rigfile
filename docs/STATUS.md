@@ -70,4 +70,4 @@ Working rules for Stage 1 are in `CLAUDE.md` (small PRs, threat note for securit
 ## Known limits (Stage 1/2)
 
 - `rigfile rollback` restores files but does not unregister MCP servers that `apply` added through the `claude` CLI; a re-apply after a rollback then reports "server exists and is not managed by Rigfile" (use `--overwrite`). Fix planned with the Stage 2 doctor/rollback work.
-- Git protections on real Linux (container E2E, stock git): a clean `git commit` with pre-commit and the backstop installed takes ~65-75 ms. Startup cost of the rule set and git subprocesses dominate; optimisation is tracked in S2-M8.
+- Hook cost: on this macOS machine (each `git` call ~14 ms) pre-commit ~50 ms, commit-msg ~16 ms, agent hooks ~7 ms, the reference-transaction backstop ~0-8 ms per invocation (git calls it 5 times per commit, the `sh` shim filters most). A clean `git commit` with all hooks measured 60-150 ms in the Linux containers (noisy, includes `git add`). Go start-up (~6 ms) and git subprocesses dominate; rules already compile lazily.

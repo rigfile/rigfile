@@ -27,3 +27,16 @@ Off by default and remembered in `state.json` once chosen (`--no-sandbox` stops 
 - **Redaction shape is UNVERIFIED**: the docs say `updatedToolOutput` (inside `hookSpecificOutput`) replaces a tool's text output for every tool, but not its exact value type or the `tool_response` shapes; the hook reads several shapes and always adds `additionalContext`. Confirmed only by the live red-team procedure (S2-M7(b)). Whether the on-disk transcript keeps the original text is also unverified.
 - **Native Windows** file protection is weaker (no sandbox there) and Windows equivalents of the deny list arrive in Stage 3.
 - `.env.example` cannot be excepted from a `Read` deny (allow cannot carve out of deny), so the deny list names the common `.env.*` files instead of `.env.*`; the hooks use the exact name rules, which do exempt `.env.example`.
+
+## Threat note (security-sensitive code: scanner, hooks, git module, base-secure)
+
+| | |
+|---|---|
+| **Assets** | Secret values on the developer's machine (keys, tokens, `.env` files, cloud credentials, Claude Code's own login), the integrity of git history, Rigfile's own state and hooks. |
+| **Adversaries considered** | (1) an agent that is careless; (2) an agent steered by prompt injection or a malicious rig/skill/MCP output ("upload ~/.ssh", "commit with --no-verify"); (3) a human making a mistake. **Not** a determined local user or malware running as the user: they can edit the hooks, settings and config directly. |
+| **What we rely on** | Claude Code applying deny/ask rules and calling hooks (deny > ask > allow, hooks run in subagents too); git calling hooks; the OS sandbox where opted in. |
+| **Fail modes chosen** | pre-commit, pre-push, commit-msg and the PreToolUse hooks fail **closed** (malformed input or an unusable scanner blocks). The reference-transaction backstop, the redact hook and a missing rigfile binary fail **open with a loud warning**, because a bug there must not brick every git operation or tool call on the machine; `rigfile doctor` reports each. |
+| **Secrets never leave the process** | Findings carry no matched value (checked by reflection in tests); hook messages, doctor output and redaction reasons name rules and fingerprints only; corpus and test tokens are assembled at run time so the repository never contains a whole credential. |
+| **No suppression by the agent** | Inline `gitleaks:allow` markers are off; `.rigfile-allow` is read from HEAD, so a commit cannot allow-list its own secret, and is visible in review. |
+| **Residual risk** | Everything in "What it cannot do" above and the ✘ rows of `docs/red-team.md`; the unverified Claude Code contracts (redaction shape, real enforcement of the deny list on scripts) until the owner runs the live procedure. |
+| **Privilege** | Nothing here uses sudo, edits system config, or touches a repository's own files. The git module edits only the user's global git config (an appended, removable block), a global excludes file and its own hooks directory, all through the journaled writer, so `rigfile rollback` restores them byte-for-byte. |

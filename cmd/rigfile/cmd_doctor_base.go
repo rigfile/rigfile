@@ -89,6 +89,9 @@ func doctorBase(e env, pi *platform.Info, st *state.State, add func(checkLevel, 
 	if rs, err := scan.DefaultRuleset(); err != nil {
 		add(lvFail, "scanner", "%v", err)
 		drifted = true
+	} else if err := rs.CompileAll(); err != nil {
+		add(lvFail, "scanner", "%v", err)
+		drifted = true
 	} else {
 		add(lvOK, "scanner", "%d rules (gitleaks %s + Rigfile additions)", rs.NumRules(), scan.RulesVersion())
 	}

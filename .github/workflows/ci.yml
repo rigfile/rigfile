@@ -54,6 +54,19 @@ jobs:
           go-version-file: go.mod
       - run: e2e/run.sh
 
+  dogfood:
+    # Rigfile scans its own history with its own scanner (working agreement 9). New findings fail the build.
+    name: dogfood (rigfile doctor --git on this repo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run ./cmd/rigfile doctor --git . --max-commits 5000
+
   secret-scan:
     runs-on: ubuntu-latest
     steps:

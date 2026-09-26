@@ -1141,3 +1141,20 @@ func TestDoctorGitScansHistoryAndWalksThroughRotation(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestDoctorBaseCheckIgnoresTheUsersOwnRigContent(t *testing.T) {
+	// regression (found by the container E2E): a rig with its own CLAUDE.md sections, skills and MCP servers
+	// must not make the base-only integrity check report drift
+	if runtime.GOOS == "windows" {
+		t.Skip("macOS/Linux")
+	}
+	m := newMachine(t)
+	rig := newRig(t)
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	r := m.run("", "doctor")
+	if !strings.Contains(r.out, "✔ base-secure ") || strings.Contains(r.out, "✘ base-secure") {
+		t.Fatalf("%s", r.out)
+	}
+}

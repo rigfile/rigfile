@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 
@@ -67,15 +66,15 @@ type tomlConfig struct {
 type allowlist struct {
 	and         bool
 	regexTarget string // "" (secret) | "match" | "line"
-	paths       []*regexp.Regexp
-	regexes     []*regexp.Regexp
+	paths       []*lazyRe
+	regexes     []*lazyRe
 	stopWords   []string // lower-case
 	hasCommits  bool     // commit checks never match here (no commit context); kept for AND semantics
 }
 
 type rule struct {
 	id, description string
-	re, pathRe      *regexp.Regexp
+	re, pathRe      *lazyRe
 	secretGroup     int
 	entropy         float64
 	keywords        []string // lower-case
@@ -111,7 +110,7 @@ func DefaultRuleset() (*Ruleset, error) {
 			defaultErr = fmt.Errorf("scan: embedded gitleaks rules do not match their recorded hash (got %s)", got[:12])
 			return
 		}
-		defaultRS, defaultErr = ParseRules(gitleaksTOML, rigfileTOML)
+		defaultRS, defaultErr = parseRules(true, gitleaksTOML, rigfileTOML)
 		if defaultRS != nil {
 			defaultRS.Version = RulesVersion()
 		}
@@ -123,7 +122,45 @@ func hashHex(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString
 
 // ParseRules compiles a gitleaks-format TOML config. Any rule that Go's regexp cannot compile is an error
 // (no rule is silently dropped: a dropped rule is a hole).
-func ParseRules(datas ...[]byte) (*Ruleset, error) {
+func ParseRules(datas ...[]byte) (*Ruleset, error) { return parseRules(false, datas...) }
+
+// CompileAll forces every pattern to compile and returns the first failure. The default rule set compiles
+// lazily; tests and `rigfile doctor` call this so an unusable pattern cannot hide.
+func (rs *Ruleset) CompileAll() error {
+	for _, r := range rs.rules {
+		for _, l := range []*lazyRe{r.re, r.pathRe} {
+			if l == nil {
+				continue
+			}
+			if _, err := l.compile(); err != nil {
+				return fmt.Errorf("scan: rule %s: %w", r.id, err)
+			}
+		}
+		for _, a := range r.allow {
+			if err := a.compileAll(); err != nil {
+				return fmt.Errorf("scan: rule %s allowlist: %w", r.id, err)
+			}
+		}
+	}
+	for _, a := range rs.global {
+		if err := a.compileAll(); err != nil {
+			return fmt.Errorf("scan: global allowlist: %w", err)
+		}
+	}
+	return nil
+}
+
+func (a *allowlist) compileAll() error {
+	for _, l := range append(append([]*lazyRe{}, a.paths...), a.regexes...) {
+		if _, err := l.compile(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// parseRules builds the rule set; lazy=false verifies every pattern compiles up front.
+func parseRules(lazy bool, datas ...[]byte) (*Ruleset, error) {
 	var c tomlConfig
 	for _, data := range datas {
 		var one tomlConfig
@@ -141,18 +178,15 @@ func ParseRules(datas ...[]byte) (*Ruleset, error) {
 			return nil, fmt.Errorf("scan: %s: unknown regexTarget %q", where, a.regexTarget)
 		}
 		for _, p := range t.Paths {
-			re, err := regexp.Compile(p)
-			if err != nil {
-				return nil, fmt.Errorf("scan: %s: path %q: %w", where, p, err)
-			}
-			a.paths = append(a.paths, re)
+			a.paths = append(a.paths, newLazy(p))
 		}
 		for _, p := range t.Regexes {
-			re, err := regexp.Compile(p)
-			if err != nil {
-				return nil, fmt.Errorf("scan: %s: regex %q: %w", where, p, err)
+			a.regexes = append(a.regexes, newLazy(p))
+		}
+		if !lazy {
+			if err := a.compileAll(); err != nil {
+				return nil, fmt.Errorf("scan: %s: %w", where, err)
 			}
-			a.regexes = append(a.regexes, re)
 		}
 		for _, w := range t.StopWords {
 			a.stopWords = append(a.stopWords, strings.ToLower(w))
@@ -177,15 +211,20 @@ func ParseRules(datas ...[]byte) (*Ruleset, error) {
 		seen[t.ID] = true
 		r := &rule{id: t.ID, description: t.Description, secretGroup: t.SecretGroup, entropy: t.Entropy,
 			generic: strings.Contains(strings.ToLower(t.ID), "generic"), window: boundedRuleWindow[t.ID]}
-		var err error
 		if t.Regex != "" {
-			if r.re, err = regexp.Compile(t.Regex); err != nil {
-				return nil, fmt.Errorf("scan: rule %s: %w", t.ID, err)
-			}
+			r.re = newLazy(t.Regex)
 		}
 		if t.Path != "" {
-			if r.pathRe, err = regexp.Compile(t.Path); err != nil {
-				return nil, fmt.Errorf("scan: rule %s path: %w", t.ID, err)
+			r.pathRe = newLazy(t.Path)
+		}
+		if !lazy {
+			for _, l := range []*lazyRe{r.re, r.pathRe} {
+				if l == nil {
+					continue
+				}
+				if _, err := l.compile(); err != nil {
+					return nil, fmt.Errorf("scan: rule %s: %w", t.ID, err)
+				}
 			}
 		}
 		if r.re == nil && r.pathRe == nil {

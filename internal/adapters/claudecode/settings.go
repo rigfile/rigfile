@@ -165,7 +165,7 @@ func (b *builder) settings(p *merge.Projection) {
 
 	// ---- things Rigfile added earlier that the rig no longer wants ----
 	b.keepOwnedOnConflict(ops)
-	if env.State != nil {
+	if env.State != nil && !env.CheckOnly {
 		ids := b.plan.Identities()
 		for _, o := range ops {
 			for _, it := range append(append([]state.Item(nil), o.Items...), o.Keep...) {

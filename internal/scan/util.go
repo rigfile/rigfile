@@ -8,9 +8,49 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 )
 
-func anyMatch(res []*regexp.Regexp, s string) bool {
+// lazyRe compiles its pattern on first use. The default rule set has ~230 rules plus ~60 allowlist patterns;
+// compiling them all costs ~15 ms, which every hook process (one per tool call) would pay for nothing when
+// the keyword prefilter rules almost all of them out. TestEveryEmbeddedRuleCompilesUnderGoRE2 and `doctor`
+// force-compile everything, so a pattern Go cannot handle is still caught.
+type lazyRe struct {
+	src  string
+	once sync.Once
+	re   *regexp.Regexp
+	err  error
+}
+
+func newLazy(src string) *lazyRe { return &lazyRe{src: src} }
+
+func (l *lazyRe) compile() (*regexp.Regexp, error) {
+	l.once.Do(func() { l.re, l.err = regexp.Compile(l.src) })
+	return l.re, l.err
+}
+
+func (l *lazyRe) get() *regexp.Regexp { re, _ := l.compile(); return re }
+
+func (l *lazyRe) MatchString(s string) bool {
+	re := l.get()
+	return re != nil && re.MatchString(s)
+}
+
+func (l *lazyRe) FindAllStringIndex(s string, n int) [][]int {
+	if re := l.get(); re != nil {
+		return re.FindAllStringIndex(s, n)
+	}
+	return nil
+}
+
+func (l *lazyRe) FindStringSubmatch(s string) []string {
+	if re := l.get(); re != nil {
+		return re.FindStringSubmatch(s)
+	}
+	return nil
+}
+
+func anyMatch(res []*lazyRe, s string) bool {
 	if s == "" {
 		return false
 	}
