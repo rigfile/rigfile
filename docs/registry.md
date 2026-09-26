@@ -56,7 +56,7 @@ JSON unless stated. Errors are `{"error": "..."}` with a stable HTTP status. A p
 
 Deviation from the plan's sketch: the content API is the tarball endpoint (a rig is one immutable blob); a generic `/blobs/:sha256` endpoint would be a second path to the same bytes that would have to repeat the visibility check, so it is not offered.
 
-Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r/{owner}/{name}`, `/r/{owner}/{name}/v/{version}`, `/r/{owner}/{name}/v/{version}/files/{path}`, `/r/{owner}/{name}/diff`, `/c/{owner}/{slug}`, `/login`, `/auth/callback`, `/logout`, `/device`, `/report`, `/legal/terms`, `/legal/acceptable-use`, `/legal/takedown`.
+Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r/{owner}/{name}`, `/r/{owner}/{name}/v/{version}`, `/r/{owner}/{name}/v/{version}/files/{path}`, `/r/{owner}/{name}/diff`, `/c/{owner}/{slug}`, `/manage/...` (POST forms for collections and organisations), `/login`, `/auth/callback`, `/logout`, `/device`, `/report`, `/legal/terms`, `/legal/acceptable-use`, `/legal/takedown`.
 
 ## 4. Auth
 

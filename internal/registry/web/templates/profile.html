@@ -1,7 +1,27 @@
 {{template "head" .}}
 <h1>{{.Data.Login}}{{if .Data.Org}} <span class="tag">organisation</span>{{end}}</h1>
 {{if .Data.Org}}{{if .Data.Org.Name}}<p>{{.Data.Org.Name}}</p>{{end}}{{end}}
-{{if .Data.Members}}<div class="card"><strong>Members</strong><ul>{{range .Data.Members}}<li><a href="/u/{{.Login}}">{{.Login}}</a> <span class="muted">{{.Role}}</span></li>{{end}}</ul></div>{{end}}
-{{if .Data.Collections}}<h2>Collections</h2><ul>{{range .Data.Collections}}<li><a href="/c/{{.Owner}}/{{.Slug}}">{{.Title}}</a>{{if eq .Visibility "private"}} <span class="tag">private</span>{{end}}</li>{{end}}</ul><h2>Rigs</h2>{{end}}
-{{if .Data.Rigs}}{{template "rigs" .Data}}{{else}}<p class="muted">No rigs to show.</p>{{end}}
+{{if .Data.Members}}<div class="card"><strong>Members</strong>
+<ul>{{range .Data.Members}}<li><a href="/u/{{.Login}}">{{.Login}}</a> <span class="muted">{{.Role}}</span>
+{{if or (eq $.Data.MyRole "owner") (eq $.Data.MyRole "admin") (eq .Login $.User.Login)}}<form class="inline" method="post" action="/manage/orgs/{{$.Data.Login}}/remove"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="login" value="{{.Login}}"><button class="link" type="submit">{{if eq .Login $.User.Login}}leave{{else}}remove{{end}}</button></form>{{end}}</li>{{end}}</ul>
+{{if or (eq .Data.MyRole "owner") (eq .Data.MyRole "admin")}}<form method="post" action="/manage/orgs/{{.Data.Login}}/member"><input type="hidden" name="csrf" value="{{.CSRF}}">
+<label>Add or change <input type="text" name="login" placeholder="their login" required></label>
+<label>as <select name="role"><option value="member">member</option>{{if eq .Data.MyRole "owner"}}<option value="admin">admin</option><option value="owner">owner</option>{{end}}</select></label>
+<button type="submit">Save</button></form>
+<div class="muted">They must have signed in to this registry once.</div>{{end}}</div>{{end}}
+{{if .Data.Collections}}<h2>Collections</h2><ul>{{range .Data.Collections}}<li><a href="/c/{{.Owner}}/{{.Slug}}">{{.Title}}</a>{{if eq .Visibility "private"}} <span class="tag">private</span>{{end}}</li>{{end}}</ul>{{end}}
+{{if .Data.Own}}<div class="card"><strong>New collection</strong>
+<form method="post" action="/manage/collections"><input type="hidden" name="csrf" value="{{.CSRF}}">
+<div><label>Title <input type="text" name="title" maxlength="80" required></label></div>
+<div><label>Address <input type="text" name="slug" maxlength="63" pattern="[a-z0-9][a-z0-9-]*" placeholder="starter-rigs" required></label></div>
+<div><label>Description <input type="text" name="description" maxlength="500"></label></div>
+<div><label><input type="checkbox" name="private" value="1"> Only I can see it</label></div>
+<button type="submit">Create</button></form></div>
+<div class="card"><strong>New organisation</strong>
+<form method="post" action="/manage/orgs"><input type="hidden" name="csrf" value="{{.CSRF}}">
+<div><label>Name <input type="text" name="login" maxlength="39" pattern="[a-z0-9][a-z0-9-]*" placeholder="acme" required></label></div>
+<div><label>Display name <input type="text" name="name" maxlength="80"></label></div>
+<button type="submit">Create</button></form>
+<div class="muted">You become its owner. Publish under it as <code>name/rig</code>.</div></div>{{end}}
+{{if .Data.Rigs}}<h2>Rigs</h2>{{template "rigs" .Data}}{{else}}<p class="muted">No rigs to show.</p>{{end}}
 {{template "foot" .}}

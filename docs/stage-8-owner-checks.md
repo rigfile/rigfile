@@ -40,7 +40,7 @@ Migrations `0003_collections.sql` and `0004_orgs.sql` run automatically at start
 - **Hosted cloud rig.** The plan defers it until the local product has traction.
 - **More Linux distros and ARM (Raspberry Pi, Windows on ARM).** The release tool already builds arm64; it needs clean-machine runs I cannot do. List for you: `rigfile self-update`, `rigfile apply` and `rigfile broker run` on Raspberry Pi OS (arm64), Alpine (musl), and Windows 11 on ARM.
 - **Windsurf, Zed, VS Code Copilot adapters:** researched, blocked on paths (above).
-- **Web forms for collections and organisations.** Management is API and CLI only; the web shows them read-only.
+- ~~Web forms for collections and organisations~~ **Built afterwards** (`docs/collections.md`, `docs/orgs.md` §Web).
 
 ## 6. External security review
 

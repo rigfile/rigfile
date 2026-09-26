@@ -27,6 +27,10 @@ Missing and private stay indistinguishable: a rig, an organisation's member list
 
 Trust facts for an organisation's rig name the organisation as publisher (never "verified", never the member who happened to upload first); publisher counts and moderation history use the organisation's rigs, and personal counts exclude them.
 
+## Web
+
+On their own profile a signed-in user can create an organisation. On an organisation's page (`/u/<org>`) members see the member list; owners and admins also get the add-or-change form (owners may choose any role, admins only `member`) and remove buttons; anyone gets a *leave* button for themselves. The forms post to `/manage/orgs...` and call the same store methods as the API, so the role rules are the API's (`TestWebFormsForOrganisations`: a plain member is refused when trying to appoint or remove, and after leaving no longer sees the list).
+
 ## Threat note
 
 | Risk | Handling |
