@@ -19,6 +19,8 @@ func cmdPull(verb string, args []string, e env) int {
 	var f rigFlags
 	fs := rigFlagSet(verb, e, &f, true)
 	planOnly := fs.Bool("plan-only", false, "show the plan for the fetched rig and stop (nothing is applied)")
+	requireSig := fs.Bool("require-signature", false, "refuse a registry rig unless its Sigstore signature verifies here and is the publisher's own GitHub Actions identity")
+	acceptSigner := fs.Bool("accept-signer-change", false, "update: accept a version whose signer differs from the one you pulled before")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
 		return 2
@@ -35,7 +37,7 @@ func cmdPull(verb string, args []string, e env) int {
 	}
 	client := e.sources
 	if client == nil {
-		client = &source.Client{CacheDir: filepath.Join(sd, "sources"), Getenv: e.getenv, Registry: &source.RegistryFetcher{Token: regToken(e)}}
+		client = &source.Client{CacheDir: filepath.Join(sd, "sources"), Getenv: e.getenv, Registry: registryFetcher(e)}
 	}
 
 	var spec source.Spec
@@ -106,6 +108,11 @@ func cmdPull(verb string, args []string, e env) int {
 		return 0
 	}
 
+	if spec.Kind == source.Registry {
+		if code := checkSignature(e, got, prev, *requireSig, *acceptSigner); code != 0 {
+			return code
+		}
+	}
 	origin := "a git repository"
 	if spec.Kind == source.Registry {
 		origin = "the Rigfile registry (" + spec.URL + ")"
@@ -127,7 +134,10 @@ func cmdPull(verb string, args []string, e env) int {
 	if spec.Ref == "" || !source.IsCommit(spec.Ref) && prev == nil {
 		banner = append(banner, fmt.Sprintf("note: %s was resolved to commit %s now and is pinned to it; `rigfile update` follows the ref later.", refName(spec), got.Commit[:12]))
 	}
-	f.pulled = &pulledRig{Source: spec.String(), Commit: got.Commit, Tree: got.TreeSHA256, Banner: banner}
+	if spec.Kind == source.Registry {
+		banner = append(banner, signatureLines(got)...)
+	}
+	f.pulled = &pulledRig{Source: spec.String(), Commit: got.Commit, Tree: got.TreeSHA256, Signer: got.Signer.String(), Banner: banner}
 	mode := "apply"
 	if *planOnly {
 		mode = "plan"
@@ -193,6 +203,44 @@ func trustLines(e env, spec source.Spec, got *source.Fetched) []string {
 func shortDate(s string) string {
 	if len(s) >= 10 {
 		return s[:10]
+	}
+	return s
+}
+
+// signatureLines reports the LOCAL verification of the version's signature (the registry's word is not enough).
+func signatureLines(got *source.Fetched) []string {
+	s := got.Signer
+	switch {
+	case s == nil:
+		return []string{"Signature: none (this version is not signed)"}
+	case s.Err != "":
+		return []string{"!!! Signature: present but NOT verified here: " + s.Err}
+	case s.ByPublisher:
+		return []string{"Signature: verified on this machine; signed by the publisher's own GitHub Actions identity: " + s.String()}
+	}
+	return []string{"!!! Signature: verified on this machine, but the signer is NOT the publisher's identity: " + s.String()}
+}
+
+// checkSignature applies --require-signature and refuses an update whose signer changed.
+func checkSignature(e env, got *source.Fetched, prev *state.RigRef, require, acceptChange bool) int {
+	s := got.Signer
+	if require && (s == nil || s.Err != "" || !s.ByPublisher) {
+		fmt.Fprintln(e.err, "rigfile: --require-signature: this version is not signed by the publisher's own GitHub Actions identity, or the signature does not verify here.")
+		for _, l := range signatureLines(got) {
+			fmt.Fprintln(e.err, "  "+l)
+		}
+		return 1
+	}
+	if prev != nil && prev.Signer != "" && s.String() != prev.Signer && !acceptChange {
+		fmt.Fprintf(e.err, "rigfile: refusing the update: the signer changed.\n  before: %s\n  now:    %s\nA different signer can mean a legitimate change of release process or a takeover. If you have checked, run again with --accept-signer-change.\n", prev.Signer, orNone(s.String()))
+		return 1
+	}
+	return 0
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "(unsigned)"
 	}
 	return s
 }

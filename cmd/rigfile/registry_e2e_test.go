@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -14,6 +18,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
 	"github.com/digitaldreamer3462/rigfile/internal/registry/dbtest"
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
 	"github.com/digitaldreamer3462/rigfile/internal/source"
 )
 
@@ -37,6 +42,7 @@ func startRegistry(t *testing.T) (url string, store *registry.Store) {
 		MaxUpload: 1 << 20, DeviceInterval: 1, GitHubID: "x", GitHubSecret: "x"}
 	blobs := blob.FS{Root: t.TempDir()}
 	s := registry.NewServer(cfg, store, blobs, noGitHub{}, nil)
+	s.VerifySignature = fakeSigVerify
 	srv.Config.Handler = s.Handler()
 	srv.Start()
 	t.Cleanup(srv.Close)
@@ -200,5 +206,101 @@ func TestSecretsBackendFileSwitchDisablesTheKeychain(t *testing.T) {
 	}
 	if keyringDisabled(env{getenv: func(string) string { return "" }}) {
 		t.Fatal("the keychain is the default")
+	}
+}
+
+// fakeSigVerify stands in for Sigstore in CLI tests (the cryptography is tested in internal/sigverify): a "bundle" names a
+// signer and the SHA-256 of the bytes it claims to have signed.
+func fakeSigVerify(bundle, artifact []byte) (*sigverify.Result, error) {
+	var m map[string]string
+	if err := json.Unmarshal(bundle, &m); err != nil {
+		return nil, errors.New("not a bundle")
+	}
+	h := sha256.Sum256(artifact)
+	if m["sha256"] != hex.EncodeToString(h[:]) {
+		return nil, errors.New("the signature is over different bytes")
+	}
+	return &sigverify.Result{Issuer: m["issuer"], Subject: m["subject"]}, nil
+}
+
+func writeFakeBundle(t *testing.T, path, issuer, subject string, tarball []byte) {
+	h := sha256.Sum256(tarball)
+	b, _ := json.Marshal(map[string]string{"issuer": issuer, "subject": subject, "sha256": hex.EncodeToString(h[:])})
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSignedRigsAreVerifiedOnThePullingMachineAndSignerChangesAreRefused(t *testing.T) {
+	regURL, store := startRegistry(t)
+	ctx := context.Background()
+	u, err := store.UpsertUser(ctx, registry.GitHubUser{ID: 1, Login: "jia"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, _ := store.CreateToken(ctx, u.ID, "t", 24*time.Hour)
+	a := registryMachine(t, regURL)
+	a.verify = fakeSigVerify
+	b := registryMachine(t, regURL)
+	b.verify = fakeSigVerify
+	// store the publisher's token on machine A the way `rigfile login` would
+	if r := a.run(tok+"\n", "secrets", "set", tokenRef(regURL)); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	dir := t.TempDir()
+	workflow := "https://github.com/jia/rigs/.github/workflows/release.yml@refs/tags/v1.0.0"
+
+	publishSigned := func(version, subject string) {
+		rig := regRig(t, "jia", "signed", version, "")
+		tarPath := filepath.Join(dir, "rig-"+version+".tgz")
+		if r := a.run("", "publish", rig, "--write-tarball", tarPath, "--ack-personal"); r.code != 0 || !strings.Contains(r.out, "cosign sign-blob") {
+			t.Fatalf("%+v", r)
+		}
+		tb, _ := os.ReadFile(tarPath)
+		bundle := filepath.Join(dir, "bundle-"+version+".json")
+		writeFakeBundle(t, bundle, sigverify.IssuerGitHubActions, subject, tb)
+		args := []string{"publish", rig, "--to-registry", "--sign-bundle", bundle, "--ack-personal"}
+		if version == "1.0.0" {
+			args = append(args, "--public")
+		}
+		if r := a.run("", args...); r.code != 0 || !strings.Contains(r.out, "published jia/signed@"+version) {
+			t.Fatalf("%+v", r)
+		}
+	}
+	publishSigned("1.0.0", workflow)
+
+	// a signature that does not match what is uploaded is refused by the registry
+	rig := regRig(t, "jia", "signed", "1.0.5", "")
+	bad := filepath.Join(dir, "bad.json")
+	writeFakeBundle(t, bad, sigverify.IssuerGitHubActions, workflow, []byte("other bytes"))
+	if r := a.run("", "publish", rig, "--to-registry", "--sign-bundle", bad, "--ack-personal"); r.code != 1 || !strings.Contains(r.err, "signature does not verify") {
+		t.Fatalf("%+v", r)
+	}
+
+	// the puller verifies on their own machine and shows who signed
+	r := b.run("", "pull", "jia/signed", "--plan-only", "--no-git", "--require-signature")
+	if r.code != 0 || !strings.Contains(r.out, "Signature: verified on this machine; signed by the publisher's own GitHub Actions identity") || !strings.Contains(r.out, "release.yml") {
+		t.Fatalf("%+v", r)
+	}
+	if r = b.run("", "pull", "jia/signed", "--yes", "--no-git", "--require-signature"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	// an unsigned version is refused by --require-signature, and shown as unsigned otherwise
+	if r = a.run("", "publish", regRig(t, "jia", "unsigned", "1.0.0", ""), "--to-registry", "--public", "--ack-personal"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r = b.run("", "pull", "jia/unsigned", "--plan-only", "--no-git", "--require-signature"); r.code != 1 || !strings.Contains(r.err, "--require-signature") {
+		t.Fatalf("%+v", r)
+	}
+	if r = b.run("", "pull", "jia/unsigned", "--plan-only", "--no-git"); r.code != 0 || !strings.Contains(r.out, "Signature: none") {
+		t.Fatalf("%+v", r)
+	}
+	// the next version is signed by a DIFFERENT identity: `update` refuses until the person accepts the change
+	publishSigned("1.1.0", "https://github.com/mallory/x/.github/workflows/r.yml@refs/tags/v1")
+	if r = b.run("", "update", "--plan-only", "--no-git"); r.code != 1 || !strings.Contains(r.err, "the signer changed") {
+		t.Fatalf("%+v", r)
+	}
+	if r = b.run("", "update", "--plan-only", "--no-git", "--accept-signer-change"); r.code != 0 || !strings.Contains(r.out, "NOT the publisher's identity") {
+		t.Fatalf("%+v", r)
 	}
 }

@@ -122,6 +122,8 @@ type Scanner struct {
 	Scan   func() (*scan.Scanner, error)
 	Log    *slog.Logger
 	Limits source.Limits
+	// PopularStars: see Config.PopularStars (0 = off).
+	PopularStars int
 }
 
 // ScanVersion unpacks the stored tarball into a temporary directory and applies the publishing rules:
@@ -133,8 +135,11 @@ type Scanner struct {
 //   - names confusably close to other rigs are recorded (docs/trust.md §4).
 func (sc *Scanner) ScanVersion(ctx context.Context, versionID int64) (ScanResult, error) {
 	var sha, owner, name string
-	var public bool
-	err := sc.Store.DB.QueryRowContext(ctx, `SELECT v.tarball_sha256, r.owner, r.name, r.visibility = 'public' FROM versions v JOIN rigs r ON r.id = v.rig_id WHERE v.id = $1`, versionID).Scan(&sha, &owner, &name, &public)
+	var public, signedByPublisher, publisherVerified bool
+	var stars int
+	err := sc.Store.DB.QueryRowContext(ctx, `SELECT v.tarball_sha256, r.owner, r.name, r.visibility = 'public', v.signer_is_publisher, u.verified_at IS NOT NULL,
+		(SELECT count(*) FROM stars st WHERE st.rig_id = r.id)
+		FROM versions v JOIN rigs r ON r.id = v.rig_id JOIN users u ON u.id = r.created_by WHERE v.id = $1`, versionID).Scan(&sha, &owner, &name, &public, &signedByPublisher, &publisherVerified, &stars)
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -177,6 +182,14 @@ func (sc *Scanner) ScanVersion(ctx context.Context, versionID int64) (ScanResult
 			res.Findings = append(res.Findings, f)
 		} else {
 			res.Warnings = append(res.Warnings, f)
+		}
+	}
+	if public && sc.PopularStars > 0 && stars >= sc.PopularStars {
+		if !signedByPublisher {
+			res.Findings = append(res.Findings, Finding{Kind: "policy", Message: fmt.Sprintf("this rig has %d stars, so new versions must be signed with the publisher's own GitHub Actions identity (Sigstore); this upload has no such signature", stars)})
+		}
+		if !publisherVerified {
+			res.Findings = append(res.Findings, Finding{Kind: "policy", Message: "this rig is popular, so its publisher must be a verified publisher; ask the registry's administrators"})
 		}
 	}
 	// static analysis and similar names: information for readers, and (danger on a public rig) a reason to hold

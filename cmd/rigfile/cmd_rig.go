@@ -74,8 +74,8 @@ type rigFlags struct {
 
 // pulledRig describes a rig that was fetched from a git source: recorded in state.json and shown on the screen.
 type pulledRig struct {
-	Source, Commit, Tree string
-	Banner               []string
+	Source, Commit, Tree, Signer string
+	Banner                       []string
 }
 
 func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
@@ -103,7 +103,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Registry: registryBaseQuiet(e, f.registry), RegistryToken: regToken(e), Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Registry: registryBaseQuiet(e, f.registry), RegistryToken: regToken(e), Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Signer: f.pulled.signer(), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -142,6 +142,13 @@ func (p *pulledRig) commit() string {
 		return ""
 	}
 	return p.Commit
+}
+
+func (p *pulledRig) signer() string {
+	if p == nil {
+		return ""
+	}
+	return p.Signer
 }
 
 func (p *pulledRig) tree() string {

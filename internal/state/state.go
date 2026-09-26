@@ -67,6 +67,8 @@ type RigRef struct {
 	Source     string `json:"source,omitempty"`
 	Commit     string `json:"commit,omitempty"`
 	TreeSHA256 string `json:"treeSha256,omitempty"`
+	// Signer is the Sigstore identity that signed the pulled version, verified on this machine ("" = unsigned).
+	Signer string `json:"signer,omitempty"`
 }
 
 // TargetState is what was applied for one target (e.g. "claude-code").

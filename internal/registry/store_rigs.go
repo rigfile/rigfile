@@ -239,6 +239,11 @@ type NewVersion struct {
 	NeedsLogins  []string
 	Layers       []string
 	Files        []FileEntry
+	// a verified Sigstore signature, if the upload carried one
+	Bundle            string
+	SignerIssuer      string
+	SignerSubject     string
+	SignerIsPublisher bool
 }
 
 // CreateVersion creates the rig on first upload (private), inserts the version as pending and queues its scan, in one
@@ -267,10 +272,12 @@ func (s *Store) CreateVersion(ctx context.Context, n NewVersion) (*Version, erro
 	}
 	var vid int64
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO versions (rig_id, version, status, tarball_sha256, size, manifest_yaml, description, readme, targets, needs_secrets, needs_logins, layers, created_at)
-		VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+		INSERT INTO versions (rig_id, version, status, tarball_sha256, size, manifest_yaml, description, readme, targets, needs_secrets, needs_logins, layers, created_at,
+		                      bundle, signer_issuer, signer_subject, signer_is_publisher)
+		VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, ''), $14, $15, $16) RETURNING id`,
 		rigID, n.Version, n.TarballSHA, n.Size, n.ManifestYAML, n.Description, n.Readme,
-		pq.Array(nz(n.Targets)), pq.Array(nz(n.NeedsSecrets)), pq.Array(nz(n.NeedsLogins)), pq.Array(nz(n.Layers)), s.now()).Scan(&vid)
+		pq.Array(nz(n.Targets)), pq.Array(nz(n.NeedsSecrets)), pq.Array(nz(n.NeedsLogins)), pq.Array(nz(n.Layers)), s.now(),
+		n.Bundle, n.SignerIssuer, n.SignerSubject, n.SignerIsPublisher).Scan(&vid)
 	if err != nil {
 		if isUnique(err) {
 			return nil, ErrConflict
@@ -493,4 +500,11 @@ func rigApproved(ctx context.Context, s *Store, id int64) bool {
 	var ok bool
 	_ = s.DB.QueryRowContext(ctx, `SELECT public_approved FROM rigs WHERE id = $1`, id).Scan(&ok)
 	return ok
+}
+
+// Bundle returns the stored Sigstore bundle of a version ("" when unsigned).
+func (s *Store) Bundle(ctx context.Context, versionID int64) string {
+	var b sql.NullString
+	_ = s.DB.QueryRowContext(ctx, `SELECT bundle FROM versions WHERE id = $1`, versionID).Scan(&b)
+	return b.String
 }

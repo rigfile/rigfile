@@ -147,7 +147,7 @@ func serve(ctx context.Context, e env) int {
 	gh := &registry.GitHubHTTP{ClientID: cfg.GitHubID, ClientSecret: cfg.GitHubSecret, WebBase: cfg.GitHubWeb, APIBase: cfg.GitHubAPI}
 	srv := registry.NewServer(cfg, store, blobs, gh, log)
 
-	sc := &registry.Scanner{Store: store, Blobs: blobs, Log: log, Limits: source.DefaultLimits, Scan: func() (*scan.Scanner, error) { return scan.New(scan.Options{}) }}
+	sc := &registry.Scanner{Store: store, Blobs: blobs, Log: log, Limits: source.DefaultLimits, PopularStars: cfg.PopularStars, Scan: func() (*scan.Scanner, error) { return scan.New(scan.Options{}) }}
 	go sc.Run(ctx, cfg.ScanWorkers)
 
 	hs := &http.Server{

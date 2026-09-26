@@ -10,9 +10,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
+	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
+	"github.com/sigstore/sigstore-go/pkg/root"
 )
 
 // Server is the registry HTTP service.
@@ -24,6 +27,23 @@ type Server struct {
 	Log   *slog.Logger
 	Lim   *Limiter
 	tmpl  *template.Template
+
+	// Sigstore is the trusted root signatures are verified against. nil = load it on first use (Cfg.SigstoreRoot, or the
+	// public-good root over TUF); tests inject a virtual Sigstore.
+	Sigstore root.TrustedMaterial
+	// VerifySignature replaces the real Sigstore verification (tests only).
+	VerifySignature func(bundle, artifact []byte) (*sigverify.Result, error)
+	sigOnce         sync.Once
+	sigErr          error
+}
+
+func (s *Server) trustedRoot() (root.TrustedMaterial, error) {
+	s.sigOnce.Do(func() {
+		if s.Sigstore == nil {
+			s.Sigstore, s.sigErr = sigverify.TrustedRoot(s.Cfg.SigstoreRoot, "")
+		}
+	})
+	return s.Sigstore, s.sigErr
 }
 
 // NewServer wires the service together.

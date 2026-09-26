@@ -12,6 +12,8 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/login"
 	"github.com/digitaldreamer3462/rigfile/internal/regclient"
+	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
+	"github.com/digitaldreamer3462/rigfile/internal/source"
 )
 
 var nonRef = regexp.MustCompile(`[^a-z0-9_-]+`)
@@ -211,4 +213,40 @@ func pollPublished(e env, c *regclient.Client, owner, name, version string) int 
 	}
 	fmt.Fprintln(e.err, "rigfile: the scan is taking longer than expected; check later with: rigfile pull", owner+"/"+name+"@"+version)
 	return 1
+}
+
+// registryFetcher is the fetcher for registry sources: it sends the stored token and verifies each version's Sigstore
+// signature on THIS machine, whatever the registry claims.
+func registryFetcher(e env) *source.RegistryFetcher {
+	return &source.RegistryFetcher{Token: regToken(e), Verify: func(ctx context.Context, spec source.Spec, version string, tarball []byte) (*source.SignerInfo, error) {
+		owner, name, _ := strings.Cut(spec.Path, "/")
+		bundle, err := regClient(e, spec.URL).Bundle(ctx, owner, name, version)
+		if err != nil {
+			return &source.SignerInfo{Err: "could not fetch the signature: " + err.Error()}, nil
+		}
+		if bundle == nil {
+			return nil, nil // unsigned
+		}
+		verify := e.verifySig
+		if verify == nil {
+			pi, err := platformInfo(e)
+			if err != nil {
+				return &source.SignerInfo{Err: err.Error()}, nil
+			}
+			sd, err := stateDirFor(e, pi)
+			if err != nil {
+				return &source.SignerInfo{Err: err.Error()}, nil
+			}
+			tm, err := sigverify.TrustedRoot("", sd)
+			if err != nil {
+				return &source.SignerInfo{Err: err.Error()}, nil
+			}
+			verify = func(b, t []byte) (*sigverify.Result, error) { return sigverify.Verify(tm, b, t) }
+		}
+		res, err := verify(bundle, tarball)
+		if err != nil {
+			return &source.SignerInfo{Err: err.Error()}, nil
+		}
+		return &source.SignerInfo{Subject: res.Subject, Issuer: res.Issuer, BundleSHA256: res.BundleSHA256, ByPublisher: sigverify.PublisherIdentity(res.Issuer, res.Subject, owner)}, nil
+	}}
 }

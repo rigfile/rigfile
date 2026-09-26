@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -238,6 +239,56 @@ func (c *Client) Upload(ctx context.Context, owner, name string, tarball []byte)
 		return nil, err
 	}
 	return &v, nil
+}
+
+// UploadSigned publishes a tarball together with its Sigstore bundle (multipart), so the registry can verify the signature
+// before it accepts the version.
+func (c *Client) UploadSigned(ctx context.Context, owner, name string, tarball, bundle []byte) (*Version, error) {
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	w, err := mw.CreateFormFile("tarball", "rig.tar.gz")
+	if err != nil {
+		return nil, err
+	}
+	_, _ = w.Write(tarball)
+	bw, err := mw.CreateFormFile("bundle", "bundle.json")
+	if err != nil {
+		return nil, err
+	}
+	_, _ = bw.Write(bundle)
+	if err := mw.Close(); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, http.MethodPost, rigPath(owner, name)+"/versions", body.Bytes(), mw.FormDataContentType())
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		return nil, readAPIError(resp)
+	}
+	defer resp.Body.Close()
+	var v Version
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// Bundle fetches a version's Sigstore bundle: (nil, nil) when the version is not signed.
+func (c *Client) Bundle(ctx context.Context, owner, name, version string) ([]byte, error) {
+	resp, err := c.do(ctx, http.MethodGet, rigPath(owner, name)+"/versions/"+url.PathEscape(version)+"/bundle", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, readAPIError(resp)
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(io.LimitReader(resp.Body, 256<<10))
 }
 
 func (c *Client) postForm(ctx context.Context, path string, form url.Values) error {

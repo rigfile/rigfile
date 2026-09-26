@@ -18,6 +18,11 @@ import (
 type RegistryFetcher struct {
 	Token  func(base string) string // the stored token for that registry, "" = anonymous
 	Limits Limits
+	// Verify, when set, checks the version's Sigstore signature against the downloaded tarball, locally. It returns nil when
+	// the version is unsigned; a SignerInfo with Err set when a signature is present but does not verify.
+	Verify func(ctx context.Context, spec Spec, version string, tarball []byte) (*SignerInfo, error)
+
+	signer *SignerInfo
 
 	yanked     bool
 	yankedNote string
@@ -81,8 +86,35 @@ func (f *RegistryFetcher) Fetch(ctx context.Context, spec Spec, commit, dest str
 	if hex.EncodeToString(sum[:]) != commit {
 		return fmt.Errorf("%w: the registry served %s@%s with a different hash than it advertised; refusing", ErrChanged, spec.Path, version)
 	}
+	f.signer = nil
+	if f.Verify != nil {
+		si, err := f.Verify(ctx, spec, version, data)
+		if err != nil {
+			si = &SignerInfo{Err: err.Error()}
+		}
+		f.signer = si
+	}
 	return Extract(bytes.NewReader(data), dest, false, f.Limits)
 }
+
+// SignerInfo is the outcome of verifying a version's signature on this machine.
+type SignerInfo struct {
+	Subject, Issuer string
+	ByPublisher     bool // the signer is the publisher's own GitHub Actions identity
+	BundleSHA256    string
+	Err             string // a signature is present but could not be verified
+}
+
+// String is the form recorded in state.json.
+func (s *SignerInfo) String() string {
+	if s == nil || s.Err != "" || s.Subject == "" {
+		return ""
+	}
+	return s.Subject + " (" + s.Issuer + ")"
+}
+
+// LastSigner returns the verification outcome for the version fetched last (nil = not signed or not checked).
+func (f *RegistryFetcher) LastSigner() *SignerInfo { return f.signer }
 
 // LastYank reports whether the version fetched last was yanked, and why.
 func (f *RegistryFetcher) LastYank() (bool, string) { return f.yanked, f.yankedNote }

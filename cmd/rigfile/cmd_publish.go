@@ -17,6 +17,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/publish"
+	"github.com/digitaldreamer3462/rigfile/internal/regclient"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 	"github.com/digitaldreamer3462/rigfile/internal/targets"
 	"github.com/digitaldreamer3462/rigfile/internal/tui"
@@ -38,11 +39,13 @@ func cmdPublish(args []string, e env) int {
 	toReg := fs.Bool("to-registry", false, "publish to the Rigfile registry (private unless --public); needs `rigfile login`")
 	public := fs.Bool("public", false, "with --to-registry: make the rig public once the registry scan has published it")
 	regFlag := fs.String("registry", "", "registry address (default $RIGFILE_REGISTRY)")
+	tarFile := fs.String("write-tarball", "", "write the exact tarball that would be published to this file (to sign it with cosign), then continue")
+	signBundle := fs.String("sign-bundle", "", "with --to-registry: a Sigstore bundle for the rig's tarball (sign the file written by --write-tarball with `cosign sign-blob --bundle`); the registry and pullers verify it")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
 		return 2
 	}
-	if (*toGit == "" && !*toReg) || len(pos) > 1 || (*public && !*toReg) {
+	if (*toGit == "" && !*toReg && *tarFile == "") || len(pos) > 1 || (*public && !*toReg) || (*signBundle != "" && !*toReg) {
 		fmt.Fprintln(e.err, "usage: rigfile publish [<rig-dir>] [--to-git <dir>] [--to-registry [--public]] [--name owner/name] [--from target] [--all] [--ack-personal] [--git-init]")
 		return 2
 	}
@@ -124,6 +127,18 @@ func cmdPublish(args []string, e env) int {
 		}
 		return 1
 	}
+	if *tarFile != "" {
+		tb, err := p.Tarball()
+		if err != nil {
+			fmt.Fprintln(e.err, "rigfile:", err)
+			return 1
+		}
+		if err := os.WriteFile(*tarFile, tb, 0o644); err != nil {
+			fmt.Fprintln(e.err, "rigfile:", err)
+			return 1
+		}
+		fmt.Fprintf(e.out, "\nwrote %s (%d bytes). Sign it: cosign sign-blob --bundle bundle.json %s\n", *tarFile, len(tb), *tarFile)
+	}
 	if *toGit != "" {
 		if err := p.Write(*toGit); err != nil {
 			fmt.Fprintln(e.err, "rigfile:", err)
@@ -133,8 +148,11 @@ func cmdPublish(args []string, e env) int {
 	} else {
 		fmt.Fprintf(e.out, "\nscan proof: %d finding(s) in %d file(s)\n", p.Proof.Findings, p.Proof.Files)
 	}
+	if *toGit == "" && !*toReg {
+		return 0
+	}
 	if *toReg {
-		if code := publishToRegistry(e, p, regBase, *public); code != 0 {
+		if code := publishToRegistry(e, p, regBase, *public, *signBundle); code != 0 {
 			return code
 		}
 	}
@@ -354,7 +372,7 @@ func gitInitCommit(dir, label string) error {
 }
 
 // publishToRegistry uploads the prepared rig and waits for the registry's scan.
-func publishToRegistry(e env, p *publish.Prepared, base string, public bool) int {
+func publishToRegistry(e env, p *publish.Prepared, base string, public bool, bundlePath string) int {
 	tb, err := p.Tarball()
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -366,7 +384,17 @@ func publishToRegistry(e env, p *publish.Prepared, base string, public bool) int
 		fmt.Fprintln(e.err, "rigfile: not signed in to", base, "- run `rigfile login` first")
 		return 1
 	}
-	v, err := c.Upload(context.Background(), owner, name, tb)
+	var v *regclient.Version
+	if bundlePath != "" {
+		bundle, rerr := os.ReadFile(bundlePath)
+		if rerr != nil {
+			fmt.Fprintln(e.err, "rigfile:", rerr)
+			return 1
+		}
+		v, err = c.UploadSigned(context.Background(), owner, name, tb, bundle)
+	} else {
+		v, err = c.Upload(context.Background(), owner, name, tb)
+	}
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
 		return 1

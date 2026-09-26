@@ -27,6 +27,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
 	"github.com/digitaldreamer3462/rigfile/internal/source"
 	"github.com/digitaldreamer3462/rigfile/internal/tools"
 )
@@ -38,18 +39,19 @@ type env struct {
 	in          io.Reader
 	out, err    io.Writer
 	getenv      func(string) string
-	stateDir    string                                         // "" = platform default
-	mcp         claudecode.MCPClient                           // nil = the real `claude` CLI
-	keyringOff  bool                                           // tests: force the encrypted-file secret backend
-	lookPath    func(string) (string, error)                   // nil = exec.LookPath
-	tools       tools.Host                                     // nil = run real package managers
-	interactive bool                                           // tests: behave as if stdin/stdout were a terminal
-	hidden      func(prompt string) ([]byte, error)            // tests: replaces the hidden-input prompt
-	sources     *source.Client                                 // nil = the real services, cached under the state directory
-	sleep       func(time.Duration)                            // tests: replaces the device-flow polling delay
-	pollEvery   time.Duration                                  // tests: how often publish checks the registry scan
-	runCmd      func(ctx context.Context, argv []string) error // tests: replaces running a vendor login command
-	openURL     func(string) error                             // tests: replaces opening the browser
+	stateDir    string                                                  // "" = platform default
+	mcp         claudecode.MCPClient                                    // nil = the real `claude` CLI
+	keyringOff  bool                                                    // tests: force the encrypted-file secret backend
+	lookPath    func(string) (string, error)                            // nil = exec.LookPath
+	tools       tools.Host                                              // nil = run real package managers
+	interactive bool                                                    // tests: behave as if stdin/stdout were a terminal
+	hidden      func(prompt string) ([]byte, error)                     // tests: replaces the hidden-input prompt
+	sources     *source.Client                                          // nil = the real services, cached under the state directory
+	sleep       func(time.Duration)                                     // tests: replaces the device-flow polling delay
+	pollEvery   time.Duration                                           // tests: how often publish checks the registry scan
+	runCmd      func(ctx context.Context, argv []string) error          // tests: replaces running a vendor login command
+	openURL     func(string) error                                      // tests: replaces opening the browser
+	verifySig   func(bundle, tarball []byte) (*sigverify.Result, error) // tests: replaces Sigstore verification
 }
 
 func (e env) look(name string) (string, error) {

@@ -18,6 +18,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
 	"github.com/digitaldreamer3462/rigfile/internal/source"
 )
 
@@ -70,11 +71,12 @@ type machine struct {
 	mcp       *fakeMCP
 	tools     *fakeTools
 	env       map[string]string
-	src       *source.Client // git sources for pull/update; nil = the real services
-	tty       bool           // behave as an interactive terminal (scripted key presses on stdin)
-	ran       [][]string     // vendor login commands that were "run"
-	key       string         // what the hidden prompt returns
-	pollEvery time.Duration  // how often publish checks the registry scan
+	src       *source.Client                                          // git sources for pull/update; nil = the real services
+	tty       bool                                                    // behave as an interactive terminal (scripted key presses on stdin)
+	ran       [][]string                                              // vendor login commands that were "run"
+	key       string                                                  // what the hidden prompt returns
+	pollEvery time.Duration                                           // how often publish checks the registry scan
+	verify    func(bundle, tarball []byte) (*sigverify.Result, error) // fake Sigstore verification
 }
 
 func newMachine(t *testing.T) *machine {
@@ -92,7 +94,7 @@ func (m *machine) run(stdin string, args ...string) result {
 	var out, errb bytes.Buffer
 	code := run(args, env{
 		in: strings.NewReader(stdin), out: &out, err: &errb,
-		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, sources: m.src, interactive: m.tty, pollEvery: m.pollEvery,
+		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, sources: m.src, interactive: m.tty, pollEvery: m.pollEvery, verifySig: m.verify,
 		runCmd: func(_ context.Context, argv []string) error { m.ran = append(m.ran, argv); return nil },
 		hidden: func(string) ([]byte, error) { return []byte(m.key), nil }, keyringOff: true, tools: m.tools,
 		lookPath: func(n string) (string, error) {
