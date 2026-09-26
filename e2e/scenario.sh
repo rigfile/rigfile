@@ -83,4 +83,17 @@ rigfile init --from codex --out /tmp/captured-codex --name e2e/captured > $out |
 grep -q 'FAKE-SECRET' /tmp/captured-codex/rigfile.yaml && fail "captured rig contains a secret"
 rigfile rollback --force > $out;                                                has "rolled back" $out
 [ ! -e "$HOME/.agents/skills/pdf" ] || fail "Codex skill not rolled back"
+echo "== publish a rig as a clean repository, then pull it back from git"
+export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.test GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.test
+rigfile publish /rig --to-git /tmp/published > $out 2>&1 || { cat $out >&2; fail "publish failed"; }
+has "scan proof: 0 finding(s)" $out
+[ -f /tmp/published/README.md ] && [ -f /tmp/published/rigfile.yaml ] || fail "published repo is incomplete"
+( cd /tmp/published && git init -q -b main && git add -A && git commit -q --no-verify -m "publish" ) || fail "cannot commit the published repo"
+rigfile pull file:///tmp/published --plan-only --no-git > $out 2>&1 || { cat $out >&2; fail "pull --plan-only failed"; }
+has "Source: file:///tmp/published" $out; has "you did not write" $out
+[ ! -e "$HOME/.agents/skills/pdf" ] || fail "plan-only pull wrote to the machine"
+rigfile pull file:///tmp/published --yes --overwrite --no-git > $out 2>&1 || { cat $out >&2; fail "pull failed"; }
+has "applied" $out
+rigfile update --plan-only --no-git > $out 2>&1;                                has "is up to date" $out
+rigfile rollback --force > $out;                                                has "rolled back" $out
 echo "E2E OK"

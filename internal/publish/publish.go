@@ -48,6 +48,17 @@ type Prepared struct {
 	AckNeeded bool
 }
 
+// unpinned are the warnings about external packages and skills that are not pinned: fine locally, refused when publishing.
+func (p *Prepared) unpinned() []manifest.Problem {
+	var out []manifest.Problem
+	for _, pr := range p.Problems {
+		if pr.Level == manifest.Warn && strings.Contains(pr.Msg, "pinned") && !strings.Contains(pr.Msg, "cannot verify") {
+			out = append(out, pr)
+		}
+	}
+	return out
+}
+
 // Proof is the result of re-scanning the staged tree.
 type Proof struct {
 	Files    int
@@ -62,6 +73,9 @@ func (p *Prepared) Blocked() []string {
 	}
 	if manifest.HasErrors(p.Problems) {
 		out = append(out, "the rig has errors (listed above)")
+	}
+	if n := len(p.unpinned()); n > 0 {
+		out = append(out, fmt.Sprintf("%d package(s) are not pinned to an exact version: a public rig must pin what it runs", n))
 	}
 	if n := len(p.Personal); n > 0 && p.AckNeeded {
 		out = append(out, fmt.Sprintf("%d personal-information item(s) to review: re-run with --ack-personal once you have checked them", n))
@@ -286,8 +300,13 @@ func personalIn(text, file string, in Input) []Finding {
 	return out
 }
 
+// genericAccounts are user and host names that identify no one (CI images, containers, default accounts); flagging them
+// would only bury the real findings (`rigfile.dev` in every manifest matched a container user called dev).
+var genericAccounts = map[string]bool{"dev": true, "root": true, "user": true, "admin": true, "test": true, "ubuntu": true, "runner": true,
+	"docker": true, "builder": true, "vagrant": true, "node": true, "localhost": true, "github": true, "circleci": true, "administrator": true}
+
 func wordRe(w string) *regexp.Regexp {
-	if len(w) < 3 {
+	if len(w) < 3 || genericAccounts[strings.ToLower(w)] {
 		return nil
 	}
 	return regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9])` + regexp.QuoteMeta(w) + `(?:$|[^A-Za-z0-9])`)

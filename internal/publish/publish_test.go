@@ -244,3 +244,20 @@ func TestEveryCorpusSecretBlocksPublishing(t *testing.T) {
 		t.Fatalf("%d core positives, %d not blocked: %v", n, len(missed), missed)
 	}
 }
+
+func TestUnpinnedPackagesBlockPublishing(t *testing.T) {
+	files := cleanFiles()
+	files["rigfile.yaml"] = []byte(strings.Replace(rigYAML, "alpaca-mcp@1.4.2", "alpaca-mcp", 1))
+	p := prep(t, files, func(in *Input) { in.AckPersonal = true })
+	b := p.Blocked()
+	if len(b) != 1 || !strings.Contains(b[0], "not pinned") {
+		t.Fatalf("%v", b)
+	}
+}
+
+func TestGenericAccountNamesAreNotPersonalInformation(t *testing.T) {
+	p := prep(t, cleanFiles(), func(in *Input) { in.User, in.Host = "dev", "runner" }) // rigfile.yaml says apiVersion: rigfile.dev/v1
+	for _, f := range p.Personal {
+		t.Errorf("unexpected: %+v", f)
+	}
+}

@@ -72,3 +72,5 @@ dist/
 .vscode/
 .idea/
 e2e/build/
+e2e/build-install/
+dist/

@@ -33,6 +33,7 @@ type Config struct {
 	Module  string
 	Repo    string // owner/repo of the GitHub releases
 	Epoch   int64  // modification time inside archives (reproducible)
+	Scripts string // directory holding install.sh and install.ps1 templates
 }
 
 func main() {
@@ -50,7 +51,7 @@ func main() {
 		os.Exit(2)
 	}
 	cfg := Config{Version: strings.TrimPrefix(*version, "v"), Out: *out, Package: "./cmd/rigfile", Repo: *repo,
-		Module: "github.com/digitaldreamer3462/rigfile", Epoch: 1700000000}
+		Module: "github.com/digitaldreamer3462/rigfile", Epoch: 1700000000, Scripts: "scripts"}
 	if *targets == "" {
 		cfg.Targets = allTargets
 	} else {
@@ -119,7 +120,33 @@ func Run(cfg Config, signKey string) error {
 	if err := renderPackaging(cfg, built); err != nil {
 		return err
 	}
+	if err := renderInstallers(cfg); err != nil {
+		return err
+	}
 	_ = os.RemoveAll(filepath.Join(cfg.Out, ".build"))
 	fmt.Printf("release v%s written to %s\n", cfg.Version, cfg.Out)
+	return nil
+}
+
+// renderInstallers writes install.sh and install.ps1 next to the archives with the release key and repository filled
+// in. They are release assets rather than part of SHA256SUMS: the key inside them is what anchors verification.
+func renderInstallers(cfg Config) error {
+	for _, name := range []string{"install.sh", "install.ps1"} {
+		b, err := os.ReadFile(filepath.Join(cfg.Scripts, name))
+		if err != nil {
+			return err
+		}
+		s := strings.ReplaceAll(string(b), "__RIGFILE_REPO__", cfg.Repo)
+		if cfg.PubKey != "" {
+			s = strings.ReplaceAll(s, "__RIGFILE_PUBKEY__", cfg.PubKey)
+		}
+		mode := os.FileMode(0o644)
+		if strings.HasSuffix(name, ".sh") {
+			mode = 0o755
+		}
+		if err := os.WriteFile(filepath.Join(cfg.Out, name), []byte(s), mode); err != nil {
+			return err
+		}
+	}
 	return nil
 }

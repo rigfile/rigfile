@@ -25,6 +25,7 @@ func hostTarget() Target { return Target{runtime.GOOS, runtime.GOARCH} }
 func run(t *testing.T, cfg Config) {
 	t.Helper()
 	cfg.Package = "../../cmd/rigfile" // relative to this package's directory, where `go test` runs
+	cfg.Scripts = "../../scripts"
 	if err := Run(cfg, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -99,6 +100,13 @@ func TestReleaseBuildsVerifiableReproducibleArtifacts(t *testing.T) {
 		t.Fatalf("the embedded key was not compiled in: %q %v", o, err)
 	}
 
+	sh := read(t, filepath.Join(out, "install.sh"))
+	if !strings.Contains(sh, `PUBKEY="`+pubLine(k)+`"`) || !strings.Contains(sh, `REPO="example-owner/rigfile"`) || strings.Contains(sh, "__RIGFILE_REPO__") || strings.Contains(sh, "__RIGFILE_PUBKEY__") {
+		t.Errorf("install.sh was not rendered:\n%s", sh[:600])
+	}
+	if !strings.Contains(read(t, filepath.Join(out, "install.ps1")), "'"+pubLine(k)+"'") {
+		t.Error("install.ps1 was not rendered")
+	}
 	checkPackaging(t, out)
 	checkDeb(t, filepath.Join(out, "rigfile_9.9.9_amd64.deb"))
 	checkWheel(t, out, exe)
