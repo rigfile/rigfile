@@ -322,6 +322,12 @@ func printNeeds(e env, p *session.Prepared) {
 	}
 	status := secretStatuses(e, p.Plat, secretRefs(needs))
 	fmt.Fprintln(e.out)
+	loginsShown := false
+	defer func() {
+		if loginsShown {
+			fmt.Fprintln(e.out, "               `rigfile logins` walks through all of them, one after another")
+		}
+	}()
 	for _, n := range needs {
 		switch n.Kind {
 		case "secret":
@@ -340,6 +346,7 @@ func printNeeds(e env, p *session.Prepared) {
 				fmt.Fprintf(e.out, "               then run: rigfile secrets set %s\n", n.Ref)
 			}
 		case "login":
+			loginsShown = true
 			how := n.Method
 			if how == "" {
 				how = "sign in"

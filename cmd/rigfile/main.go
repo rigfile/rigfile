@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -36,14 +37,16 @@ type env struct {
 	in          io.Reader
 	out, err    io.Writer
 	getenv      func(string) string
-	stateDir    string                              // "" = platform default
-	mcp         claudecode.MCPClient                // nil = the real `claude` CLI
-	keyringOff  bool                                // tests: force the encrypted-file secret backend
-	lookPath    func(string) (string, error)        // nil = exec.LookPath
-	tools       tools.Host                          // nil = run real package managers
-	interactive bool                                // tests: behave as if stdin/stdout were a terminal
-	hidden      func(prompt string) ([]byte, error) // tests: replaces the hidden-input prompt
-	sources     *source.Client                      // nil = the real services, cached under the state directory
+	stateDir    string                                         // "" = platform default
+	mcp         claudecode.MCPClient                           // nil = the real `claude` CLI
+	keyringOff  bool                                           // tests: force the encrypted-file secret backend
+	lookPath    func(string) (string, error)                   // nil = exec.LookPath
+	tools       tools.Host                                     // nil = run real package managers
+	interactive bool                                           // tests: behave as if stdin/stdout were a terminal
+	hidden      func(prompt string) ([]byte, error)            // tests: replaces the hidden-input prompt
+	sources     *source.Client                                 // nil = the real services, cached under the state directory
+	runCmd      func(ctx context.Context, argv []string) error // tests: replaces running a vendor login command
+	openURL     func(string) error                             // tests: replaces opening the browser
 }
 
 func (e env) look(name string) (string, error) {
@@ -78,6 +81,8 @@ func run(args []string, e env) int {
 		return cmdPull("pull", args[1:], e)
 	case "update":
 		return cmdPull("update", args[1:], e)
+	case "logins":
+		return cmdLogins(args[1:], e)
 	case "publish":
 		return cmdPublish(args[1:], e)
 	case "diff":
