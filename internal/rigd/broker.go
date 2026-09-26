@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -126,6 +127,9 @@ func (b *Broker) Close() error {
 	}
 	if b.store != nil {
 		b.store.CloseAll()
+	}
+	if c, ok := b.Audit.(io.Closer); ok {
+		_ = c.Close()
 	}
 	_ = os.Remove(filepath.Join(b.Dir, InfoFile))
 	_ = os.Remove(filepath.Join(b.Dir, TokenFile))
