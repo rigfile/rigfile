@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 7 (`rigd`, the secret broker): S7-M0 to S7-M6 BUILT on branch `stage-7` (not pushed); S7-M7 is the owner gate (`docs/stage-7-owner-checks.md`). Stages 1-5 are merged to `main`; Stage 6 is pushed with green CI and awaiting your merge. Open for the owner: the Stage 5-6 external security review and runbook rehearsal, and the live checks for Stage 7 (real service install per OS, real MCP servers).**
-Last updated: 2026-09-26 (Stage 7 built)
+**Current stage: Stage 8 (growth features, first slice): S8-M0 to S8-M7 BUILT on branch `stage-8` (not pushed); the owner gate is `docs/stage-8-owner-checks.md`. Stages 1-7 are merged to `main`. Open for the owner: push stage-8 and read CI, a database backup before the two new migrations, the Stage 5-8 external security review, the runbook rehearsal, the Stage 7 live checks, and the decisions in the Stage 8 owner checks. Windsurf, Zed and VS Code Copilot are researched but not built (conflicting or unverified vendor paths); private memory sync, a hosted rig and ARM/distro verification are deliberately not started.**
+Last updated: 2026-09-26 (Stage 8 first slice built)
 
 ## Stage 0 result (signed off)
 
@@ -152,3 +152,11 @@ Plan of record: `docs/stage-7-plan.md`; spec: `docs/rigd.md` (§7 records what w
 Proven: the proxy and broker against local TLS servers; a real malicious child process against the real broker (29 attempts: everything blocked or reduced to a surrogate, one documented exception); `exec` with real child processes; a detached background broker end to end; service files as goldens and installs through a fake activator with rollback.
 
 Not proven: a real launchd/systemd/scheduled-task install, real MCP servers and vendor APIs, Node/Python/Go clients against the CA variables, and one real gap: **a compromised child runs as you and can read the broker token** (`docs/red-team-broker.md`, last row). See `docs/stage-7-owner-checks.md`.
+
+## Stage 8: first slice built, awaiting owner steps
+
+Plan of record: `docs/stage-8-plan.md`; owner steps: `docs/stage-8-owner-checks.md`. Built: **version diffs** (`internal/rigdiff`, `rigfile changes`, the review banner in `rigfile update`, registry API and page; `docs/diffs.md`), **forks and use-as-base** (`rigfile fork`, derived rigs on the registry; `docs/forks.md`), **collections** (`docs/collections.md`), **organisations** with membership as the access control (`docs/orgs.md`, migrations 0003 and 0004, `rigfile org`, admin `disable-org`), and **`rigfile ui`**, a guarded local checklist page (`docs/local-ui.md`). Researched, not built: Windsurf, Zed, VS Code Copilot targets (`docs/targets/`).
+
+Proven: unit and CLI tests for every part; the registry parts against a real Postgres, including an organisation red-team over every read route and a concurrent-namespace race test.
+
+Not proven: real browsers, a real registry deployment, real teams, the editors' file formats. The riskiest change is the pair of visibility fragments in `internal/registry/store_rigs.go`, which every read now goes through.

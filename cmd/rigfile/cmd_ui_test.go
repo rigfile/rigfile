@@ -11,12 +11,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/digitaldreamer3462/rigfile/internal/platform"
 )
 
 func TestUIShowsThePlanStoresDeclaredSecretsAndApplies(t *testing.T) {
 	m := newMachine(t)
 	pass := filepath.Join(t.TempDir(), "pass")
-	if err := os.WriteFile(pass, []byte("correct horse battery staple\n"), 0o600); err != nil {
+	if err := platform.WritePrivate(pass, []byte("correct horse battery staple\n")); err != nil {
 		t.Fatal(err)
 	}
 	m.env["RIGFILE_PASSPHRASE_FILE"] = pass
