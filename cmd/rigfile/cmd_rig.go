@@ -65,7 +65,7 @@ func cmdValidate(args []string, e env) int {
 // ---- plan / apply -----------------------------------------------------------------------------
 
 type rigFlags struct {
-	layers, project, claudeDir, registry                                       string
+	layers, project, claudeDir, registry, models                               string
 	overwrite, yes, updateLock, noTools, noGit, unsafeBase, sandbox, noSandbox bool
 	acceptDanger                                                               bool
 	targets                                                                    kvFlags
@@ -91,6 +91,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 	fs.Var(&f.targets, "target", "also configure this target even if it is not detected (repeatable): "+strings.Join(targets.Names(), ", "))
 	fs.BoolVar(&f.noGit, "no-git", false, "skip the git protections (global gitignore and secret-scanning hooks)")
 	fs.BoolVar(&f.overwrite, "overwrite", false, "replace hand-edited managed content and items Rigfile does not own")
+	fs.StringVar(&f.models, "models", "", "the rig's local models: now (download and set up), later (default with --yes), or skip (also skips the engine install)")
 	if withApply {
 		fs.BoolVar(&f.yes, "yes", false, "apply without asking")
 		fs.BoolVar(&f.acceptDanger, "accept-danger", false, "with --yes: apply even though static analysis found danger-level patterns in a rig you pulled")
@@ -103,7 +104,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Registry: registryBaseQuiet(e, f.registry), RegistryToken: regToken(e), Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Signer: f.pulled.signer(), Overwrite: f.overwrite, ToolsHost: e.tools, Hardware: e.hardware, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Registry: registryBaseQuiet(e, f.registry), RegistryToken: regToken(e), Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Signer: f.pulled.signer(), Overwrite: f.overwrite, ToolsHost: e.tools, Hardware: e.hardware, SkipModels: f.models == "skip", NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -276,6 +277,9 @@ func planApply(verb, rigDir string, f rigFlags, e env) int {
 	}
 	if !f.yes {
 		promptMissingSecrets(e, p)
+	}
+	if code := applyModels(e, p, f); code != 0 && exit == 0 {
+		exit = code
 	}
 	return exit
 }

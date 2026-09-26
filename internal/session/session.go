@@ -71,6 +71,8 @@ type Options struct {
 	Sources *source.Client
 	// Hardware overrides hardware detection (tests). nil = read this machine, only when the rig has `models:`.
 	Hardware *platform.Hardware
+	// SkipModels leaves the rig's `models:` out: no plan section, no engine install (--models skip).
+	SkipModels bool
 	// Registry is the origin of the Rigfile registry to resolve owner/name layers from ("" = none); RegistryToken returns
 	// the stored sign-in token for it (private layers), or "".
 	Registry      string
@@ -308,22 +310,7 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 			return nil, err
 		}
 	}
-	cat, err := tools.LoadCatalog()
-	if err != nil {
-		return nil, err
-	}
-	th := o.ToolsHost
-	if th == nil {
-		th = tools.SystemHost{}
-	}
-	in := tools.Input{}
-	for k, v := range p.Merged.Tools {
-		for _, e := range v {
-			in[k] = append(in[k], e.V)
-		}
-	}
-	p.Tools = tools.Build(cat, in, string(pi.OS), th)
-	if len(p.Merged.Models) > 0 {
+	if len(p.Merged.Models) > 0 && !o.SkipModels {
 		mcat, err := models.LoadCatalog()
 		if err != nil {
 			return nil, err
@@ -340,6 +327,33 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 		}
 		p.Models = models.ResolveAll(ms, mcat, p.Hardware)
 	}
+	cat, err := tools.LoadCatalog()
+	if err != nil {
+		return nil, err
+	}
+	th := o.ToolsHost
+	if th == nil {
+		th = tools.SystemHost{}
+	}
+	in := tools.Input{}
+	for k, v := range p.Merged.Tools {
+		for _, e := range v {
+			in[k] = append(in[k], e.V)
+		}
+	}
+	// the engines the chosen models need are ordinary tools: planned, shown, and run only after approval
+	for _, m := range p.Models {
+		if m.Chosen == nil {
+			continue
+		}
+		switch m.Chosen.Engine {
+		case "ollama":
+			in["common"] = append(in["common"], "ollama")
+		case "mlx-lm":
+			in["uv"] = append(in["uv"], "mlx-lm=="+m.Chosen.EngineVersion)
+		}
+	}
+	p.Tools = tools.Build(cat, in, string(pi.OS), th)
 	if len(p.Merged.Gateways) > 0 {
 		p.ModelNotes = append(p.ModelNotes, "gateways: are NOT applied. A local protocol bridge to Claude Code is unsupported by Anthropic and none was verified for Codex; use `rigfile models run` for the documented routes (docs/models.md §4)")
 	}

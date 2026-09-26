@@ -47,6 +47,11 @@ type Installed struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	API      string `json:"api"` // base URL of the OpenAI-style API
+
+	// How to start it by hand (`rigfile models serve`).
+	Exe  string            `json:"exe,omitempty"`
+	Args []string          `json:"args,omitempty"`
+	Env  map[string]string `json:"env,omitempty"`
 }
 
 func (d Deps) out() io.Writer {
@@ -163,6 +168,7 @@ func setupMLX(ctx context.Context, p *Plan, d Deps, rec *Installed) error {
 		return fmt.Errorf("download of %s failed: %w", v.Model, err)
 	}
 	rec.Dir = snap
+	rec.Exe, rec.Args, rec.Env = ServeCommand(p, exe, snap)
 	if p.Serve.Autostart {
 		cmd, args, env := ServeCommand(p, exe, snap)
 		sv := d.service(p.Name, "Rigfile local model server ("+p.Name+")", cmd, args, env)
@@ -185,6 +191,7 @@ func setupOllama(ctx context.Context, p *Plan, d Deps, rec *Installed) error {
 	}
 	hostPort := net.JoinHostPort(p.Serve.Host, strconv.Itoa(p.Serve.Port))
 	env := []string{"OLLAMA_HOST=" + hostPort}
+	rec.Exe, rec.Args, rec.Env = ServeCommand(p, exe, "")
 	base := endpoint(p.Serve.Host, p.Serve.Port)
 	tagsURL := base + "/api/tags"
 	if p.Serve.Autostart {

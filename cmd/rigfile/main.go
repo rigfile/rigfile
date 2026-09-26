@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
+	"github.com/digitaldreamer3462/rigfile/internal/models"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/rigd"
 	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
@@ -54,6 +55,8 @@ type env struct {
 	openURL     func(string) error                                      // tests: replaces opening the browser
 	verifySig   func(bundle, tarball []byte) (*sigverify.Result, error) // tests: replaces Sigstore verification
 	brokerAct   rigd.Activator                                          // tests: replaces launchctl / systemctl / schtasks
+	modelDeps   func(models.Deps) models.Deps                           // tests: replaces how model setup reaches the machine
+	runAgent    func(path string, args, env, drop []string) int         // tests: replaces launching codex or claude
 	hardware    *platform.Hardware                                      // tests: replaces hardware detection
 	exe         string                                                  // tests: the path installed into service files ("" = this binary)
 }
@@ -153,7 +156,7 @@ func usage(w io.Writer) {
   login | logout | whoami            sign in to a Rigfile registry (device flow; token kept in your keychain)
   publish [--to-git DIR] [--to-registry [--public]]   scrub your setup (or a rig dir); write a repo and/or publish to the registry
   logins [--provider name]           walk through the logins the applied rig needs
-  models list                        local models: what the catalog would choose on this machine
+  models list|pull|status|serve|url|run|rm   local models: choose per machine, verified download, service, agents
   ui [<rig-dir>] [--no-open]           the plan and your checklist in a browser page on this computer
   org create|list|members|add|rm       organisations: a namespace several people publish under
   collection create|add|rm|delete|show|list   curated lists of rigs on the registry
