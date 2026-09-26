@@ -1047,3 +1047,97 @@ func TestSandboxDoesNotOverwriteAUserChoice(t *testing.T) {
 		t.Fatal("the user's own sandbox choice was overwritten")
 	}
 }
+
+func TestDoctorVerifiesBaseSecureAndFixReappliesTheRig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("macOS/Linux")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	m := newMachine(t)
+	rig := plainRig(t, "")
+	if r := m.run("", "doctor"); !strings.Contains(r.out, "⚠ base-secure") || !strings.Contains(r.out, "not applied") {
+		t.Fatalf("before apply: %+v", r)
+	}
+	if r := m.run("", "apply", rig, "--yes"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	r := m.run("", "doctor")
+	for _, want := range []string{"✔ base-secure ", "✔ base-secure git", "✔ scanner", "✔ git protections"} {
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("doctor missing %q:\n%s", want, r.out)
+		}
+	}
+	if strings.Contains(r.out, "✘") {
+		t.Fatalf("a fresh apply must be all green:\n%s", r.out)
+	}
+
+	// someone removes a deny rule from settings.json
+	sp := filepath.Join(m.home, ".claude", "settings.json")
+	b := mustRead(t, sp)
+	if !strings.Contains(string(b), `"Read(~/.ssh/**)",`) {
+		t.Fatalf("test assumption: %s", b)
+	}
+	_ = os.WriteFile(sp, []byte(strings.Replace(string(b), `"Read(~/.ssh/**)",`, "", 1)), 0o644)
+	r = m.run("", "doctor")
+	if r.code != 1 || !strings.Contains(r.out, "✘ base-secure") || !strings.Contains(r.out, "Read(~/.ssh/**)") || !strings.Contains(r.out, "doctor --fix") {
+		t.Fatalf("a missing deny must be named:\n%+v", r)
+	}
+	// --fix re-applies the recorded rig (the plan is shown; "a" approves)
+	r = m.run("a\n", "doctor", "--fix")
+	if !strings.Contains(r.out, "re-applying jiaxu/plain") || !strings.Contains(r.out, "applied") {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(string(mustRead(t, sp)), `"Read(~/.ssh/**)"`) {
+		t.Fatal("--fix did not restore the deny rule")
+	}
+	if r := m.run("", "doctor"); r.code != 0 || strings.Contains(r.out, "✘") {
+		t.Fatalf("%+v", r)
+	}
+
+	// hooks switched off, and the git hooks binary gone
+	b = mustRead(t, sp)
+	_ = os.WriteFile(sp, []byte(strings.Replace(string(b), "{\n", "{\n  \"disableAllHooks\": true,\n", 1)), 0o644)
+	if r := m.run("", "doctor"); r.code != 1 || !strings.Contains(r.out, "✘ hooks enabled") || !strings.Contains(r.out, "disableAllHooks") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "doctor", "--fix", "extra"); r.code != 2 {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestDoctorGitScansHistoryAndWalksThroughRotation(t *testing.T) {
+	g := newGitEnv(t)
+	g.write("README.md", "hello\n")
+	g.mustGit("add", "-A")
+	g.mustGit("commit", "-q", "--no-verify", "-m", "init")
+	m := newMachine(t)
+
+	if r := m.run("", "doctor", "--git", g.dir); r.code != 0 || !strings.Contains(r.out, "no secrets found") {
+		t.Fatalf("clean repo: %+v", r)
+	}
+	g.write("old.py", "token = \""+e2eSecret+"\"\n")
+	g.write("still.py", "key = \""+e2eSecret+"\"\n")
+	g.mustGit("add", "-A")
+	g.mustGit("commit", "-q", "--no-verify", "-m", "oops")
+	os.Remove(filepath.Join(g.dir, "old.py"))
+	g.mustGit("add", "-A")
+	g.mustGit("commit", "-q", "--no-verify", "-m", "remove old")
+
+	r := m.run("", "doctor", "--git", g.dir)
+	if r.code != 1 || !strings.Contains(r.out, "old.py:1") || !strings.Contains(r.out, "removed since") || !strings.Contains(r.out, "still.py:1") || !strings.Contains(r.out, "STILL IN HEAD") {
+		t.Fatalf("%+v", r)
+	}
+	for _, want := range []string{"ROTATE every credential", "github-pat", "Personal access tokens", "filter-repo", "never rewrites history"} {
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("walkthrough missing %q:\n%s", want, r.out)
+		}
+	}
+	if strings.Contains(r.out, e2eSecret) || strings.Contains(r.out, "wJ4kP9xQm2Rt7V") {
+		t.Fatal("doctor --git printed the secret")
+	}
+	if r := m.run("", "doctor", "--git", g.dir, "--max-commits", "1"); !strings.Contains(r.out, "only the newest 1 commits") {
+		t.Fatalf("%+v", r)
+	}
+}

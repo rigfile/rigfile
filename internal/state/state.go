@@ -61,7 +61,8 @@ type UnsafeBase struct {
 type RigRef struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
-	Hash    string `json:"hash"` // hash of the merged model for this target
+	Hash    string `json:"hash"`          // hash of the merged model for this target
+	Dir     string `json:"dir,omitempty"` // absolute rig directory of the last apply (so `doctor --fix` can re-apply it)
 }
 
 // TargetState is what was applied for one target (e.g. "claude-code").

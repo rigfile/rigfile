@@ -18,7 +18,7 @@ func TestLoadSaveRoundTripAndPermissions(t *testing.T) {
 		t.Fatalf("missing file must be an empty state: %+v %v", s, err)
 	}
 	tg := s.Target("claude-code")
-	tg.Rig = RigRef{"x/rig", "1.0.0", "abc"}
+	tg.Rig = RigRef{Name: "x/rig", Version: "1.0.0", Hash: "abc"}
 	tg.Upsert(Item{Category: "skill", Key: "b", Kind: KindTree, Path: "/p/b", Hash: "h1"})
 	tg.Upsert(Item{Category: "agent", Key: "a", Kind: KindFile, Path: "/p/a.md", Hash: "h2"})
 	tg.Upsert(Item{Category: "skill", Key: "b", Kind: KindTree, Path: "/p/b", Hash: "h3"}) // same identity: replaced

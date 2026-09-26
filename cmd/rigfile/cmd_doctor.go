@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -40,9 +41,22 @@ func (c check) mark() string {
 
 // cmdDoctor health-checks everything Rigfile depends on. Exit 1 if anything is red (✘).
 func cmdDoctor(args []string, e env) int {
-	if len(args) != 0 {
-		fmt.Fprintln(e.err, "usage: rigfile doctor")
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(e.err)
+	gitScan := fs.Bool("git", false, "scan a repository's whole history for committed secrets and walk through rotation (read-only)")
+	fix := fs.Bool("fix", false, "re-apply the last applied rig to repair drift (shows the plan and asks first)")
+	maxCommits := fs.Int("max-commits", 5000, "with --git: scan at most this many commits (newest)")
+	pos, err := parseInterspersed(fs, args)
+	if err != nil || len(pos) > 1 || (len(pos) == 1 && !*gitScan) {
+		fmt.Fprintln(e.err, "usage: rigfile doctor [--fix] | rigfile doctor --git [<repo>] [--max-commits N]")
 		return 2
+	}
+	if *gitScan {
+		dir := ""
+		if len(pos) == 1 {
+			dir = pos[0]
+		}
+		return doctorGit(e, dir, *maxCommits)
 	}
 	var cs []check
 	add := func(l checkLevel, name, format string, a ...any) {
@@ -93,8 +107,11 @@ func cmdDoctor(args []string, e env) int {
 		add(lvFail, "state", "%v", err)
 		return printChecks(e, cs)
 	}
+	baseDrift := false
 	if st.UnsafeBase != nil {
 		add(lvFail, "base-secure", "DISABLED since %s (applied with --i-understand-unsafe-base); run `rigfile apply` without the flag to restore it", st.UnsafeBase.Since)
+	} else {
+		baseDrift = doctorBase(e, pi, st, add)
 	}
 	if gts := st.Targets[gitmod.Target]; gts != nil && len(gts.Items) > 0 {
 		var bad []string
@@ -169,7 +186,21 @@ func cmdDoctor(args []string, e env) int {
 	default:
 		add(lvWarn, "secret store", "no OS keychain available; the encrypted-file fallback will be used (weaker)")
 	}
-	return printChecks(e, cs)
+	code := printChecks(e, cs)
+	if *fix {
+		ts := st.Targets[session.Target]
+		switch {
+		case !baseDrift && code == 0:
+			fmt.Fprintln(e.out, "nothing to fix")
+		case ts == nil || ts.Rig.Dir == "":
+			fmt.Fprintln(e.err, "rigfile: cannot fix: no rig directory is recorded; run `rigfile apply <rig-dir>` yourself")
+			return 1
+		default:
+			fmt.Fprintf(e.out, "\nre-applying %s (%s)\n\n", ts.Rig.Name, ts.Rig.Dir)
+			return cmdPlanApply("apply", []string{ts.Rig.Dir}, e)
+		}
+	}
+	return code
 }
 
 func printChecks(e env, cs []check) int {

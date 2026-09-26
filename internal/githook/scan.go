@@ -363,3 +363,44 @@ func (g Git) looseCommit(oid string) (tree string, parents []string, ok bool) {
 	}
 	return tree, parents, len(tree) == 40
 }
+
+// ScanHistory scans up to max commits of every ref (newest first when truncated), oldest first in the result,
+// against each commit's first parent, with the allow list from HEAD. It reads history only; it never
+// rewrites it.
+func (g Git) ScanHistory(sc *scan.Scanner, max int) (res Result, commits int, truncated bool, err error) {
+	args := []string{"rev-list", "--all"}
+	if max > 0 {
+		args = append(args, fmt.Sprintf("--max-count=%d", max+1))
+	}
+	b, err := g.out(args...)
+	if err != nil {
+		return Result{}, 0, false, err
+	}
+	list := strings.Fields(string(b))
+	if max > 0 && len(list) > max {
+		list, truncated = list[:max], true
+	}
+	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 { // oldest first
+		list[i], list[j] = list[j], list[i]
+	}
+	allowRev := ""
+	if g.ok("rev-parse", "--verify", "-q", "HEAD") {
+		allowRev = "HEAD"
+	}
+	res, err = g.ScanCommits(sc, list, allowRev)
+	return res, len(list), truncated, err
+}
+
+// PresentAtHead reports whether the finding is still in the file at HEAD (same fingerprint).
+func (g Git) PresentAtHead(sc *scan.Scanner, f scan.Finding) bool {
+	data, err := g.out("show", "HEAD:"+f.Path)
+	if err != nil {
+		return false
+	}
+	for _, h := range sc.ScanFile(f.Path, data) {
+		if h.Fingerprint == f.Fingerprint {
+			return true
+		}
+	}
+	return false
+}

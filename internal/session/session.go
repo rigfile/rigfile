@@ -402,7 +402,8 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 		}
 		res.LockWritten = lr.Changed
 	}
-	ts.Rig = state.RigRef{Name: p.Top.M.Name, Version: p.Top.M.Version, Hash: p.MergedSHA}
+	absDir, _ := filepath.Abs(p.Top.Dir)
+	ts.Rig = state.RigRef{Name: p.Top.M.Name, Version: p.Top.M.Version, Hash: p.MergedSHA, Dir: absDir}
 	ts.LockSHA = hashing.Bytes(lockBytes)
 	ts.Needs = p.Needs()
 	// A run that changed nothing must not rewrite state.json just to bump a timestamp.
