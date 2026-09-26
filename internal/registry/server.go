@@ -35,6 +35,8 @@ type Server struct {
 	VerifySignature func(bundle, artifact []byte) (*sigverify.Result, error)
 	sigOnce         sync.Once
 	sigErr          error
+
+	diff diffState
 }
 
 func (s *Server) trustedRoot() (root.TrustedMaterial, error) {

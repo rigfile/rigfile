@@ -1,0 +1,16 @@
+{{template "head" .}}
+{{with .Data}}
+<p><a href="/r/{{.Rig.Owner}}/{{.Rig.Name}}">{{.Rig.Owner}}/{{.Rig.Name}}</a> / changes</p>
+{{if .Err}}<div class="card">{{.Err}}</div>
+{{else}}
+<h2>{{.Result.From}} <span class="muted">to</span> {{.Result.To}}</h2>
+{{if not .Result.Entries}}{{if not .Result.Files}}<div class="card">No changes.</div>{{end}}{{end}}
+{{if .Review}}<div class="banner"><strong>Look at these before you accept ({{len .Review}})</strong><ul>{{range .Review}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+{{if .Result.Entries}}<div class="card"><strong>Manifest</strong>
+<table class="diff">{{range .Result.Entries}}<tr class="{{.Change}}"><td class="mark">{{if eq .Change "added"}}+{{else if eq .Change "removed"}}-{{else}}~{{end}}</td><td>{{.Category}}</td><td><code>{{.Key}}</code></td><td class="muted">{{if eq .Change "changed"}}{{.Before}} → {{.After}}{{else if eq .Change "added"}}{{.After}}{{else}}{{.Before}}{{end}}</td></tr>{{end}}</table></div>{{end}}
+{{range .Files}}<div class="card"><strong>{{.Path}}</strong> <span class="muted">{{.Change}}{{if .Omitted}} · {{.Omitted}}{{end}}</span>
+{{range .Notes}}<div class="warn">{{.Text}}</div>{{end}}
+{{if .Lines}}<pre class="udiff">{{range .Lines}}<span class="{{.Kind}}">{{.Text}}
+</span>{{end}}</pre>{{end}}</div>{{end}}
+{{end}}{{end}}
+{{template "foot" .}}

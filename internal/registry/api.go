@@ -16,6 +16,7 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/search", s.apiSearch)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}", s.apiRig)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/resolve", s.apiResolve)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/diff", s.apiDiff)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}", s.apiVersion)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/manifest", s.apiManifest)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/tarball", s.apiTarball)

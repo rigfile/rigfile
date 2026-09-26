@@ -103,6 +103,17 @@ func TestUpdateFollowsTheSourceAndSaysWhenNothingChanged(t *testing.T) {
 	if r.code != 0 || !strings.Contains(r.out, "Update: ") || !strings.Contains(r.out, "new") {
 		t.Fatalf("%+v", r)
 	}
+	for _, want := range []string{"What changed since the version you have applied:", "Look at these before you accept", "commands new: adds an item whose text the agent will follow", "+ commands/new.md"} {
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("update must show what changed; missing %q:\n%s", want, r.out)
+		}
+	}
+	if strings.Contains(r.out, "+new command") {
+		t.Fatal("file text is shown only with --diff")
+	}
+	if r := m.run("", "update", "--plan-only", "--no-git", "--diff"); !strings.Contains(r.out, "+new command") {
+		t.Fatalf("--diff shows file text:\n%s", r.out)
+	}
 	if _, err := os.Stat(filepath.Join(m.home, ".claude", "commands", "new.md")); !os.IsNotExist(err) {
 		t.Fatal("--plan-only applied the update")
 	}
@@ -164,5 +175,25 @@ func TestPullOfACleanRigSaysSo(t *testing.T) {
 	url := gitRig(t, plainRig(t, ""), env)
 	if r := m.run("", "pull", url, "--plan-only", "--no-git"); r.code != 0 || !strings.Contains(r.out, "ANALYSIS  no suspicious patterns") {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestChangesComparesTwoRigDirectories(t *testing.T) {
+	m := newMachine(t)
+	a := plainRig(t, "")
+	b := plainRig(t, "")
+	put(t, b, "commands/extra.md", "extra command\n", 0o644)
+	put(t, b, "rigfile.yaml", strings.Replace(mustReadStr(t, filepath.Join(b, "rigfile.yaml")), "commands:\n", "commands:\n  - {path: commands/extra.md}\n", 1), 0o644)
+	r := m.run("", "changes", a, b, "--diff")
+	if r.code != 0 || !strings.Contains(r.out, "commands extra") || !strings.Contains(r.out, "+extra command") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "changes", a, a); r.code != 0 || !strings.Contains(r.out, "no changes") {
+		t.Fatalf("%+v", r)
+	}
+	for _, args := range [][]string{{"changes"}, {"changes", a}, {"changes", a, "not-a-rig"}} {
+		if r := m.run("", args...); r.code != 2 {
+			t.Fatalf("%v: %+v", args, r)
+		}
 	}
 }

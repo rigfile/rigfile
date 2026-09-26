@@ -18,6 +18,7 @@ func (s *Server) pageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /u/{login}", s.pageProfile)
 	mux.HandleFunc("GET /r/{owner}/{name}", s.pageRig)
 	mux.HandleFunc("GET /r/{owner}/{name}/v/{version}", s.pageRig)
+	mux.HandleFunc("GET /r/{owner}/{name}/diff", s.pageDiff)
 	mux.HandleFunc("GET /r/{owner}/{name}/v/{version}/files/{path...}", s.pageFile)
 	mux.HandleFunc("GET /r/{owner}/{name}/v/{version}/raw/{path...}", s.rawFile)
 	mux.HandleFunc("POST /r/{owner}/{name}/star", s.pageStar)

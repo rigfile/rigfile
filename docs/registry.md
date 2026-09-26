@@ -36,6 +36,7 @@ JSON unless stated. Errors are `{"error": "..."}` with a stable HTTP status. A p
 | `GET /v1/search?q=&limit=` | optional | public rigs matching name, description, owner |
 | `GET /v1/rigs/{owner}/{name}` | optional | metadata, visibility, stars, versions the viewer may see |
 | `GET /v1/rigs/{owner}/{name}/resolve?range=^1.2` | optional | the newest non-yanked version satisfying the range (`layers.Satisfies` rules); exact versions may be yanked |
+| `GET /v1/rigs/{owner}/{name}/diff?from=&to=` | optional | what changed between two versions the viewer may see (`from` defaults to the version before `to`, `to` to the newest published): manifest items added, removed, changed, file changes with unified text diffs, and the notes that ask for review (S8-M1, `docs/diffs.md`) |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}` | optional | version detail; scan findings only for the owner |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}/manifest` | optional | `rigfile.yaml` |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}/tarball` | optional | the gzip tarball; headers `X-Rigfile-SHA256`, `ETag`, immutable caching |
@@ -50,7 +51,7 @@ JSON unless stated. Errors are `{"error": "..."}` with a stable HTTP status. A p
 
 Deviation from the plan's sketch: the content API is the tarball endpoint (a rig is one immutable blob); a generic `/blobs/:sha256` endpoint would be a second path to the same bytes that would have to repeat the visibility check, so it is not offered.
 
-Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r/{owner}/{name}`, `/r/{owner}/{name}/v/{version}`, `/r/{owner}/{name}/v/{version}/files/{path}`, `/login`, `/auth/callback`, `/logout`, `/device`, `/report`, `/legal/terms`, `/legal/acceptable-use`, `/legal/takedown`.
+Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r/{owner}/{name}`, `/r/{owner}/{name}/v/{version}`, `/r/{owner}/{name}/v/{version}/files/{path}`, `/r/{owner}/{name}/diff`, `/login`, `/auth/callback`, `/logout`, `/device`, `/report`, `/legal/terms`, `/legal/acceptable-use`, `/legal/takedown`.
 
 ## 4. Auth
 

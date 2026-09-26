@@ -89,6 +89,8 @@ func run(args []string, e env) int {
 		return cmdPull("pull", args[1:], e)
 	case "update":
 		return cmdPull("update", args[1:], e)
+	case "changes":
+		return cmdChanges(args[1:], e)
 	case "self-update":
 		return cmdSelfUpdate(args[1:], e)
 	case "verify-signature":
@@ -140,6 +142,7 @@ func usage(w io.Writer) {
   login | logout | whoami            sign in to a Rigfile registry (device flow; token kept in your keychain)
   publish [--to-git DIR] [--to-registry [--public]]   scrub your setup (or a rig dir); write a repo and/or publish to the registry
   logins [--provider name]           walk through the logins the applied rig needs
+  changes <before> <after> [--diff]  what a new version of a rig adds, removes and changes
   self-update [--check]              install the latest release after verifying its signature and checksum
   verify-signature <file> [--pubkey k] check a minisign signature
   diff                               show drift since the last apply
