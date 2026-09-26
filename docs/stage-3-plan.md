@@ -1,0 +1,33 @@
+# Stage 3 plan of record: multi-vendor adapters + Windows
+
+**Goal (RIGFILE_PLAN.md §12):** the same rig configures Claude Code, Codex, Cursor, Gemini CLI and Claude Desktop on macOS, Linux **and Windows**, with base-secure ported to each target (enforced where the tool allows, "instructions only" where not, always said on the plan screen).
+**Exit:** golden + round-trip tests pass for all targets on all three OSes; one rig applied on clean macOS, Ubuntu and Windows 11 VMs works in each tool; base-secure red-team prompts blocked on all three.
+
+Started 2026-09-26 on branch `stage-3` (from `stage-2`, whose owner sign-off S2-M9 is still pending: Stage 3 builds on that branch and merges after it).
+
+**What I can and cannot do here.** Everything is built and tested on macOS (host) and Linux (containers). Windows code paths are unit-tested with an injected `GOOS`/environment and cross-compiled/vetted, and the CI matrix moves to `windows-latest` (runs on push, which is the owner's). Clean-VM runs, real Windows Credential Manager/ACL behaviour, and every "UNVERIFIED" vendor contract are owner-run checks listed in S3-M10; no adapter claims what it could not verify (unverified cells are skipped with a visible note).
+
+## Design calls
+
+1. **Adapters are registered targets** (`internal/targets`): `Name`, `Detect`, `Plan`. `session.Prepare` merges and projects the rig **per target** (per-target `overrides.<target>` already exist in the merge engine), builds one plan per selected target, and applies all of them through the same journaled writer, state file (one entry per target), lockfile (merged hash per target) and review screen.
+2. **Which targets run:** `claude-code` always (Stage 1 behaviour on a fresh machine); every other target only when **detected** (its config dir or executable exists) or **named** (`targets.include` in the rig, or `--target <name>`); `targets.exclude` always wins; a target that is named but not installed still gets its config written, with a note.
+3. **Capabilities are data** (`capabilities.yaml` per target, embedded): which categories a target supports, per-OS config paths, and the notes shown for unsupported cells. The support matrix in the plan is regenerated from it (`docs/targets/matrix.md`), so docs cannot drift from code.
+4. **Unsupported is loud**: an item a target cannot express is listed on the plan screen as "not supported by <target>: <why>", never dropped silently. Global instructions for Cursor (no user rules file) are printed for the user to paste.
+5. **MCP stdio entries always go through `rigfile exec`** for every target (secrets never in a config file); on Windows the exec shim runs `.cmd`/`.bat` shims (npx, npm) through `cmd /c` itself.
+6. **base-secure per target:** the embedded layer stays one layer; each adapter maps what it can (permissions/tool exclusions, hooks, sandbox/approval settings, instructions snippet) and reports the rest as "instructions only".
+
+## Milestones
+
+| # | Milestone | Delivers | Acceptance | Status |
+|---|---|---|---|---|
+| S3-M0 | **Verify first** | `docs/targets/{gemini-cli,cursor,claude-desktop}.md` (Codex was done in Stage 0), OS-support answers, UNVERIFIED list | Dated, sourced, honest about gaps | **done 2026-09-26** |
+| S3-M1 | **Adapter framework** | `internal/targets` registry, per-target merge/project/plan in `session`, per-target state and lock hashes, `--target`, detection, capabilities data + generated matrix, plan screen sections per target | Stage 1/2 behaviour unchanged (all existing tests green); a fake second adapter proves N targets, state, lock, rollback, diff and doctor per target | todo |
+| S3-M2 | **Codex adapter** | `~/.codex/config.toml` (`[mcp_servers]`, sandbox/approval settings, hooks), `AGENTS.md` section, skills under `~/.agents/skills`, subagents as TOML, commands → skills; TOML edits preserve comments (`internal/splice` TOML regions) | Golden files per OS; user TOML content untouched; verify/drift | todo |
+| S3-M3 | **Gemini CLI adapter** | `~/.gemini/settings.json` MCP + `context.fileName` untouched, `GEMINI.md` section, commands as TOML | Golden + verify | todo |
+| S3-M4 | **Cursor adapter** | `~/.cursor/mcp.json`, project `.cursor/rules/*.mdc`, printed user rules | Golden + verify | todo |
+| S3-M5 | **Claude Desktop adapter** | per-OS `claude_desktop_config.json` (macOS/Windows; "not available" on Linux), stdio only, remote servers reported | Golden + verify | todo |
+| S3-M6 | **base-secure per target** | mapping table, "enforced / instructions only" wording on the plan screen, `doctor` per target, red-team rows per target | Red-team doc regenerated with per-target rows | todo |
+| S3-M7 | **Capture + round trip** | `capture()` per target, `rigfile init --from <target>`; `capture(apply(x)) == x` for supported fields; golden files per OS (macOS/Linux/Windows) | Round-trip tests green for every adapter | todo |
+| S3-M8 | **Windows platform** | Credential Manager backend via go-keyring, user-only ACLs, `%APPDATA%`/`%LOCALAPPDATA%` paths, long paths, CRLF, `cmd /c` for `.cmd` shims in the exec shim, Git-for-Windows `sh` hook shims, PowerShell forms of the guard's rules, winget/Scoop tool installs | Windows-`GOOS` unit tests for every branch; `GOOS=windows` build/vet; CI `windows-latest` runs the suite | todo |
+| S3-M9 | **WSL** | detect, configure inside WSL, cross-boundary denies (`/mnt/c/Users/*/.ssh/**`), optional Windows-side configuration via `rigfile.exe` (documented, not automated) | Unit tests with injected WSL environment | todo |
+| S3-M10 | **CI + E2E + sign-off** | CI matrix ubuntu/macos/windows full; container E2E extended to multi-target; documented clean-VM procedure (macOS Tart, Windows 11) and the live-vendor checks for every UNVERIFIED item; STATUS checklist | CI green on three OSes; owner runs VM procedures | todo (owner gate) |
