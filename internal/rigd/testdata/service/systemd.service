@@ -1,0 +1,16 @@
+[Unit]
+Description=Rigfile secret broker (rigd)
+Documentation=https://github.com/digitaldreamer3462/rigfile/blob/main/docs/rigd.md
+
+[Service]
+Type=simple
+ExecStart="/usr/local/bin/rigfile" broker run
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+StandardOutput=append:/home/me/.rigfile/rigd/rigd.log
+StandardError=inherit
+
+[Install]
+WantedBy=default.target

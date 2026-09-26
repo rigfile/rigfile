@@ -27,6 +27,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/digitaldreamer3462/rigfile/internal/rigd"
 	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
 	"github.com/digitaldreamer3462/rigfile/internal/source"
 	"github.com/digitaldreamer3462/rigfile/internal/tools"
@@ -52,6 +53,8 @@ type env struct {
 	runCmd      func(ctx context.Context, argv []string) error          // tests: replaces running a vendor login command
 	openURL     func(string) error                                      // tests: replaces opening the browser
 	verifySig   func(bundle, tarball []byte) (*sigverify.Result, error) // tests: replaces Sigstore verification
+	brokerAct   rigd.Activator                                          // tests: replaces launchctl / systemctl / schtasks
+	exe         string                                                  // tests: the path installed into service files ("" = this binary)
 }
 
 func (e env) look(name string) (string, error) {

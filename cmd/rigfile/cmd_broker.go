@@ -6,10 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
+	"time"
 
+	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/rigd"
 )
 
@@ -29,6 +33,8 @@ func rigdDir(e env) (string, error) {
 const brokerUsage = `usage: rigfile broker <command>
 
   run                 run the broker in the foreground (Ctrl-C stops it)
+  install | uninstall install or remove the per-user service (launchd, systemd --user, or a scheduled task)
+  start | stop        start or stop it (the service if installed, otherwise a background process)
   status              show whether the broker is running
   enable | disable    turn Level 2 (surrogate secrets) on or off for rigfile exec
   exclude <server>    run one server at Level 1 (the real key in its environment)
@@ -50,6 +56,8 @@ func cmdBroker(args []string, e env) int {
 		return brokerRun(args[1:], e, dir)
 	case "status":
 		return brokerStatus(e, dir)
+	case "install", "uninstall", "start", "stop":
+		return brokerService(args[0], e, dir)
 	case "enable", "disable":
 		cfg, err := rigd.LoadConfig(dir)
 		if err != nil {
@@ -148,4 +156,147 @@ func brokerStatus(e env, dir string) int {
 	}
 	fmt.Fprintln(e.err, "rigfile:", err)
 	return 1
+}
+
+func goosFor(pi *platform.Info) string {
+	if pi.OS == platform.MacOS {
+		return "darwin"
+	}
+	return string(pi.OS)
+}
+
+type execActivator struct{}
+
+func (execActivator) Run(argv []string) (string, error) {
+	out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()
+	return string(out), err
+}
+
+func brokerService(action string, e env, dir string) int {
+	pi, err := platformInfo(e)
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	sd, err := stateDirFor(e, pi)
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	home, err := pi.Home()
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	exe := e.exe
+	if exe == "" {
+		if exe, err = os.Executable(); err != nil {
+			fmt.Fprintln(e.err, "rigfile:", err)
+			return 1
+		}
+	}
+	act := e.brokerAct
+	if act == nil {
+		act = execActivator{}
+	}
+	svc := &rigd.Service{
+		Spec: rigd.ServiceSpec{GOOS: goosFor(pi), Home: home, Exe: exe, UID: strconv.Itoa(os.Getuid()), StateDir: sd, LogPath: filepath.Join(dir, "rigd.log")},
+		Act:  act, BackupRoot: filepath.Join(sd, "backups"),
+	}
+	fail := func(err error) int { fmt.Fprintln(e.err, "rigfile:", err); return 1 }
+	switch action {
+	case "install":
+		path, err := svc.Install()
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintf(e.out, "Installed the broker service (%s) and started it. Undo with `rigfile broker uninstall`; `rigfile rollback` also restores the file.\n", path)
+		fmt.Fprintln(e.out, "The service reads secrets from your OS keychain. If you use the encrypted-file backend, it cannot prompt for a passphrase: run `rigfile broker run` yourself instead.")
+		return 0
+	case "uninstall":
+		if err := svc.Uninstall(); err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(e.out, "Removed the broker service.")
+		return 0
+	case "start":
+		if svc.Installed() {
+			if err := svc.Start(); err != nil {
+				return fail(err)
+			}
+			fmt.Fprintln(e.out, "Started the broker service.")
+			return 0
+		}
+		return brokerBackground(e, dir, exe)
+	case "stop":
+		if svc.Installed() {
+			if err := svc.Stop(); err != nil {
+				return fail(err)
+			}
+			fmt.Fprintln(e.out, "Stopped the broker service.")
+			return 0
+		}
+		return brokerTerminate(e, dir)
+	}
+	return 2
+}
+
+// brokerBackground starts `rigfile broker run` detached from this terminal (no service manager involved).
+func brokerBackground(e env, dir, exe string) int {
+	if c, err := rigd.ClientFromDir(dir); err == nil {
+		if _, err := c.Status(); err == nil {
+			fmt.Fprintln(e.out, "The broker is already running.")
+			return 0
+		}
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	logPath := filepath.Join(dir, "rigd.log")
+	lf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	defer lf.Close()
+	cmd := exec.Command(exe, "broker", "run")
+	cmd.Stdout, cmd.Stderr = lf, lf
+	platform.Detach(cmd)
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	_ = cmd.Process.Release()
+	for i := 0; i < 60; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if c, err := rigd.ClientFromDir(dir); err == nil {
+			if _, err := c.Status(); err == nil {
+				fmt.Fprintf(e.out, "The broker is running in the background (log: %s).\n", logPath)
+				return 0
+			}
+		}
+	}
+	fmt.Fprintf(e.err, "rigfile: the broker did not come up; see %s\n", logPath)
+	return 1
+}
+
+// brokerTerminate stops a background broker by its recorded pid.
+func brokerTerminate(e env, dir string) int {
+	c, err := rigd.ClientFromDir(dir)
+	if err != nil {
+		fmt.Fprintln(e.out, "The broker is not running.")
+		return 0
+	}
+	st, err := c.Status()
+	if err != nil {
+		fmt.Fprintln(e.out, "The broker is not running.")
+		return 0
+	}
+	if err := platform.Terminate(st.PID); err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	fmt.Fprintln(e.out, "Stopped the broker.")
+	return 0
 }
