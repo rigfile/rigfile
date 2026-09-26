@@ -461,6 +461,8 @@ func (c *capturer) reverseRule(r string) (map[string]string, string) {
 	switch tool {
 	case "Bash":
 		return map[string]string{"bash": arg}, ""
+	case "PowerShell":
+		return map[string]string{"powershell": arg}, ""
 	case "WebFetch":
 		if d, ok := strings.CutPrefix(arg, "domain:"); ok {
 			return map[string]string{"web_fetch": d}, ""

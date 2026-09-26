@@ -162,7 +162,7 @@ func Build(o Options) (*engine.Plan, error) {
 }
 
 func configBlock(hooksDir string) string {
-	q := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(hooksDir)
+	q := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(platform.ToShellPath(hooksDir))
 	return "# managed by rigfile (base-secure): global git hooks that scan for secrets, chained to your previous hooks.\n" +
 		"# Remove this block (or run `rigfile rollback`) to restore your previous setting.\n" +
 		"[core]\n\thooksPath = \"" + q + "\"\n"
@@ -184,7 +184,7 @@ func (b *builder) previousHooksPath(p Paths) string {
 		b.plan.Notes = append(b.plan.Notes, fmt.Sprintf("your core.hooksPath (%s) is relative, so it cannot be chained from a global directory; it was not chained", prev))
 		return ""
 	}
-	return prev
+	return platform.ToShellPath(prev) // the dispatcher is a sh script (Git for Windows): forward slashes
 }
 
 func sameDir(a, b string) bool {
@@ -224,7 +224,8 @@ func (b *builder) hooks(p Paths) error {
 	}
 	entries := make([]hashing.Entry, 0, len(files))
 	for _, f := range files {
-		entries = append(entries, hashing.Entry{Path: f.rel, Size: int64(len(f.data)), SHA256: hashing.Bytes(f.data), Exec: f.exec})
+		// NTFS has no execute bit, so a Windows tree is hashed with none (Git for Windows runs hooks through sh anyway).
+		entries = append(entries, hashing.Entry{Path: f.rel, Size: int64(len(f.data)), SHA256: hashing.Bytes(f.data), Exec: f.exec && b.o.Plat.OS != platform.Windows})
 	}
 	sortEntries(entries)
 	want := hashing.TreeOf(entries)

@@ -304,3 +304,10 @@ func TestMarkerProblemsFailLoudlyInsteadOfEditingBlindly(t *testing.T) {
 		t.Fatalf("unbalanced markers must be an error: %v", err)
 	}
 }
+
+func TestConfigBlockUsesForwardSlashesForWindowsPaths(t *testing.T) {
+	got := configBlock(`C:\Users\me\AppData\Roaming\rigfile\git-hooks`)
+	if !strings.Contains(got, `hooksPath = "C:/Users/me/AppData/Roaming/rigfile/git-hooks"`) {
+		t.Fatal(got)
+	}
+}

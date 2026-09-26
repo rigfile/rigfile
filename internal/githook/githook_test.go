@@ -370,3 +370,10 @@ func TestCommitMsgScansTheMessageButNotGitComments(t *testing.T) {
 		t.Fatal("an unreadable message must fail closed")
 	}
 }
+
+func TestDispatcherOnWindowsUsesForwardSlashesForTheBinary(t *testing.T) {
+	s := DispatchScript(`C:\Users\me\AppData\Local\rigfile\rigfile.exe`, true)
+	if !strings.Contains(s, "RIGFILE='C:/Users/me/AppData/Local/rigfile/rigfile.exe'\n") || strings.Contains(s, `C:\`) {
+		t.Fatalf("%s", s[:400])
+	}
+}

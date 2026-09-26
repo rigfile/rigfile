@@ -1,0 +1,5 @@
+# Golden files and the sh hook scripts Rigfile generates must be byte-identical on every OS: Windows checkouts
+# must not rewrite them to CRLF.
+* text=auto eol=lf
+*.png binary
+*.age binary

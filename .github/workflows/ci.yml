@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -28,12 +28,17 @@ jobs:
           if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
       - run: go vet ./...
       # The keychain is not available on CI runners; tests use the encrypted-file backend.
-      - run: go test -race -count=1 ./...
-      # timing gate (scanner speed); meaningless under -race, so it runs separately
-      - run: go test -count=1 -run TestPerformance ./internal/scan
+      - if: runner.os != 'Windows'
+        run: go test -race -count=1 ./...
+      # Windows runners have no C toolchain by default, which -race needs; the race detector already ran on Linux/macOS.
+      - if: runner.os == 'Windows'
+        run: go test -count=1 ./...
+      # timing gate (scanner speed); meaningless under -race, so it runs separately (and on shared Windows runners it is not stable enough to gate)
+      - if: runner.os != 'Windows'
+        run: go test -count=1 -run TestPerformance ./internal/scan
 
   windows-build:
-    # Windows is Stage 3: CI only proves it still compiles and vets. No tests run there yet.
+    # Fast fail: the whole module cross-compiles and vets for Windows (the test job above runs the suite natively).
     name: build (windows, cross-compiled)
     runs-on: ubuntu-latest
     steps:

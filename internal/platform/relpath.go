@@ -29,3 +29,15 @@ func SafeRelative(abs string) (string, error) {
 	}
 	return rel, nil
 }
+
+// ToShellPath renders a Windows absolute path (C:\Users\me\x, \\server\share\x) with forward slashes, the form
+// Git for Windows' bundled sh, git's own config and `core.hooksPath` all accept without escaping. A path that
+// is not Windows-shaped is returned unchanged, so it is safe to call on any OS's paths.
+func ToShellPath(p string) string {
+	drive := len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/') &&
+		(p[0] >= 'a' && p[0] <= 'z' || p[0] >= 'A' && p[0] <= 'Z')
+	if drive || strings.HasPrefix(p, `\\`) {
+		return strings.ReplaceAll(p, `\`, "/")
+	}
+	return p
+}

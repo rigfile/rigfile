@@ -18,6 +18,12 @@ hooks:
     event: pre_tool_use
     match: {tool: bash}
     run: builtin:guard
+  # Windows without Git Bash runs commands through Claude Code's PowerShell tool, which the Bash matcher does not cover.
+  - id: base-secure-guard-powershell
+    event: pre_tool_use
+    match: {tool: powershell}
+    run: builtin:guard
+    os: [windows]
   # File writes: no secret values in written content (the full scanner, not a regex floor).
   - id: base-secure-write-guard
     event: pre_tool_use
@@ -83,9 +89,19 @@ permissions:
     - {read: "~/.local/share/keyrings/**", reason: "desktop keyring", os: [linux]}
     - {read: "~/Library/Keychains/**", reason: "macOS keychains", os: [macos]}
     - {read: "/etc/shadow", reason: "password hashes", os: [linux]}
+    # Windows locations (UNVERIFIED on a clean VM: docs/stage-3-plan.md S3-M10). DPAPI keeps the master keys under Protect.
+    - {read: "~/AppData/Roaming/Microsoft/Credentials/**", reason: "Windows saved credentials", os: [windows]}
+    - {read: "~/AppData/Local/Microsoft/Credentials/**", reason: "Windows saved credentials", os: [windows]}
+    - {read: "~/AppData/Roaming/Microsoft/Protect/**", reason: "DPAPI master keys", os: [windows]}
+    - {read: "~/AppData/Roaming/gnupg/**", reason: "GPG keys", os: [windows]}
+    - {read: "~/AppData/Roaming/gcloud/**", reason: "cloud credentials", os: [windows]}
+    - {read: "~/AppData/Roaming/rigfile/**", reason: "Rigfile's git hooks and configuration", os: [windows]}
+    - {read: "~/AppData/Local/rigfile/**", reason: "Rigfile state, backups and encrypted secrets", os: [windows]}
     # ---- Rigfile's own configuration must not be editable by an agent (it is not a protected path) ----
     - {edit: "~/.rigfile/**", reason: "Rigfile state and backups"}
     - {edit: "~/.config/rigfile/**", reason: "Rigfile's git hooks and configuration"}
+    - {edit: "~/AppData/Roaming/rigfile/**", reason: "Rigfile's git hooks and configuration", os: [windows]}
+    - {edit: "~/AppData/Local/rigfile/**", reason: "Rigfile state and backups", os: [windows]}
     # ---- git safety: hooks are what stop a secret from being committed ----
     - {bash: "git*--no-verify*", reason: "bypasses the secret-scanning git hooks"}
     - {bash: "git*core.hooksPath*", reason: "disables the secret-scanning git hooks"}
@@ -99,6 +115,18 @@ permissions:
     - {bash: "env", reason: "prints every environment variable, secrets included"}
     - {bash: "printenv", reason: "prints every environment variable, secrets included"}
     - {bash: "export -p", reason: "prints every environment variable, secrets included"}
+    # ---- the same protections for the PowerShell tool (Windows) ----
+    - {powershell: "git*--no-verify*", reason: "bypasses the secret-scanning git hooks", os: [windows]}
+    - {powershell: "git*core.hooksPath*", reason: "disables the secret-scanning git hooks", os: [windows]}
+    - {powershell: "git push --force*", reason: "force-push rewrites shared history", os: [windows]}
+    - {powershell: "git push -f*", reason: "force-push rewrites shared history", os: [windows]}
+    - {powershell: "git push*--force*", reason: "force-push rewrites shared history", os: [windows]}
+    - {powershell: "Get-ChildItem env:*", reason: "prints every environment variable, secrets included", os: [windows]}
+    - {powershell: "gci env:*", reason: "prints every environment variable, secrets included", os: [windows]}
+    - {powershell: "dir env:*", reason: "prints every environment variable, secrets included", os: [windows]}
+    - {powershell: "ls env:*", reason: "prints every environment variable, secrets included", os: [windows]}
+    - {powershell: "Get-Item env:*", reason: "prints every environment variable, secrets included", os: [windows]}
+    - {powershell: "*GetEnvironmentVariables*", reason: "prints every environment variable, secrets included", os: [windows]}
   ask:
     - {bash: "git push*", reason: "publishes commits"}
     - {bash: "git -C * push*", reason: "publishes commits"}
@@ -119,3 +147,14 @@ permissions:
     - {edit: "~/.claude/settings.local.json", reason: "the agent's own hooks and permissions"}
     - {edit: "./.claude/settings.json", reason: "the agent's own hooks and permissions"}
     - {edit: "./.claude/settings.local.json", reason: "the agent's own hooks and permissions"}
+    - {powershell: "git push*", reason: "publishes commits", os: [windows]}
+    - {powershell: "Remove-Item*-Recurse*", reason: "recursive deletion", os: [windows]}
+    - {powershell: "rd /s*", reason: "recursive deletion", os: [windows]}
+    - {powershell: "Start-Process*RunAs*", reason: "runs with administrator rights", os: [windows]}
+    - {powershell: "npm publish*", reason: "publishes a package", os: [windows]}
+    - {powershell: "twine upload*", reason: "publishes a package", os: [windows]}
+    - {powershell: "cargo publish*", reason: "publishes a package", os: [windows]}
+    - {powershell: "*iwr *| iex*", reason: "runs a downloaded script", os: [windows]}
+    - {powershell: "*irm *| iex*", reason: "runs a downloaded script", os: [windows]}
+    - {powershell: "*Invoke-WebRequest*|*Invoke-Expression*", reason: "runs a downloaded script", os: [windows]}
+    - {powershell: "*Invoke-RestMethod*|*Invoke-Expression*", reason: "runs a downloaded script", os: [windows]}

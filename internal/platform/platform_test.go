@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -130,8 +131,22 @@ func TestPreferredSecretStore(t *testing.T) {
 
 func TestWritePrivate(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		if err := WritePrivate(filepath.Join(t.TempDir(), "x"), []byte("v")); err != ErrNotSupported {
-			t.Fatalf("Windows must fail closed until implemented, got %v", err)
+		// No mode bits: the file must be readable by the owner and carry a protected user-only ACL (IsPrivateFile
+		// reads the real DACL), and an overwrite must leave no temp files behind.
+		p := filepath.Join(t.TempDir(), "sub", "secret.age")
+		for _, v := range []string{"v1", "v2"} {
+			if err := WritePrivate(p, []byte(v)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if b, err := os.ReadFile(p); err != nil || string(b) != "v2" {
+			t.Fatalf("content = %q err=%v", b, err)
+		}
+		if err := IsPrivateFile(p); err != nil {
+			t.Fatalf("a file written by WritePrivate must be private: %v", err)
+		}
+		if ents, _ := os.ReadDir(filepath.Dir(p)); len(ents) != 1 {
+			t.Fatalf("temp files left behind: %v", ents)
 		}
 		return
 	}
@@ -181,5 +196,32 @@ func TestSafeRelative(t *testing.T) {
 	}
 	if _, err := SafeRelative("relative/path"); err == nil {
 		t.Fatal("relative paths must be rejected")
+	}
+}
+
+func TestForeignTrusteesAllowsOnlyOwnerSystemAndAdministrators(t *testing.T) {
+	me := "S-1-5-21-1-2-3-1001"
+	if got := ForeignTrustees([]string{me, "S-1-5-18", "S-1-5-32-544", me}, me); len(got) != 0 {
+		t.Fatalf("%v", got)
+	}
+	got := ForeignTrustees([]string{me, "S-1-1-0", "S-1-5-32-545", "S-1-5-11", "S-1-1-0", "S-1-5-21-1-2-3-1002"}, me)
+	want := []string{"S-1-1-0", "S-1-5-11", "S-1-5-21-1-2-3-1002", "S-1-5-32-545"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestToShellPathOnlyRewritesWindowsShapedPaths(t *testing.T) {
+	for in, want := range map[string]string{
+		`C:\Users\me\AppData\Roaming\rigfile\git-hooks`: "C:/Users/me/AppData/Roaming/rigfile/git-hooks",
+		`c:/already/fine`:  "c:/already/fine",
+		`\\server\share\x`: "//server/share/x",
+		"/home/me/it's":    "/home/me/it's",
+		`/weird\name`:      `/weird\name`, // a POSIX file name may contain a backslash
+		"":                 "",
+	} {
+		if got := ToShellPath(in); got != want {
+			t.Errorf("ToShellPath(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

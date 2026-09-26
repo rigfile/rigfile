@@ -107,3 +107,22 @@ Detected as `linux` + `wsl=true` via `WSL_DISTRO_NAME` (✅ referenced in [Codex
 5. Sandbox availability differs: none on native Windows for Claude Code. (§8.2, §11)
 6. Both tools store credentials in plaintext files on some OS/config combinations; add these to the deny list. (§8.2)
 7. Rigfile needs a tie-breaker between `~/.rigfile` (state) and `~/.config/rigfile` (config) on macOS: two conventions on one OS.
+
+## 8. Windows implementation (Stage 3, S3-M8)
+
+Built and covered by cross-compilation (`GOOS=windows go vet ./...`), injected-GOOS unit tests on every host, and Windows-only tests that run on CI's `windows-latest` (`internal/platform`, `internal/execshim`, `internal/secrets`). **Nothing here has been run on a real Windows machine by the developer yet**: the first native run is the `windows-latest` CI job, then the clean-VM procedure in S3-M10.
+
+| Concern | What Rigfile does | Status |
+|---|---|---|
+| Secret store | `go-keyring` → Windows Credential Manager (a secret is capped at 2560 bytes; a larger value is refused with a clear message) | UNVERIFIED natively |
+| Secret / state files | `WritePrivate`: temp file → protected (non-inheriting) DACL granting only the current user → write → rename. `IsPrivateFile` reads the DACL and refuses anyone but the user, SYSTEM and Administrators (decision logic `ForeignTrustees` is unit-tested everywhere) | UNVERIFIED natively |
+| Concurrent `secrets set` | `LockFileEx` on a sidecar `.lock` file | UNVERIFIED natively |
+| Paths | `%USERPROFILE%`, `%APPDATA%` (config, Claude Desktop), `%LOCALAPPDATA%\rigfile` (state); Go adds the `\\?\` prefix for paths over MAX_PATH itself | golden files per OS |
+| Line endings | marker regions and JSON edits keep an existing file's CRLF; `.gitattributes` pins LF for everything Rigfile generates or compares | tested |
+| Renames | `platform.RenameReplace` retries briefly (an editor or scanner may hold the destination open) | UNVERIFIED natively |
+| `rigfile exec` / MCP servers | `npx`, `npm` are `.cmd` shims: the program is resolved through PATHEXT and Go runs `.cmd` through `cmd.exe` with its own escaping, refusing arguments it cannot escape (no shell injection). Config entries call `rigfile` (a real `.exe`, which Claude Code's exec form requires), so no `cmd /c` wrapper appears in any config | Windows-only tests; `cmd /c npx` in vendor docs stays UNVERIFIED and is unneeded |
+| Interrupt | Windows cannot signal a child; Ctrl-C ends the wrapped server (`platform.ForwardSignal`) | by design |
+| Git hooks | Git for Windows runs the `#!/bin/sh` shims with its bundled sh; the dispatcher and `core.hooksPath` use forward-slash paths (`platform.ToShellPath`); the hooks tree is hashed without an execute bit (NTFS has none) | tested by injected paths; UNVERIFIED natively |
+| PowerShell | base-secure carries `PowerShell(...)` deny/ask rules, a `powershell` guard hook and Windows credential/DPAPI read denies, all `os: [windows]` | tested |
+| Tools | winget/Scoop entries in `catalog/tools.yaml` | Stage 1 |
+| Reserved names | a rig whose skill/agent/command id is `con`, `nul`, `com1`... is rejected on every OS (it could not be checked out on Windows) | tested |

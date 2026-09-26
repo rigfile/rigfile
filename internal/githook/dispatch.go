@@ -3,6 +3,8 @@ package githook
 import (
 	"fmt"
 	"strings"
+
+	"github.com/digitaldreamer3462/rigfile/internal/platform"
 )
 
 // HookNames are every hook git can run (githooks(5)). With `core.hooksPath` pointing at Rigfile's directory
@@ -39,7 +41,7 @@ func ShimScript(name string) string {
 // starts Rigfile only for the "prepared" state of a branch or tag update. Hooks that carry stdin are read
 // once with the shell builtin `read` so each consumer sees the same input.
 func DispatchScript(bin string, backstop bool) string {
-	q := "'" + strings.ReplaceAll(bin, "'", `'\''`) + "'"
+	q := "'" + strings.ReplaceAll(platform.ToShellPath(bin), "'", `'\''`) + "'"
 	b := 0
 	if backstop {
 		b = 1

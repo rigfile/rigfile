@@ -71,7 +71,8 @@ type machine struct {
 
 func newMachine(t *testing.T) *machine {
 	h := t.TempDir()
-	return &machine{t: t, home: h, mcp: newFakeMCP(), tools: &fakeTools{have: map[string]bool{"npm": true}}, env: map[string]string{"HOME": h, "USERPROFILE": h, "PATH": os.Getenv("PATH")}}
+	return &machine{t: t, home: h, mcp: newFakeMCP(), tools: &fakeTools{have: map[string]bool{"npm": true}}, env: map[string]string{"HOME": h, "USERPROFILE": h, "PATH": os.Getenv("PATH"),
+		"APPDATA": filepath.Join(h, "AppData", "Roaming"), "LOCALAPPDATA": filepath.Join(h, "AppData", "Local")}}
 }
 
 type result struct {
