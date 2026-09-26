@@ -1,4 +1,5 @@
 {{template "head" .}}
 <h1>{{.Data.Login}}</h1>
+{{if .Data.Collections}}<h2>Collections</h2><ul>{{range .Data.Collections}}<li><a href="/c/{{.Owner}}/{{.Slug}}">{{.Title}}</a>{{if eq .Visibility "private"}} <span class="tag">private</span>{{end}}</li>{{end}}</ul><h2>Rigs</h2>{{end}}
 {{if .Data.Rigs}}{{template "rigs" .Data}}{{else}}<p class="muted">No rigs to show.</p>{{end}}
 {{template "foot" .}}

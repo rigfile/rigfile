@@ -1,0 +1,11 @@
+{{template "head" .}}
+{{with .Data}}
+<h1>{{.C.Title}}{{if eq .C.Visibility "private"}} <span class="tag">private</span>{{end}}</h1>
+<p class="muted">A collection by <a href="/u/{{.C.Owner}}">{{.C.Owner}}</a></p>
+{{if .C.Description}}<p>{{.C.Description}}</p>{{end}}
+{{if .Items}}{{range .Items}}<div class="card"><h3><a href="/r/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a>{{if .Latest}} <span class="muted">{{.Latest}}</span>{{end}}</h3>
+<div>{{.Description}}</div>{{if .Note}}<div class="muted">{{.Note}}</div>{{end}}<div class="muted">{{.Stars}} ★</div></div>{{end}}
+{{else}}<p class="muted">Nothing here yet.</p>{{end}}
+{{if .Mine}}<p class="muted">Change this collection with <code>rigfile collection</code>.</p>{{end}}
+{{end}}
+{{template "foot" .}}

@@ -67,8 +67,9 @@ func (s *Server) pageSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 type profileData struct {
-	Login string
-	Rigs  []RigSummary
+	Login       string
+	Rigs        []RigSummary
+	Collections []Collection
 }
 
 func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +84,8 @@ func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rs, _ := s.Store.OwnedRigs(r.Context(), login, v)
-	s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs}})
+	cs, _ := s.Store.UserCollections(r.Context(), login, v)
+	s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs, Collections: cs}})
 }
 
 // RigPage is everything the rig page shows.

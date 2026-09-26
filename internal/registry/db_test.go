@@ -16,7 +16,7 @@ func TestMigrationsApplyOnceAndConstraintsHold(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	if err := db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 2 {
+	if err := db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 3 {
 		t.Fatalf("migrations recorded: %d %v", n, err)
 	}
 	if _, err := db.Exec(`INSERT INTO users (github_id, login) VALUES (1, 'Jia')`); err == nil {

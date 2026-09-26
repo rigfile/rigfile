@@ -20,6 +20,7 @@ A web service where people publish rigs, browse them, star them, and pull them w
 | `stars` | `user_id`, `rig_id` |
 | `jobs` | scan queue: `version_id`, `state`, `attempts`, `run_after`, `locked_by`, `locked_until` |
 | `reports` | abuse reports: `rig_id`, `version`, `reporter_id` (nullable), `reason`, `details`, `status` |
+| `collections`, `collection_items` | curated lists of rig references (S8-M3, migration 0003) |
 | `audit_log` | who did what: publish, yank, remove, visibility change, login, token issue/revoke, admin actions |
 
 Blobs: `blobs/sha256/<aa>/<hex>` (tarballs), content-addressed and immutable; the database row is the only thing that makes a blob reachable.
@@ -37,6 +38,7 @@ JSON unless stated. Errors are `{"error": "..."}` with a stable HTTP status. A p
 | `GET /v1/rigs/{owner}/{name}` | optional | metadata, visibility, stars, versions the viewer may see |
 | `GET /v1/rigs/{owner}/{name}/resolve?range=^1.2` | optional | the newest non-yanked version satisfying the range (`layers.Satisfies` rules); exact versions may be yanked |
 | `GET /v1/rigs/{owner}/{name}/diff?from=&to=` | optional | what changed between two versions the viewer may see (`from` defaults to the version before `to`, `to` to the newest published): manifest items added, removed, changed, file changes with unified text diffs, and the notes that ask for review (S8-M1, `docs/diffs.md`) |
+| `POST /v1/collections`, `GET /v1/collections/{owner}/{slug}`, ... | see `docs/collections.md` | curated lists of rigs (S8-M3) |
 | `GET /v1/rigs/{owner}/{name}/derived` | optional | public rigs whose newest published version builds on this one (`from:`); see `docs/forks.md` |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}` | optional | version detail; scan findings only for the owner |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}/manifest` | optional | `rigfile.yaml` |
@@ -52,7 +54,7 @@ JSON unless stated. Errors are `{"error": "..."}` with a stable HTTP status. A p
 
 Deviation from the plan's sketch: the content API is the tarball endpoint (a rig is one immutable blob); a generic `/blobs/:sha256` endpoint would be a second path to the same bytes that would have to repeat the visibility check, so it is not offered.
 
-Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r/{owner}/{name}`, `/r/{owner}/{name}/v/{version}`, `/r/{owner}/{name}/v/{version}/files/{path}`, `/r/{owner}/{name}/diff`, `/login`, `/auth/callback`, `/logout`, `/device`, `/report`, `/legal/terms`, `/legal/acceptable-use`, `/legal/takedown`.
+Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r/{owner}/{name}`, `/r/{owner}/{name}/v/{version}`, `/r/{owner}/{name}/v/{version}/files/{path}`, `/r/{owner}/{name}/diff`, `/c/{owner}/{slug}`, `/login`, `/auth/callback`, `/logout`, `/device`, `/report`, `/legal/terms`, `/legal/acceptable-use`, `/legal/takedown`.
 
 ## 4. Auth
 

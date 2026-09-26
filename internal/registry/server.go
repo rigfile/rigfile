@@ -67,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /static/", staticHandler())
 	s.authRoutes(mux)
 	s.apiRoutes(mux)
+	s.collectionRoutes(mux)
 	s.pageRoutes(mux)
 	return s.recoverer(s.headers(s.logged(mux)))
 }
