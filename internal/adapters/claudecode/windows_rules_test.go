@@ -51,3 +51,31 @@ func TestBaseSecurePowerShellRulesAreWindowsOnly(t *testing.T) {
 		t.Fatalf("Windows rules leaked onto macOS:\n%s", mac)
 	}
 }
+
+func TestWSLAddsWindowsSideDeniesOnlyInsideWSLAndOnlyWithBaseSecure(t *testing.T) {
+	mk := func(env map[string]string) *platform.Info {
+		pi, _ := platform.New(platform.Options{GOOS: "linux", Getenv: func(k string) string { return env[k] }})
+		return pi
+	}
+	wsl := mk(map[string]string{"HOME": "/home/me", "WSL_DISTRO_NAME": "Ubuntu"})
+	if !wsl.WSL || !mk(map[string]string{"HOME": "/home/me", "WSL_INTEROP": "/run/WSL/1_interop"}).WSL {
+		t.Fatal("WSL not detected")
+	}
+	if mk(map[string]string{"HOME": "/home/me"}).WSL || len(WSLDenies(mk(map[string]string{"HOME": "/h"}))) != 0 {
+		t.Fatal("plain Linux must not get Windows-side rules")
+	}
+	p, err := PlanPermissions(wsl, []byte("{}\n"), manifest.Permissions{Deny: WSLDenies(wsl)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, c := range p.Adds {
+		got = append(got, c.Rule)
+	}
+	joined := strings.Join(got, "\n")
+	for _, want := range []string{"Read(//mnt/c/Users/*/.ssh/**)", "Read(//mnt/c/Users/*/AppData/Roaming/Microsoft/Protect/**)"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %s in\n%s", want, joined)
+		}
+	}
+}

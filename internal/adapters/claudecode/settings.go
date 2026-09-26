@@ -92,7 +92,14 @@ func (b *builder) settings(p *merge.Projection) {
 	var ops []engine.Op
 
 	// ---- permissions (add-only union; provably shadowed allows are dropped and reported) ----
-	pp, err := PlanPermissions(env.Plat, work, p.Permissions())
+	perms := p.Permissions()
+	if env.BaseSecure {
+		if wsl := WSLDenies(env.Plat); len(wsl) > 0 {
+			perms.Deny = append(perms.Deny, wsl...)
+			b.note("WSL detected: base-secure also denies reads of the Windows profile under /mnt/c/Users/*/ (SSH keys, cloud credentials, DPAPI). A Claude Code installed on the Windows side is a separate install: run rigfile there too.")
+		}
+	}
+	pp, err := PlanPermissions(env.Plat, work, perms)
 	if err != nil {
 		b.fail(fmt.Errorf("%s: %w", env.short(path), err))
 		return

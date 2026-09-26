@@ -126,3 +126,11 @@ Built and covered by cross-compilation (`GOOS=windows go vet ./...`), injected-G
 | PowerShell | base-secure carries `PowerShell(...)` deny/ask rules, a `powershell` guard hook and Windows credential/DPAPI read denies, all `os: [windows]` | tested |
 | Tools | winget/Scoop entries in `catalog/tools.yaml` | Stage 1 |
 | Reserved names | a rig whose skill/agent/command id is `con`, `nul`, `com1`... is rejected on every OS (it could not be checked out on Windows) | tested |
+
+### WSL, as built (S3-M9)
+
+- Detected as Linux with `WSL_DISTRO_NAME` or `WSL_INTEROP` set (`rigfile doctor` prints `linux/amd64 (WSL)`). Inside WSL2 every target is configured exactly as on Linux, in the distro's `$HOME`.
+- **Cross-boundary denies.** With base-secure on, the Claude Code adapter adds `Read(//mnt/c/Users/*/<credential path>)` rules for SSH keys, cloud CLIs, `.netrc`/`.npmrc`, Claude Code's own login files, the Windows saved-credentials and DPAPI directories, and Rigfile's Windows state (`claudecode.WSLDenies`, listed on the plan screen as `+ deny`). A Read deny also blocks Edit/Write on the path. Plain Linux never gets them.
+- **UNVERIFIED (live check in S3-M10):** whether `*` in a directory segment of a Read rule matches the Windows user-name directory; distros with a non-default `automount.root` in `wsl.conf` (the rules assume `/mnt/c`).
+- **Windows-side tools are a separate install.** The Claude Code, Codex or Cursor installed on Windows reads `%USERPROFILE%`, not the WSL home. Rigfile does not reach across the boundary automatically: run `rigfile.exe apply` on the Windows side too (the same rig applies on both). The plan screen says so when WSL is detected.
+- Codex and Gemini CLI have no file-read deny rules Rigfile can use, so they get no cross-boundary rules; their base-secure level is stated on the plan screen as before.
