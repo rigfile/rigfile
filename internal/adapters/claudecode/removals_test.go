@@ -118,7 +118,7 @@ func TestHandEditedOrphansAreLeftInPlaceAndDisowned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	notes := strings.Join(p2.Notes, "\n")
+	notes := strings.ReplaceAll(strings.Join(p2.Notes, "\n"), `\`, "/")
 	for _, want := range []string{`agent "reviewer" is no longer in the rig but was edited by hand`, `skill "pdf" is no longer in the rig but was edited by hand`, `section "coding-style" in ~/.claude/CLAUDE.md is no longer in the rig but was edited by hand`} {
 		if !strings.Contains(notes, want) {
 			t.Errorf("missing note %q in:\n%s", want, notes)
