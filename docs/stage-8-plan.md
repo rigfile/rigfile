@@ -38,4 +38,5 @@ Stage 8 has no single exit criterion: it is a bucket. Started 2026-09-26 on bran
 | S8-M1 | done (`docs/diffs.md`) |
 | S8-M2 | done (`docs/forks.md`) |
 | S8-M3 | done (`docs/collections.md`) |
-| S8-M4 to S8-M7 | todo |
+| S8-M4 | done (`docs/orgs.md`) |
+| S8-M5 to S8-M7 | todo |

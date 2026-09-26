@@ -117,13 +117,15 @@ func isUnique(err error) bool {
 
 // The visibility predicate. Every read of rigs and versions goes through these two fragments (docs/registry.md §2):
 //
-//	rig:     not removed, and (public, or the viewer owns it, or the viewer is an admin)
-//	version: published or yanked; the owner (and admins) also see pending and rejected; admins also see removed
+//	rig:     not removed, and (public, or the viewer belongs to it, or the viewer is an admin)
+//	version: published or yanked; those who belong to the rig (and admins) also see pending and rejected; admins also see removed
+//
+// "Belongs to" is rigMember: a personal rig's creator, or the members of the organisation that owns the rig.
 //
 // $1 is the viewer id (0 = anonymous) and $2 whether the viewer is an admin.
 const (
-	rigVisibleAdm  = `(($2::boolean) OR r.removed_at IS NULL AND (r.visibility = 'public' OR r.created_by = $1))`
-	versionVisible = `(v.status IN ('published','yanked') OR (v.status IN ('pending','rejected','held') AND (r.created_by = $1 OR $2::boolean)) OR (v.status = 'removed' AND $2::boolean))`
+	rigVisibleAdm  = `(($2::boolean) OR (r.removed_at IS NULL AND (r.org_id IS NULL OR NOT EXISTS (SELECT 1 FROM orgs og WHERE og.id = r.org_id AND og.disabled_at IS NOT NULL)) AND (r.visibility = 'public' OR ` + rigMember + `)))`
+	versionVisible = `(v.status IN ('published','yanked') OR (v.status IN ('pending','rejected','held') AND (` + rigMember + ` OR $2::boolean)) OR (v.status = 'removed' AND $2::boolean))`
 )
 
 const rigCols = `r.id, r.owner, r.name, r.description, r.visibility, r.created_by, r.created_at,
@@ -256,15 +258,23 @@ func (s *Store) CreateVersion(ctx context.Context, n NewVersion) (*Version, erro
 	}
 	defer tx.Rollback()
 	var rigID, createdBy int64
+	var orgID sql.NullInt64
 	var removed sql.NullTime
+	// a rig under an organisation's name belongs to the organisation
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO rigs (owner, name, description, created_by, created_at) VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO rigs (owner, name, description, created_by, org_id, created_at) VALUES ($1, $2, $3, $4, (SELECT id FROM orgs WHERE login = $1 AND disabled_at IS NULL), $5)
 		ON CONFLICT (owner, name) DO UPDATE SET description = rigs.description
-		RETURNING id, created_by, removed_at`, n.Owner, n.Name, n.Description, n.UserID, s.now()).Scan(&rigID, &createdBy, &removed)
+		RETURNING id, created_by, org_id, removed_at`, n.Owner, n.Name, n.Description, n.UserID, s.now()).Scan(&rigID, &createdBy, &orgID, &removed)
 	if err != nil {
 		return nil, err
 	}
-	if createdBy != n.UserID && !n.Admin {
+	belongs := createdBy == n.UserID
+	if orgID.Valid {
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM org_members WHERE org_id = $1 AND user_id = $2)`, orgID.Int64, n.UserID).Scan(&belongs); err != nil {
+			return nil, err
+		}
+	}
+	if !belongs && !n.Admin {
 		return nil, ErrForbidden
 	}
 	if removed.Valid {
@@ -292,8 +302,10 @@ func (s *Store) CreateVersion(ctx context.Context, n NewVersion) (*Version, erro
 	if _, err := tx.ExecContext(ctx, `INSERT INTO jobs (version_id, run_after) VALUES ($1, $2)`, vid, s.now()); err != nil {
 		return nil, err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE rigs SET description = $2 WHERE id = $1 AND created_by = $3`, rigID, n.Description, n.UserID); err != nil {
-		return nil, err
+	if belongs {
+		if _, err := tx.ExecContext(ctx, `UPDATE rigs SET description = $2 WHERE id = $1`, rigID, n.Description); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -332,7 +344,7 @@ func (s *Store) Yank(ctx context.Context, owner, name, ver, reason string, actor
 	if err != nil {
 		return err
 	}
-	if rig.CreatedBy != actor.ID && !actor.IsAdmin {
+	if !s.CanManage(ctx, actor, rig) {
 		return ErrForbidden
 	}
 	res, err := s.DB.ExecContext(ctx, `UPDATE versions SET status = 'yanked', yanked_at = $3, yank_reason = $4 WHERE rig_id = $1 AND version = $2 AND status = 'published'`, rig.ID, ver, s.now(), reason)
@@ -382,7 +394,7 @@ func (s *Store) SetVisibility(ctx context.Context, owner, name, vis string, acto
 	if err != nil {
 		return err
 	}
-	if rig.CreatedBy != actor.ID && !actor.IsAdmin {
+	if !s.CanAdminister(ctx, actor, rig) {
 		return ErrForbidden
 	}
 	if vis == "public" {
@@ -486,7 +498,7 @@ func (s *Store) OwnedRigs(ctx context.Context, login string, viewer Viewer) ([]R
 	rows, err := s.DB.QueryContext(ctx, `
 		SELECT `+rigCols+`, (SELECT v.version FROM versions v WHERE v.rig_id = r.id AND v.status = 'published' ORDER BY v.created_at DESC LIMIT 1)
 		FROM rigs r JOIN users u ON u.id = r.created_by
-		WHERE u.login = $3 AND `+rigVisibleAdm+`
+		WHERE u.login = $3 AND r.org_id IS NULL AND `+rigVisibleAdm+`
 		  AND (r.visibility = 'private' OR EXISTS (SELECT 1 FROM versions v WHERE v.rig_id = r.id AND v.status = 'published'))
 		ORDER BY r.created_at DESC`, viewer.ID, viewer.Admin, strings.ToLower(login))
 	if err != nil {

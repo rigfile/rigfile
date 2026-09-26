@@ -370,3 +370,60 @@ func TestRegistryCollectionsForksAndChangesFromTheCLI(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestRegistryOrganisationsFromTheCLI(t *testing.T) {
+	regURL, store := startRegistry(t)
+	ctx := context.Background()
+	for i, l := range []string{"jia", "bob"} {
+		if _, err := store.UpsertUser(ctx, registry.GitHubUser{ID: int64(i + 1), Login: l}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a, b := registryMachine(t, regURL), registryMachine(t, regURL)
+	for _, x := range []struct {
+		m     *machine
+		login string
+	}{{a, "jia"}, {b, "bob"}} {
+		approveWhenAsked(t, store, x.login)
+		if r := x.m.run("", "login"); r.code != 0 {
+			t.Fatalf("%s: %+v", x.login, r)
+		}
+	}
+	if r := a.run("", "org", "create", "acme", "--title", "Acme"); r.code != 0 || !strings.Contains(r.out, "you are its owner") {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "org", "create", "bob"); r.code != 1 || !strings.Contains(r.err, "already") {
+		t.Fatalf("%+v", r)
+	}
+	// bob is outside: cannot publish, cannot list members
+	rig := regRig(t, "acme", "tool", "1.0.0", "")
+	if r := b.run("", "publish", rig, "--to-registry", "--ack-personal"); r.code != 1 || !strings.Contains(r.err, "organisation") {
+		t.Fatalf("%+v", r)
+	}
+	if r := b.run("", "org", "members", "acme"); r.code != 1 {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "org", "add", "acme", "bob"); r.code != 0 || !strings.Contains(r.out, "bob is now a member of acme") {
+		t.Fatalf("%+v", r)
+	}
+	if r := b.run("", "org", "list"); r.code != 0 || !strings.Contains(r.out, "acme  (member)") {
+		t.Fatalf("%+v", r)
+	}
+	if r := b.run("", "publish", rig, "--to-registry", "--ack-personal"); r.code != 0 || !strings.Contains(r.out, "published acme/tool@1.0.0") {
+		t.Fatalf("a member publishes under the organisation: %+v", r)
+	}
+	if r := a.run("", "org", "members", "acme"); r.code != 0 || !strings.Contains(r.out, "jia  (owner)") || !strings.Contains(r.out, "bob  (member)") {
+		t.Fatalf("%+v", r)
+	}
+	if r := b.run("", "org", "rm", "acme", "bob"); r.code != 0 {
+		t.Fatalf("leaving: %+v", r)
+	}
+	if r := b.run("", "pull", "acme/tool", "--plan-only", "--no-git"); r.code != 1 {
+		t.Fatalf("a former member cannot pull the private rig: %+v", r)
+	}
+	for _, args := range [][]string{{"org"}, {"org", "create"}, {"org", "add", "acme"}, {"org", "nope"}} {
+		if r := a.run("", args...); r.code != 2 {
+			t.Fatalf("%v: %+v", args, r)
+		}
+	}
+}

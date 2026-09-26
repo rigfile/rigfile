@@ -140,7 +140,7 @@ func (sc *Scanner) ScanVersion(ctx context.Context, versionID int64) (ScanResult
 	var sha, owner, name string
 	var public, signedByPublisher, publisherVerified bool
 	var stars int
-	err := sc.Store.DB.QueryRowContext(ctx, `SELECT v.tarball_sha256, r.owner, r.name, r.visibility = 'public', v.signer_is_publisher, u.verified_at IS NOT NULL,
+	err := sc.Store.DB.QueryRowContext(ctx, `SELECT v.tarball_sha256, r.owner, r.name, r.visibility = 'public', v.signer_is_publisher, (u.verified_at IS NOT NULL AND r.org_id IS NULL),
 		(SELECT count(*) FROM stars st WHERE st.rig_id = r.id)
 		FROM versions v JOIN rigs r ON r.id = v.rig_id JOIN users u ON u.id = r.created_by WHERE v.id = $1`, versionID).Scan(&sha, &owner, &name, &public, &signedByPublisher, &publisherVerified, &stars)
 	if err != nil {

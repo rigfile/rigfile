@@ -51,6 +51,7 @@ func usage(w io.Writer) {
       resolve-report --id N --status actioned|dismissed
       takedown --rig owner/name [--version V] --reason R   remove a version (or the whole rig)
       disable-user --login L | enable-user --login L
+      disable-org --login ORG | enable-org --login ORG   (an organisation's rigs vanish for everyone but admins while disabled)
       verify-publisher --login L --kind person|organisation|domain [--reason NOTE] | unverify-publisher --login L
       held                                            list versions held for review
       release --id N [--reason R] | reject --id N --reason R

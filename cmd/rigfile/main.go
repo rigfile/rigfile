@@ -89,6 +89,8 @@ func run(args []string, e env) int {
 		return cmdPull("pull", args[1:], e)
 	case "update":
 		return cmdPull("update", args[1:], e)
+	case "org":
+		return cmdOrg(args[1:], e)
 	case "collection":
 		return cmdCollection(args[1:], e)
 	case "fork":
@@ -146,6 +148,7 @@ func usage(w io.Writer) {
   login | logout | whoami            sign in to a Rigfile registry (device flow; token kept in your keychain)
   publish [--to-git DIR] [--to-registry [--public]]   scrub your setup (or a rig dir); write a repo and/or publish to the registry
   logins [--provider name]           walk through the logins the applied rig needs
+  org create|list|members|add|rm       organisations: a namespace several people publish under
   collection create|add|rm|delete|show|list   curated lists of rigs on the registry
   fork <source> --name owner/name    start your own rig from someone else's (a copy, or --extend to build on it)
   changes <before> <after> [--diff]  what a new version of a rig adds, removes and changes

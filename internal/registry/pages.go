@@ -70,6 +70,8 @@ type profileData struct {
 	Login       string
 	Rigs        []RigSummary
 	Collections []Collection
+	Org         *Org
+	Members     []Member
 }
 
 func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +82,15 @@ func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.Store.UserByLogin(r.Context(), login); err != nil {
+		if org, oerr := s.Store.OrgByLogin(r.Context(), login); oerr == nil {
+			rs, _ := s.Store.OrgRigs(r.Context(), org, v)
+			var members []Member
+			if u != nil {
+				members, _ = s.Store.Members(r.Context(), u, org) // only members get the list
+			}
+			s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs, Org: org, Members: members}})
+			return
+		}
 		s.notFound(w, r)
 		return
 	}
@@ -120,7 +131,7 @@ func (s *Server) loadRig(w http.ResponseWriter, r *http.Request) (*RigPage, *Use
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return nil, nil, "", false
 	}
-	page := &RigPage{Rig: rig, Versions: vs, Registry: s.Cfg.PublicURL, IsOwner: u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)}
+	page := &RigPage{Rig: rig, Versions: vs, Registry: s.Cfg.PublicURL, IsOwner: s.Store.CanManage(r.Context(), u, rig)}
 	for i := range vs {
 		if vs[i].Status == "published" {
 			page.Latest = vs[i].Version

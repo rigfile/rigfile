@@ -1,5 +1,7 @@
 {{template "head" .}}
-<h1>{{.Data.Login}}</h1>
+<h1>{{.Data.Login}}{{if .Data.Org}} <span class="tag">organisation</span>{{end}}</h1>
+{{if .Data.Org}}{{if .Data.Org.Name}}<p>{{.Data.Org.Name}}</p>{{end}}{{end}}
+{{if .Data.Members}}<div class="card"><strong>Members</strong><ul>{{range .Data.Members}}<li><a href="/u/{{.Login}}">{{.Login}}</a> <span class="muted">{{.Role}}</span></li>{{end}}</ul></div>{{end}}
 {{if .Data.Collections}}<h2>Collections</h2><ul>{{range .Data.Collections}}<li><a href="/c/{{.Owner}}/{{.Slug}}">{{.Title}}</a>{{if eq .Visibility "private"}} <span class="tag">private</span>{{end}}</li>{{end}}</ul><h2>Rigs</h2>{{end}}
 {{if .Data.Rigs}}{{template "rigs" .Data}}{{else}}<p class="muted">No rigs to show.</p>{{end}}
 {{template "foot" .}}

@@ -105,7 +105,7 @@ func (s *Server) apiRig(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusInternalServerError, "could not list versions")
 		return
 	}
-	isOwner := u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)
+	isOwner := s.Store.CanManage(r.Context(), u, rig)
 	_, derivedCount, _ := s.Store.Derived(r.Context(), rig.Owner, rig.Name, v, 1)
 	list := make([]versionJSON, 0, len(vs))
 	latest := ""
@@ -185,7 +185,7 @@ func (s *Server) apiVersion(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusNotFound, "no such version")
 		return
 	}
-	writeJSON(w, http.StatusOK, versionToJSON(*ver, u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)))
+	writeJSON(w, http.StatusOK, versionToJSON(*ver, s.Store.CanManage(r.Context(), u, rig)))
 }
 
 // pullable finds a version the viewer may download: published or yanked (or, for the owner, any they can see).
@@ -199,7 +199,7 @@ func (s *Server) pullable(w http.ResponseWriter, r *http.Request) (*Rig, *Versio
 		apiError(w, http.StatusNotFound, "no such version")
 		return nil, nil, false
 	}
-	if ver.Status != "published" && ver.Status != "yanked" && !(u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)) {
+	if ver.Status != "published" && ver.Status != "yanked" && !s.Store.CanManage(r.Context(), u, rig) {
 		apiError(w, http.StatusNotFound, "no such version")
 		return nil, nil, false
 	}
@@ -285,8 +285,11 @@ func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if owner != u.Login && !u.IsAdmin {
-		apiError(w, http.StatusForbidden, "you can publish only under your own name ("+u.Login+"/...)")
-		return
+		// an organisation's namespace is open to its members; anyone else is told the same thing as for another person's name
+		if org, err := s.Store.OrgByLogin(r.Context(), owner); err != nil || s.Store.OrgRole(r.Context(), u, org.ID) == "" {
+			apiError(w, http.StatusForbidden, "you can publish only under your own name ("+u.Login+"/...) or an organisation you belong to")
+			return
+		}
 	}
 	if IsReservedOwner(owner) && !u.IsAdmin {
 		apiError(w, http.StatusForbidden, "the "+owner+"/ namespace is reserved")

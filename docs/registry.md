@@ -20,12 +20,13 @@ A web service where people publish rigs, browse them, star them, and pull them w
 | `stars` | `user_id`, `rig_id` |
 | `jobs` | scan queue: `version_id`, `state`, `attempts`, `run_after`, `locked_by`, `locked_until` |
 | `reports` | abuse reports: `rig_id`, `version`, `reporter_id` (nullable), `reason`, `details`, `status` |
+| `orgs`, `org_members`, `rigs.org_id` | organisations and their members (S8-M4, migration 0004; `docs/orgs.md`) |
 | `collections`, `collection_items` | curated lists of rig references (S8-M3, migration 0003) |
 | `audit_log` | who did what: publish, yank, remove, visibility change, login, token issue/revoke, admin actions |
 
 Blobs: `blobs/sha256/<aa>/<hex>` (tarballs), content-addressed and immutable; the database row is the only thing that makes a blob reachable.
 
-**The visibility predicate** is defined once (`store.Visible`) and used by every read: a version is readable by a viewer iff it is `published` or `yanked` AND (the rig is public OR the viewer owns it) AND neither the rig nor the version is `removed`; owners additionally see their own `pending` and `rejected` versions. There is no code path that reads a version without going through it.
+**The visibility predicate** is defined once (`rigVisibleAdm`, `versionVisible`) and used by every read: a version is readable by a viewer iff it is `published` or `yanked` AND (the rig is public OR the viewer *belongs to it*) AND neither the rig nor the version is `removed`; those who belong to the rig additionally see its `pending` and `rejected` versions. "Belongs to" (`rigMember`) is: a personal rig's creator, or a member of the organisation that owns the rig (Stage 8, `docs/orgs.md`); a disabled organisation's rigs are visible to site admins only. There is no code path that reads a version without going through it.
 
 ## 3. API
 
@@ -38,6 +39,7 @@ JSON unless stated. Errors are `{"error": "..."}` with a stable HTTP status. A p
 | `GET /v1/rigs/{owner}/{name}` | optional | metadata, visibility, stars, versions the viewer may see |
 | `GET /v1/rigs/{owner}/{name}/resolve?range=^1.2` | optional | the newest non-yanked version satisfying the range (`layers.Satisfies` rules); exact versions may be yanked |
 | `GET /v1/rigs/{owner}/{name}/diff?from=&to=` | optional | what changed between two versions the viewer may see (`from` defaults to the version before `to`, `to` to the newest published): manifest items added, removed, changed, file changes with unified text diffs, and the notes that ask for review (S8-M1, `docs/diffs.md`) |
+| `POST /v1/orgs`, `GET /v1/orgs/{org}`, `.../members`, `PUT`/`DELETE .../members/{login}`, `GET /v1/me/orgs` | see `docs/orgs.md` | organisations (S8-M4) |
 | `POST /v1/collections`, `GET /v1/collections/{owner}/{slug}`, ... | see `docs/collections.md` | curated lists of rigs (S8-M3) |
 | `GET /v1/rigs/{owner}/{name}/derived` | optional | public rigs whose newest published version builds on this one (`from:`); see `docs/forks.md` |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}` | optional | version detail; scan findings only for the owner |

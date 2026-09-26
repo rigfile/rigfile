@@ -68,6 +68,7 @@ func (s *Server) Handler() http.Handler {
 	s.authRoutes(mux)
 	s.apiRoutes(mux)
 	s.collectionRoutes(mux)
+	s.orgRoutes(mux)
 	s.pageRoutes(mux)
 	return s.recoverer(s.headers(s.logged(mux)))
 }
