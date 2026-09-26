@@ -40,4 +40,5 @@ Stage 8 has no single exit criterion: it is a bucket. Started 2026-09-26 on bran
 | S8-M3 | done (`docs/collections.md`) |
 | S8-M4 | done (`docs/orgs.md`) |
 | S8-M5 | done (`docs/local-ui.md`) |
-| S8-M6 to S8-M7 | todo |
+| S8-M6 | researched, **not built**: `docs/targets/{windsurf,zed,vscode-copilot}.md` (CONFLICT and UNVERIFIED paths; each names the owner check that settles it) |
+| S8-M7 | todo |
