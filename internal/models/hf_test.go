@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -45,7 +46,13 @@ func newFakeHF(t *testing.T, files map[string]string) *fakeHF {
 			return
 		}
 		var entries []map[string]any
-		for p, b := range f.files {
+		paths := make([]string, 0, len(f.files))
+		for p := range f.files {
+			paths = append(paths, p)
+		}
+		sort.Strings(paths)
+		for _, p := range paths {
+			b := f.files[p]
 			e := map[string]any{"type": "file", "path": p, "size": len(b)}
 			if strings.HasSuffix(p, ".safetensors") || strings.HasSuffix(p, ".gguf") {
 				s := sha256.Sum256(b)
@@ -105,6 +112,7 @@ func (f *fakeHF) resolveHits(p string) int { f.mu.Lock(); defer f.mu.Unlock(); r
 
 func goodRepo() map[string]string {
 	return map[string]string{
+		".gitattributes":    "*.safetensors filter=lfs\n", // real model repositories carry one
 		"config.json":       `{"model_type":"qwen3"}`,
 		"tokenizer.json":    strings.Repeat("token ", 100),
 		"model.safetensors": strings.Repeat("weights!", 5000),
@@ -117,7 +125,7 @@ func TestFetchDownloadsAndVerifiesEverything(t *testing.T) {
 	hf := &HF{Base: f.srv.URL, RepoPrefix: "/repo"}
 	var last int64
 	files, err := hf.Fetch(context.Background(), "mlx-community/Qwen3-8B-4bit", rev, "mlx-safetensors", dest, func(done, total int64) { last = done })
-	if err != nil || len(files) != 3 {
+	if err != nil || len(files) != 4 {
 		t.Fatalf("%v %v", files, err)
 	}
 	for p, c := range goodRepo() {
@@ -128,8 +136,12 @@ func TestFetchDownloadsAndVerifiesEverything(t *testing.T) {
 			t.Errorf("%s: a .part file was left behind", p)
 		}
 	}
-	if last != int64(len(goodRepo()["config.json"])+len(goodRepo()["tokenizer.json"])+len(goodRepo()["model.safetensors"])) {
-		t.Fatalf("progress ended at %d", last)
+	var want int64
+	for _, c := range goodRepo() {
+		want += int64(len(c))
+	}
+	if last != want {
+		t.Fatalf("progress ended at %d, want %d", last, want)
 	}
 	// a second run downloads nothing: everything already verifies
 	before := f.resolveHits("model.safetensors")
@@ -177,7 +189,7 @@ func TestFetchRefusesUnsafeRepositories(t *testing.T) {
 		"python source":     {map[string]string{"modeling_x.py": "import os", "model.safetensors": "w"}, "trust_remote_code"},
 		"no weights at all": {map[string]string{"config.json": "{}"}, "no safetensors weights"},
 		"an odd path":       {map[string]string{"a/../../evil": "x", "model.safetensors": "w"}, "unsafe file path"},
-		"a .git path":       {map[string]string{".gitattributes": "x", "model.safetensors": "w"}, "unsafe file path"},
+		"a .git directory":  {map[string]string{".git/config": "x", "model.safetensors": "w"}, "unsafe file path"},
 	} {
 		f := newFakeHF(t, tc.files)
 		dest := t.TempDir()
@@ -227,7 +239,7 @@ func TestListInputsAndPagination(t *testing.T) {
 	f := newFakeHF(t, goodRepo())
 	f.pages = true
 	files, err := (&HF{Base: f.srv.URL, RepoPrefix: "/repo"}).List(context.Background(), "org/name", rev)
-	if err != nil || len(files) != 3 {
+	if err != nil || len(files) != 4 {
 		t.Fatalf("both pages must be read: %v %v", files, err)
 	}
 	hf := &HF{Base: f.srv.URL, RepoPrefix: "/repo"}

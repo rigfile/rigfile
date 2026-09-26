@@ -163,7 +163,7 @@ func CheckSnapshot(files []HFFile, format string) error {
 	weights := 0
 	for _, f := range files {
 		clean := path.Clean(f.Path)
-		if f.Path == "" || clean != f.Path || !filepath.IsLocal(filepath.FromSlash(clean)) || strings.HasPrefix(clean, ".git") {
+		if f.Path == "" || clean != f.Path || !filepath.IsLocal(filepath.FromSlash(clean)) || hasGitDir(clean) {
 			return fmt.Errorf("the repository lists an unsafe file path %q", f.Path)
 		}
 		ext := strings.ToLower(path.Ext(f.Path))
@@ -431,4 +431,15 @@ func (v *verifier) check(f HFFile, _ int64) error {
 		return fmt.Errorf("verification failed: content hash %s… does not match the %s… the repository lists; the file was discarded", got[:12], want[:12])
 	}
 	return nil
+}
+
+// hasGitDir reports a path inside a .git directory. A plain file such as .gitattributes (present in real model repositories)
+// is fine.
+func hasGitDir(p string) bool {
+	for _, part := range strings.Split(p, "/") {
+		if strings.EqualFold(part, ".git") {
+			return true
+		}
+	}
+	return false
 }
