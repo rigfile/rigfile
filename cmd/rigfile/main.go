@@ -81,6 +81,10 @@ func run(args []string, e env) int {
 		return cmdPull("pull", args[1:], e)
 	case "update":
 		return cmdPull("update", args[1:], e)
+	case "self-update":
+		return cmdSelfUpdate(args[1:], e)
+	case "verify-signature":
+		return cmdVerifySignature(args[1:], e)
 	case "logins":
 		return cmdLogins(args[1:], e)
 	case "publish":
@@ -118,7 +122,9 @@ func usage(w io.Writer) {
   pull <source> [--plan-only]        fetch a rig from github.com/o/r[@ref][//dir] (or gitlab.com, https/ssh git URL), review, apply
   update [--plan-only]               re-resolve the source of the last pulled rig and show what changed
   publish [--to-git DIR]             scrub your setup (or a rig dir) into a clean repository you can share
-  logins [--rig DIR]                 walk through the logins the applied rig needs
+  logins [--provider name]           walk through the logins the applied rig needs
+  self-update [--check]              install the latest release after verifying its signature and checksum
+  verify-signature <file> [--pubkey k] check a minisign signature
   diff                               show drift since the last apply
   rollback [<run-id>] [--list]       undo a run (newest by default)
   lock [<rig-dir>]                   write or refresh rigfile.lock
