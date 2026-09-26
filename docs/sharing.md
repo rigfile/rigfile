@@ -1,6 +1,6 @@
 # Sharing rigs through git: threat model and spec (S4-M0)
 
-Status: spec of record for Stage 4. Every rule below names the test that enforces it (`internal/source`, `internal/publish`, `cmd/rigfile`); a rule without a test is a bug in this document.
+Status: spec of record for Stage 4, implemented on branch `stage-4`. Each rule is enforced by tests in `internal/source`, `internal/layers`, `internal/publish`, `internal/login`, `internal/selfupdate` and `cmd/rigfile` (test names in the sections below are the primary ones); a rule without a test is a bug in this document.
 
 ## 1. What a rig is, from a stranger's point of view
 
@@ -70,8 +70,8 @@ Pipeline, in this order; any failing stage stops before anything is written:
 
 ## 8. Logins (S4-M5)
 
-`logins:` entries become one checklist after `apply`. Methods: `api_key` (hidden prompt, stored in the secret store), `cli` (Rigfile runs the vendor's own login command, then checks the result), `oauth` (browser + loopback listener on `127.0.0.1` with PKCE and a one-shot `state`), `device` (RFC 8628 device code, chosen automatically when there is no browser or `SSH_CONNECTION` is set). Tokens go to the secret store only; nothing is written to a config file, log or `state.json` (which keeps names of needs, never values). Tests run against fake OAuth servers.
+`logins:` entries are walked by `rigfile logins` after `apply`/`pull` (the list comes from `state.json`). The manifest methods are `api-key` (hidden prompt, stored in the secret store as `logins/<provider>/api_key`), `vendor-cli` (Rigfile runs the vendor's own command and then its status check: `gh auth login`+`gh auth status`, `codex login`; `claude-code` and `gemini-cli` are manual steps Rigfile explains and asks about) and `oauth` (loopback listener on `127.0.0.1` with PKCE and a one-shot `state`; the RFC 8628 device flow is chosen instead when there is no browser or `SSH_CONNECTION` is set). No OAuth provider is built in: each needs a public client id issued to Rigfile, so `oauth` answers "no OAuth client is registered" until the owner adds one. Tokens go to the secret store only; nothing is written to a config file, log or `state.json` (which keeps names of needs, never values). Tests run against fake OAuth servers.
 
 ## 9. Release verification (S4-M6)
 
-Release archives are listed in `SHA256SUMS`, signed with a minisign key whose public half is embedded in the install scripts and the binary. Installers and `rigfile self-update` verify the signature, then the archive hash, and refuse otherwise (tests: tampered archive, wrong key, downgrade).
+Release archives are listed in `SHA256SUMS`, signed with a minisign key whose public half is embedded in the binary (`selfupdate.PublicKey`, set at build time) and written into the release's `install.sh`/`install.ps1`. Installers and `rigfile self-update` verify the signature, check that its signed trusted comment names the version being installed (an old signed list cannot be replayed under a newer tag), then the archive hash, and refuse otherwise (tests: `internal/selfupdate` and the container installer E2E with the real minisign: tampered archive, edited checksums, wrong key, replayed signature, missing signature, key-less template). The installers need the `minisign` tool; without it they refuse unless `RIGFILE_INSECURE_SKIP_SIGNATURE=1` is set, which skips only the signature check and says so. A build without a key refuses to self-update.
