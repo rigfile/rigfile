@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 3 (multi-vendor adapters + Windows): BUILD COMPLETE on branch `stage-3` (S3-M0 to S3-M9 done, S3-M10 = owner gate: `docs/stage-3-owner-checks.md`). Stage 2 (`stage-2`) still awaits its S2-M9 owner sign-off; `stage-3` is built on top of it. Neither branch is pushed (pushes are the owner's).**
-Last updated: 2026-09-26 (end of Stage 3 build session)
+**Current stage: Stage 3 is COMPLETE and merged to `main` together with Stage 2 (2026-09-26; CI green on ubuntu, macOS and windows-latest). Stage 4 (Git-based sharing) is planned in `docs/stage-4-plan.md` and starts on the owner's go. Owner-run checks that CI cannot do remain open: `docs/stage-3-owner-checks.md` (Windows VM, live vendor loads, WSL glob) and the Stage 2 items below (live red-team, base-secure on the owner's machine, LICENSE).**
+Last updated: 2026-09-26 (Stage 3 merged; Stage 4 planned)
 
 ## Stage 0 result (signed off)
 
@@ -105,3 +105,14 @@ Built (plan: `docs/stage-3-plan.md`): target registry with per-target merge/proj
 4. Finish the Stage 2 checklist above, then merge `stage-2` and `stage-3` into `main`.
 
 Deviations worth knowing: Windows CI runs without `-race` and without the scanner timing gate; `init --from` cannot tell whole-file items Rigfile wrote (skills, agents) from yours unless `state.json` owns them, so run it before the first apply; Gemini CLI hooks/permissions and Cursor rules/hooks are not written at all (contracts unverified; the plan screen says so).
+
+
+## Stage 3 result (merged to `main`, 2026-09-26)
+
+Merge commit `10d820f`. CI: `stage-2` and `stage-3` green on all jobs. The first native Windows run found only test-side path assumptions plus one real bug (capture did not replace a forward-slash Windows home path in hook commands); all fixed. Evidence that Windows code runs natively: `internal/platform` (ACL `WritePrivate`/`IsPrivateFile`), `internal/execshim` (`.cmd` shim, argument-injection test) and `internal/secrets` (`LockFileEx`) tests pass on `windows-latest`. Still not run by anyone: real Credential Manager, real vendor tools loading the adapters' output, WSL, a clean Windows 11 VM (`docs/stage-3-owner-checks.md`).
+
+Recorded in this session: the generated `docs/red-team.md` no longer prints per-OS rule counts (it made CI on Linux see the file as stale); the `redteam` doc and tests must stay OS-neutral. Local pushes by Claude are blocked by a user-level deny on `git push`, so pushes and merges to shared branches are the owner's.
+
+## Stage 4: next
+
+Plan of record: `docs/stage-4-plan.md` (S4-M0 to S4-M7). Design calls are taken with my recommendations (remote sources pinned by commit SHA and tree hash, GitHub/GitLab tarball fetch without needing `git`, minisign-verified installers, guided logins never automated). Say "go" and I start S4-M0 (`docs/sharing.md`: threat model and spec).
