@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	basesecure "github.com/digitaldreamer3462/rigfile/base-secure"
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
@@ -46,22 +47,28 @@ type Options struct {
 	NoGit      bool   // skip the git module (global gitignore + secret-scanning hooks)
 	RigfileBin string // absolute path of the rigfile executable written into the git hooks; "" = this executable
 	NoBackstop bool   // do not install the reference-transaction backstop (decision O9: on by default)
+
+	// UnsafeBase skips rigfile/base-secure (--i-understand-unsafe-base): local only, recorded in state.json,
+	// shown red by doctor, and never accepted by a future `publish`.
+	UnsafeBase bool
 }
 
 // Prepared is everything computed before anything is written.
 type Prepared struct {
-	Opts     Options
-	Plat     *platform.Info
-	StateDir string
-	Top      *manifest.Loaded
-	Layers   *layers.Result
-	Merged   *merge.Merged
-	Proj     *merge.Projection
-	Problems []manifest.Problem
-	State    *state.State
-	Plan     *engine.Plan // nil if the rig has errors
-	Tools    tools.Plan   // what apply would install (planned, never run here)
-	GitPlan  *engine.Plan // the git module (base-secure); nil with --no-git
+	Opts       Options
+	Plat       *platform.Info
+	StateDir   string
+	Top        *manifest.Loaded
+	Layers     *layers.Result
+	UnsafeBase bool
+	Merged     *merge.Merged
+	Proj       *merge.Projection
+	Problems   []manifest.Problem
+	State      *state.State
+	Plan       *engine.Plan // nil if the rig has errors
+	Tools      tools.Plan   // what apply would install (planned, never run here)
+	GitPlan    *engine.Plan // the git module (base-secure); nil with --no-git
+	cleanup    func()       // removes the extracted base-secure files
 
 	Lock      *lock.Lock
 	LockPath  string
@@ -74,7 +81,17 @@ type Prepared struct {
 var ErrProblems = errors.New("the rig has errors")
 
 // Prepare computes the plan. It reads the machine and the rig; it writes nothing.
-func Prepare(o Options) (*Prepared, error) {
+func Prepare(o Options) (pp *Prepared, err error) {
+	var cleanup func()
+	defer func() {
+		if err != nil && cleanup != nil {
+			cleanup() // an error return leaves no caller to Close(): do not leak the extracted files
+		}
+	}()
+	return prepare(o, &cleanup)
+}
+
+func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 	if o.Getenv == nil {
 		o.Getenv = os.Getenv
 	}
@@ -99,18 +116,36 @@ func Prepare(o Options) (*Prepared, error) {
 			return nil, err
 		}
 	}
-	p := &Prepared{Opts: o, Plat: pi, StateDir: sd}
+	p := &Prepared{Opts: o, Plat: pi, StateDir: sd, UnsafeBase: o.UnsafeBase}
 
 	top, err := manifest.Load(o.RigDir)
 	if err != nil {
 		return nil, err
 	}
 	p.Top = top
-	res, err := layers.Resolve(top, layers.DirSource{Root: o.LayersDir})
+	if strings.HasPrefix(top.M.Name, "rigfile/") {
+		return nil, fmt.Errorf("the name %q is reserved for rigfiles published by the Rigfile project (plan §10.3); rename the rig", top.M.Name)
+	}
+	var base *manifest.Loaded
+	if !o.UnsafeBase {
+		bdir, cleanup, err := basesecure.Extract()
+		if err != nil {
+			return nil, err
+		}
+		p.cleanup = cleanup
+		*cleanupOut = cleanup
+		if base, err = manifest.Load(bdir); err != nil {
+			return nil, fmt.Errorf("the embedded %s layer failed to load: %w", basesecure.Name, err)
+		}
+	}
+	res, err := layers.Resolve(top, layers.WithBase(base, layers.DirSource{Root: o.LayersDir}))
 	if err != nil {
 		return nil, err
 	}
 	p.Layers = res
+	if o.UnsafeBase {
+		res.Warnings = append(res.Warnings, "rigfile/base-secure is DISABLED (--i-understand-unsafe-base): no secret protections, denies or guard hooks from the base layer")
+	}
 	for _, l := range res.Layers {
 		for _, pr := range manifest.Check(res.Loaded[l.Name]) {
 			if l.Name != top.M.Name {
@@ -158,7 +193,7 @@ func Prepare(o Options) (*Prepared, error) {
 
 	env := claudecode.Env{
 		Plat: pi, ClaudeDir: claudeDir, ProjectDir: o.ProjectDir, State: p.State.Targets[Target],
-		MCP: o.MCP, Overwrite: o.Overwrite,
+		MCP: o.MCP, Overwrite: o.Overwrite, BaseSecure: !o.UnsafeBase,
 	}
 	if p.Plan, err = claudecode.Build(env, p.Proj); err != nil {
 		return nil, err
@@ -200,6 +235,14 @@ func Prepare(o Options) (*Prepared, error) {
 		p.Plan.Notes = append(p.Plan.Notes, w)
 	}
 	return p, nil
+}
+
+// Close removes the temporary files of this run (the extracted base-secure layer). Safe to call twice.
+func (p *Prepared) Close() {
+	if p != nil && p.cleanup != nil {
+		p.cleanup()
+		p.cleanup = nil
+	}
 }
 
 // Changes counts every actionable change, including the git module's.
@@ -352,6 +395,12 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 	if res.Applied > 0 || res.LockWritten || ts.RunID == "" {
 		ts.AppliedAt = now().UTC().Format(time.RFC3339)
 		ts.RunID = runID
+	}
+	switch {
+	case p.UnsafeBase && p.State.UnsafeBase == nil:
+		p.State.UnsafeBase = &state.UnsafeBase{Since: now().UTC().Format(time.RFC3339)}
+	case !p.UnsafeBase:
+		p.State.UnsafeBase = nil
 	}
 	sb, err := p.State.Marshal()
 	if err != nil {

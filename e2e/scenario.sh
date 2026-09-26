@@ -24,6 +24,17 @@ echo hand-edit > "$HOME/.claude/agents/reviewer.md"
 rigfile diff > $out && fail "diff should report drift" || true;         has "agent" $out
 echo "== rollback";  rigfile rollback --force > $out;                   has "rolled back" $out
 [ ! -e "$HOME/.claude/skills" ] || fail "skills not rolled back"
+echo "== base-secure (Claude Code side)"
+rigfile apply /rig --yes --overwrite --no-git > $out 2>&1 || true
+st="$HOME/.claude/settings.json"
+grep -q 'Read(~/.ssh/\*\*)' "$st" || fail "base-secure deny rules missing from settings.json"
+grep -q '"disableBypassPermissionsMode": "disable"' "$st" || fail "bypass mode is not disabled"
+grep -q 'Security baseline (managed by rigfile/base-secure' "$HOME/.claude/CLAUDE.md" || fail "security baseline snippet missing"
+echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"sh -c \"git commit --no-verify -m x\""}}' | rigfile hook run guard > $out; has '"permissionDecision":"deny"' $out
+echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"cat ~/.ssh/id_ed25519"}}' | rigfile hook run guard > $out; has 'no-read-credentials\|credentials' $out
+tokw="gh""p_""wJ4kP9xQm2Rt7VbN5cLd8HyZaE3sUfG6TiOo"
+printf '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"K=%s"}}' "$tokw" | rigfile hook run redact > $out; has 'REDACTED:github-pat' $out
+if grep -q "$tokw" $out; then fail "redact hook echoed the secret"; fi
 echo "== git protections (base-secure)"
 # apply again after the rollback. --overwrite: rollback does not unregister MCP servers (known gap), so the
 # server registered by the first apply would otherwise be reported as 'not managed by Rigfile'

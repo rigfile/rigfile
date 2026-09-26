@@ -35,6 +35,7 @@ type Env struct {
 	MCP        MCPClient          // nil = the claude CLI is unavailable
 	RigfileCmd string             // command used in MCP/hook entries; default "rigfile"
 	Overwrite  bool               // replace hand-edited managed content and files Rigfile does not own
+	BaseSecure bool               // rigfile/base-secure is part of this run: add its non-rule settings (S2-M5)
 }
 
 func (e Env) rigfile() string {

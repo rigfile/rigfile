@@ -1,0 +1,115 @@
+# rigfile/base-secure: the always-on safety layer (RIGFILE_PLAN.md §8). Embedded in the rigfile binary; its
+# items are LOCKED: a later layer may add to them but never replace, remove or disable them (merge-semantics §3).
+# Claude Code first. Sources for every rule shape: docs/targets/claude-code.md §8 and §12.
+apiVersion: rigfile.dev/v1
+name: rigfile/base-secure
+version: 1.0.0
+description: Secrets never read, printed or committed by accident; guarded git, shell and file-write tools.
+
+instructions:
+  - id: security-baseline
+    file: instructions/security-baseline.md
+    scope: user
+
+hooks:
+  # Shell commands: force-push, --no-verify, core.hooksPath, rm -rf, sudo, publish, env dumps, reading credential
+  # files; unwraps sh -c / env / sudo / xargs / path-qualified programs (Claude Code's own rules do not).
+  - id: base-secure-guard
+    event: pre_tool_use
+    match: {tool: bash}
+    run: builtin:guard
+  # File writes: no secret values in written content (the full scanner, not a regex floor).
+  - id: base-secure-write-guard
+    event: pre_tool_use
+    match: {tool: write}
+    run: builtin:write-guard
+  - id: base-secure-write-guard-edit
+    event: pre_tool_use
+    match: {tool: edit}
+    run: builtin:write-guard
+  # Tool output: secret-looking values are replaced before the model reads them.
+  - id: base-secure-redact
+    event: post_tool_use
+    match: {tool: "*"}
+    run: builtin:redact
+
+permissions:
+  deny:
+    # ---- credential files (Read deny also blocks Edit/Write on the path and recognised Bash readers) ----
+    - {read: "**/.env", reason: "environment files hold secrets"}
+    - {read: "**/.env.local", reason: "environment files hold secrets"}
+    - {read: "**/.env.development", reason: "environment files hold secrets"}
+    - {read: "**/.env.production", reason: "environment files hold secrets"}
+    - {read: "**/.env.staging", reason: "environment files hold secrets"}
+    - {read: "**/.env.test", reason: "environment files hold secrets"}
+    - {read: "**/.env.*.local", reason: "environment files hold secrets"}
+    - {read: "**/*.pem", reason: "private keys and certificates"}
+    - {read: "**/*.key", reason: "private keys"}
+    - {read: "**/*.p12", reason: "key stores"}
+    - {read: "**/*.pfx", reason: "key stores"}
+    - {read: "**/*.jks", reason: "key stores"}
+    - {read: "**/*.keystore", reason: "key stores"}
+    - {read: "**/*.ppk", reason: "PuTTY private keys"}
+    - {read: "**/id_rsa*", reason: "SSH private keys"}
+    - {read: "**/id_ed25519*", reason: "SSH private keys"}
+    - {read: "**/id_ecdsa*", reason: "SSH private keys"}
+    - {read: "**/credentials.json", reason: "cloud credentials"}
+    - {read: "**/service-account*.json", reason: "cloud credentials"}
+    - {read: "**/client_secret*.json", reason: "OAuth client secrets"}
+    - {read: "**/*.tfstate", reason: "Terraform state holds secrets"}
+    - {read: "**/.netrc", reason: "stored passwords"}
+    - {read: "**/.npmrc", reason: "registry tokens"}
+    - {read: "**/.pypirc", reason: "registry tokens"}
+    - {read: "~/.ssh/**", reason: "SSH keys and config"}
+    - {read: "~/.aws/**", reason: "cloud credentials"}
+    - {read: "~/.config/gcloud/**", reason: "cloud credentials"}
+    - {read: "~/.azure/**", reason: "cloud credentials"}
+    - {read: "~/.kube/**", reason: "cluster credentials"}
+    - {read: "~/.docker/config.json", reason: "registry credentials"}
+    - {read: "~/.npmrc", reason: "registry tokens"}
+    - {read: "~/.pypirc", reason: "registry tokens"}
+    - {read: "~/.netrc", reason: "stored passwords"}
+    - {read: "~/.claude/.credentials.json", reason: "Claude Code login"}
+    - {read: "~/.claude.json", reason: "Claude Code login session and app state"}
+    - {read: "~/.rigfile/**", reason: "Rigfile state, backups and encrypted secrets"}
+    - {read: "~/.config/rigfile/**", reason: "Rigfile's git hooks and configuration"}
+    - {read: "~/.gnupg/**", reason: "GPG keys", os: [linux, macos]}
+    - {read: "~/.local/share/keyrings/**", reason: "desktop keyring", os: [linux]}
+    - {read: "~/Library/Keychains/**", reason: "macOS keychains", os: [macos]}
+    - {read: "/etc/shadow", reason: "password hashes", os: [linux]}
+    # ---- Rigfile's own configuration must not be editable by an agent (it is not a protected path) ----
+    - {edit: "~/.rigfile/**", reason: "Rigfile state and backups"}
+    - {edit: "~/.config/rigfile/**", reason: "Rigfile's git hooks and configuration"}
+    # ---- git safety: hooks are what stop a secret from being committed ----
+    - {bash: "git*--no-verify*", reason: "bypasses the secret-scanning git hooks"}
+    - {bash: "git*core.hooksPath*", reason: "disables the secret-scanning git hooks"}
+    - {bash: "git push --force*", reason: "force-push rewrites shared history"}
+    - {bash: "git push -f*", reason: "force-push rewrites shared history"}
+    - {bash: "git push*--force*", reason: "force-push rewrites shared history"}
+    - {bash: "git -C * push*--force*", reason: "force-push rewrites shared history"}
+    - {bash: "git -c * push*--force*", reason: "force-push rewrites shared history"}
+    - {bash: "/usr/bin/git*--no-verify*", reason: "bypasses the secret-scanning git hooks"}
+    # ---- dumping the environment leaks every secret in it ----
+    - {bash: "env", reason: "prints every environment variable, secrets included"}
+    - {bash: "printenv", reason: "prints every environment variable, secrets included"}
+    - {bash: "export -p", reason: "prints every environment variable, secrets included"}
+  ask:
+    - {bash: "git push*", reason: "publishes commits"}
+    - {bash: "git -C * push*", reason: "publishes commits"}
+    - {bash: "git -c * push*", reason: "publishes commits"}
+    - {bash: "rm -rf*", reason: "recursive forced deletion"}
+    - {bash: "/bin/rm -rf*", reason: "recursive forced deletion"}
+    - {bash: "sudo*", reason: "runs with administrator rights"}
+    - {bash: "chmod -R 777*", reason: "opens permissions recursively"}
+    - {bash: "npm publish*", reason: "publishes a package"}
+    - {bash: "twine upload*", reason: "publishes a package"}
+    - {bash: "cargo publish*", reason: "publishes a package"}
+    - {bash: "docker run*--privileged*", reason: "a privileged container has host access"}
+    - {bash: "curl*| sh*", reason: "runs a downloaded script"}
+    - {bash: "curl*| bash*", reason: "runs a downloaded script"}
+    - {bash: "wget*| sh*", reason: "runs a downloaded script"}
+    - {bash: "wget*| bash*", reason: "runs a downloaded script"}
+    - {edit: "~/.claude/settings.json", reason: "the agent's own hooks and permissions"}
+    - {edit: "~/.claude/settings.local.json", reason: "the agent's own hooks and permissions"}
+    - {edit: "./.claude/settings.json", reason: "the agent's own hooks and permissions"}
+    - {edit: "./.claude/settings.local.json", reason: "the agent's own hooks and permissions"}

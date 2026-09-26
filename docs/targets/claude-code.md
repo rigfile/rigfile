@@ -294,3 +294,8 @@ Sandbox: OS-enforced filesystem and network isolation for Bash/PowerShell/Monito
 **Impact on the plan:** the OS-level layer that §8.2/§11 defer to Stage 7 (egress allowlist, secret surrogates) partly exists in the vendor product for Claude Code. **Not verified:** exact enforcement gaps, Linux dependencies on a stock Ubuntu/Fedora, interaction with MCP servers and hooks (hooks are not sandboxed Bash). Recommendation in `docs/stage-2-plan.md` (O7): research and prototype in Stage 2 as an *optional, plan-screen-visible* layer of base-secure on macOS/Linux; do not depend on it for exit criteria.
 
 Sources: https://code.claude.com/docs/en/hooks · /permissions · /permission-modes · /sandboxing (2026-09-25)
+
+### 12.6 S2-M5 addenda (2026-09-25)
+
+- **PostToolUse output shape:** the Agent SDK hooks page (`code.claude.com/docs/en/agent-sdk/hooks`) says: for `PostToolUse`, inside **`hookSpecificOutput`** set `additionalContext` to append to the tool result, or **`updatedToolOutput` to replace the tool's output before Claude sees it, which "works for any tool"**; `updatedMCPToolOutput` is deprecated. The value type and the `tool_response` field shapes are still not documented in the pages the fetcher could read (the reference page is truncated): **UNVERIFIED**, handled by reading several shapes and confirmed in the live procedure.
+- **Hook matcher for edits:** `Edit`, `MultiEdit`, `NotebookEdit` are separate tool names; base-secure matches `Edit|MultiEdit|NotebookEdit`. Write/Edit `tool_input` field names differ between sources (`content`/`new_string` vs `file_text`/`new_str`); the write guard reads all of them.

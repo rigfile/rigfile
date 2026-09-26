@@ -542,3 +542,51 @@ func TestAddThenRemoveRestoresOriginal(t *testing.T) {
 		}
 	}
 }
+
+func TestSetMissingString(t *testing.T) {
+	path := []string{"permissions", "disableBypassPermissionsMode"}
+	// creates parents, in the document's own style; never touches other members
+	doc := "{\n  \"model\": \"opus\",\n  \"env\": {\"A\": \"1\"}\n}\n"
+	out, existing, added, err := SetMissingString([]byte(doc), path, "disable")
+	if err != nil || !added || existing != "" {
+		t.Fatalf("%v %v %q", err, added, existing)
+	}
+	want := "{\n  \"model\": \"opus\",\n  \"env\": {\"A\": \"1\"},\n  \"permissions\": {\n    \"disableBypassPermissionsMode\": \"disable\"\n  }\n}\n"
+	if string(out) != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", out, want)
+	}
+	// member into an existing object
+	doc = "{\n  \"permissions\": {\n    \"deny\": [\"x\"]\n  }\n}\n"
+	out, _, added, err = SetMissingString([]byte(doc), path, "disable")
+	if err != nil || !added || !strings.Contains(string(out), "\"deny\": [\"x\"],\n    \"disableBypassPermissionsMode\": \"disable\"") {
+		t.Fatalf("%v %v\n%s", err, added, out)
+	}
+	if v, ok := ReadString(out, path); !ok || v != "disable" {
+		t.Fatalf("%q %v", v, ok)
+	}
+	// an existing value is reported and never changed, whatever its type
+	for _, d := range []string{`{"permissions":{"disableBypassPermissionsMode":"other"}}`, `{"permissions":{"disableBypassPermissionsMode":true}}`} {
+		out, existing, added, err := SetMissingString([]byte(d), path, "disable")
+		if err != nil || added || string(out) != d || existing == "" {
+			t.Fatalf("%s: %v %v %q %s", d, err, added, existing, out)
+		}
+	}
+	// empty and compact documents; same value is a no-op
+	out, _, added, _ = SetMissingString(nil, path, "disable")
+	if !added || !strings.Contains(string(out), "\"permissions\": {") || !json.Valid(out) {
+		t.Fatalf("%s", out)
+	}
+	if _, _, added, _ := SetMissingString(out, path, "disable"); added {
+		t.Fatal("second call must be a no-op")
+	}
+	if out, _, _, _ := SetMissingString([]byte(`{}`), path, "disable"); string(out) != `{"permissions":{"disableBypassPermissionsMode":"disable"}}` {
+		t.Fatalf("%s", out)
+	}
+	// wrong shapes are errors, not overwrites
+	if _, _, _, err := SetMissingString([]byte(`{"permissions": 3}`), path, "x"); err == nil {
+		t.Fatal("a non-object parent must be an error")
+	}
+	if _, _, _, err := SetMissingString([]byte(`not json`), path, "x"); err == nil {
+		t.Fatal("invalid JSON must be an error")
+	}
+}

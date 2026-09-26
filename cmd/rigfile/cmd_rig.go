@@ -62,8 +62,8 @@ func cmdValidate(args []string, e env) int {
 // ---- plan / apply -----------------------------------------------------------------------------
 
 type rigFlags struct {
-	layers, project, claudeDir                 string
-	overwrite, yes, updateLock, noTools, noGit bool
+	layers, project, claudeDir                             string
+	overwrite, yes, updateLock, noTools, noGit, unsafeBase bool
 }
 
 func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
@@ -72,6 +72,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 	fs.StringVar(&f.layers, "layers", "", "directory holding inherited layers: <dir>/<owner>/<name>/rigfile.yaml")
 	fs.StringVar(&f.project, "project", "", "project directory for scope: project instructions")
 	fs.StringVar(&f.claudeDir, "claude-dir", "", "Claude Code config directory (default ~/.claude or $CLAUDE_CONFIG_DIR)")
+	fs.BoolVar(&f.unsafeBase, "i-understand-unsafe-base", false, "DANGEROUS: skip rigfile/base-secure (local only; recorded in state; doctor shows it red)")
 	fs.BoolVar(&f.noGit, "no-git", false, "skip the git protections (global gitignore and secret-scanning hooks)")
 	fs.BoolVar(&f.overwrite, "overwrite", false, "replace hand-edited managed content and items Rigfile does not own")
 	if withApply {
@@ -85,7 +86,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit,
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase,
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -113,9 +114,15 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	if p == nil {
 		return code
 	}
+	defer p.Close()
 
 	fmt.Fprintln(e.out, p.Header())
 	fmt.Fprintln(e.out)
+	if f.unsafeBase {
+		fmt.Fprintln(e.out, "!!! --i-understand-unsafe-base: rigfile/base-secure is SKIPPED. Nothing protects secrets from the agent or from git")
+		fmt.Fprintln(e.out, "!!! beyond what you already have. This is recorded in state.json and shown as a red item by `rigfile doctor`.")
+		fmt.Fprintln(e.out)
+	}
 	for _, pr := range p.Problems {
 		fmt.Fprintln(e.out, pr)
 	}
@@ -454,6 +461,7 @@ func cmdLock(args []string, e env) int {
 	if p == nil {
 		return code
 	}
+	defer p.Close()
 	if manifest.HasErrors(p.Problems) {
 		for _, pr := range p.Problems {
 			fmt.Fprintln(e.err, pr)

@@ -93,6 +93,9 @@ func cmdDoctor(args []string, e env) int {
 		add(lvFail, "state", "%v", err)
 		return printChecks(e, cs)
 	}
+	if st.UnsafeBase != nil {
+		add(lvFail, "base-secure", "DISABLED since %s (applied with --i-understand-unsafe-base); run `rigfile apply` without the flag to restore it", st.UnsafeBase.Since)
+	}
 	if gts := st.Targets[gitmod.Target]; gts != nil && len(gts.Items) > 0 {
 		var bad []string
 		for _, d := range state.Check(gts.Items, nil) {

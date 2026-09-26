@@ -59,13 +59,16 @@ func matcherFor(m manifest.HookMatch) (matcher, ifRule string, err error) {
 			return "", "", fmt.Errorf("unknown tool %q in hook match", m.Tool)
 		}
 		matcher = n
+		if m.Tool == "edit" {
+			matcher = "Edit|MultiEdit|NotebookEdit" // every tool that edits files (S2-M5): a hook must not miss MultiEdit
+		}
 	}
 	switch {
 	case m.Command != "" && (m.Tool == "bash" || m.Tool == "powershell"):
 		ifRule = fmt.Sprintf("%s(%s)", matcher, m.Command)
 	case m.Path != "" && (m.Tool == "read" || m.Tool == "edit" || m.Tool == "write"):
-		n := matcher
-		if m.Tool == "write" {
+		n := toolNames[m.Tool]
+		if m.Tool == "write" || m.Tool == "edit" {
 			n = "Edit" // path rules for Write are never consulted; Edit(path) covers all writers (§8)
 		}
 		ifRule = fmt.Sprintf("%s(%s)", n, m.Path)
@@ -127,6 +130,14 @@ func (b *builder) settings(p *merge.Projection) {
 	}
 	if len(p.Deny)+len(p.Ask)+len(p.Allow) > 0 || !pp.Empty() {
 		ops = append(ops, permOp)
+	}
+
+	// ---- base-secure settings ----
+	if env.BaseSecure {
+		if op, ok := b.settingOp(path, &work, "permissions.disableBypassPermissionsMode", "disable",
+			"bypassPermissions mode skips the prompts that protect .git, .claude and shell rc files; base-secure turns it off (decision O8)"); ok {
+			ops = append(ops, op)
+		}
 	}
 
 	// ---- hooks ----
@@ -198,6 +209,38 @@ func (b *builder) settings(p *merge.Projection) {
 		}
 	}
 	b.plan.Ops = append(b.plan.Ops, ops...)
+}
+
+// settingOp ensures a scalar setting exists with the wanted value, without ever overwriting the user's own
+// choice: an existing different value is reported and left alone.
+func (b *builder) settingOp(settingsPath string, work *[]byte, dotted, want, why string) (engine.Op, bool) {
+	env := b.env
+	segs := strings.Split(dotted, ".")
+	next, existing, added, err := jsonedit.SetMissingString(*work, segs, want)
+	if err != nil {
+		b.fail(fmt.Errorf("%s: %w", env.short(settingsPath), err))
+		return engine.Op{}, false
+	}
+	item := state.Item{Category: "setting", Key: dotted, Kind: state.KindJSONValue, Path: settingsPath, Hash: hashing.Bytes([]byte(want)),
+		Detail: map[string]string{"path": dotted, "value": want}}
+	op := engine.Op{Category: "setting", Key: dotted, Detail: []string{why}}
+	label := env.short(settingsPath) + "   " + dotted + " = \"" + want + "\""
+	switch {
+	case added:
+		*work = next
+		op.Symbol, op.Summary, op.Items = engine.Update, label, []state.Item{item}
+	case existing == want:
+		op.Symbol, op.Summary = engine.Unchanged, label+"   (up to date)"
+		if _, mine := env.owned("setting", dotted, settingsPath); mine {
+			op.Items = []state.Item{item}
+		}
+	default:
+		op.Symbol, op.Summary = engine.Conflict, label+"   your settings already say "+existing+"; not changed"
+		if prev, mine := env.owned("setting", dotted, settingsPath); mine {
+			op.Keep = []state.Item{prev}
+		}
+	}
+	return op, true
 }
 
 func appendUniqueItem(list []state.Item, it state.Item) []state.Item {

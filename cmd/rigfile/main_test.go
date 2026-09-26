@@ -833,3 +833,143 @@ func TestHookWriteGuardAndRedactCommands(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+const plainRigYAML = `apiVersion: rigfile.dev/v1
+name: jiaxu/plain
+version: 1.0.0
+commands:
+  - {path: commands/hi.md}
+`
+
+func plainRig(t *testing.T, extra string) string {
+	dir := t.TempDir()
+	put(t, dir, "rigfile.yaml", plainRigYAML+extra, 0o644)
+	put(t, dir, "commands/hi.md", "hi", 0o644)
+	return dir
+}
+
+func TestBaseSecureIsAppliedToEveryRig(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp) // the embedded layer is extracted here for the run and must be cleaned up
+	m := newMachine(t)
+	rig := plainRig(t, "")
+
+	r := m.run("", "plan", rig, "--no-git")
+	for _, want := range []string{"rigfile/base-secure → jiaxu/plain", "security-baseline", "Read(~/.ssh/**)", "Bash(git*--no-verify*)", "Bash(git push*)",
+		"base-secure-guard", "base-secure-write-guard", "base-secure-redact", "disableBypassPermissionsMode", "⚠ executes code"} {
+		if r.code != 0 || !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if left, _ := filepath.Glob(filepath.Join(tmp, "rigfile-base-secure-*")); len(left) != 0 {
+		t.Fatalf("the extracted base layer was not cleaned up: %v", left)
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".claude")); !os.IsNotExist(err) {
+		t.Fatal("plan wrote to the machine")
+	}
+
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	settings := string(mustRead(t, filepath.Join(m.home, ".claude", "settings.json")))
+	for _, want := range []string{`"Read(~/.ssh/**)"`, `"Bash(git*--no-verify*)"`, `"Bash(git push*)"`, `"Edit(~/.config/rigfile/**)"`,
+		`"disableBypassPermissionsMode": "disable"`, `"matcher": "Edit|MultiEdit|NotebookEdit"`, `"PostToolUse"`, `"write-guard"`, `"redact"`, `"guard"`} {
+		if !strings.Contains(settings, want) {
+			t.Errorf("settings.json missing %s:\n%s", want, settings)
+		}
+	}
+	if md := string(mustRead(t, filepath.Join(m.home, ".claude", "CLAUDE.md"))); !strings.Contains(md, "Security baseline (managed by rigfile/base-secure") {
+		t.Fatalf("instructions snippet missing:\n%s", md)
+	}
+	if r := m.run("", "diff"); r.code != 0 || !strings.Contains(r.out, "no drift") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "doctor"); strings.Contains(r.out, "✘ base-secure") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestBaseSecureCannotBeReplacedOrImpersonatedByARig(t *testing.T) {
+	m := newMachine(t)
+	// a rig cannot replace a locked base hook
+	rig := plainRig(t, "hooks:\n  - {id: base-secure-guard, event: pre_tool_use, match: {tool: bash}, run: 'builtin:guard'}\n")
+	if r := m.run("", "plan", rig, "--no-git"); r.code != 1 || !strings.Contains(r.err, "base-secure") {
+		t.Fatalf("replacing a locked item must be refused: %+v", r)
+	}
+	// a rig cannot take the reserved name, and a same-named layer on disk cannot stand in for the embedded one
+	bad := t.TempDir()
+	put(t, bad, "rigfile.yaml", "apiVersion: rigfile.dev/v1\nname: rigfile/base-secure\nversion: 9.9.9\n", 0o644)
+	if r := m.run("", "plan", bad, "--no-git"); r.code != 1 || !strings.Contains(r.err, "reserved") {
+		t.Fatalf("%+v", r)
+	}
+	layers := t.TempDir()
+	put(t, layers, "rigfile/base-secure/rigfile.yaml", "apiVersion: rigfile.dev/v1\nname: rigfile/base-secure\nversion: 9.9.9\n", 0o644)
+	good := plainRig(t, "")
+	r := m.run("", "plan", good, "--layers", layers, "--no-git")
+	if r.code != 0 || !strings.Contains(r.out, "Read(~/.ssh/**)") || strings.Contains(r.out, "9.9.9") {
+		t.Fatalf("the embedded base must win over a directory layer:\n%+v", r)
+	}
+	// an allow rule that base-secure denies has no effect and says so (deny always wins)
+	rig = plainRig(t, "permissions:\n  allow:\n    - {read: '~/.ssh/**'}\n")
+	if r := m.run("", "plan", rig, "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	settings := string(mustRead(t, filepath.Join(m.home, ".claude", "settings.json")))
+	var doc struct {
+		Permissions struct{ Allow []string } `json:"permissions"`
+	}
+	_ = json.Unmarshal([]byte(settings), &doc)
+	for _, a := range doc.Permissions.Allow {
+		if strings.Contains(a, ".ssh") {
+			t.Fatalf("an allow shadowed by a base deny must not be written: %v", doc.Permissions.Allow)
+		}
+	}
+}
+
+func TestUnsafeBaseFlagIsLoudRecordedAndReversible(t *testing.T) {
+	m := newMachine(t)
+	rig := plainRig(t, "")
+	r := m.run("", "plan", rig, "--no-git", "--i-understand-unsafe-base")
+	if r.code != 0 || !strings.Contains(r.out, "--i-understand-unsafe-base") || !strings.Contains(r.out, "SKIPPED") || strings.Contains(r.out, "Read(~/.ssh/**)") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git", "--i-understand-unsafe-base"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	sd := filepath.Join(m.home, ".rigfile", "state.json")
+	if !strings.Contains(string(mustRead(t, sd)), `"unsafeBase"`) {
+		t.Fatal("the unsafe apply must be recorded in state.json")
+	}
+	if r := m.run("", "doctor"); r.code != 1 || !strings.Contains(r.out, "✘ base-secure") || !strings.Contains(r.out, "DISABLED") {
+		t.Fatalf("doctor must show it red: %+v", r)
+	}
+	// a normal apply restores the layer and clears the record (the lockfile changed: the base layer is back)
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 1 || !strings.Contains(r.err, "lockfile") {
+		t.Fatalf("restoring the base layer changes the lock, which must be accepted explicitly: %+v", r)
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git", "--update-lock"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if strings.Contains(string(mustRead(t, sd)), `"unsafeBase"`) {
+		t.Fatal("a normal apply must clear the unsafe record")
+	}
+	if r := m.run("", "doctor"); strings.Contains(r.out, "✘ base-secure") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestExistingBypassModeSettingIsNeverOverwritten(t *testing.T) {
+	m := newMachine(t)
+	put(t, filepath.Join(m.home, ".claude"), "settings.json", "{\n  \"permissions\": {\n    \"disableBypassPermissionsMode\": \"other\"\n  }\n}\n", 0o644)
+	rig := plainRig(t, "")
+	r := m.run("", "apply", rig, "--yes", "--no-git")
+	if r.code != 3 || !strings.Contains(r.out, "your settings already say other") {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(string(mustRead(t, filepath.Join(m.home, ".claude", "settings.json"))), `"other"`) {
+		t.Fatal("the user's own value was overwritten")
+	}
+}

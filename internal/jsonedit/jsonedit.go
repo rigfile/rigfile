@@ -51,6 +51,72 @@ func AppendRaw(doc []byte, path []string, raws []string) (out []byte, added []st
 	})
 }
 
+// SetMissingString ensures the object member at path exists, giving it the string value if (and only if) it
+// is absent. An existing member is NEVER changed: existing is its current value (raw JSON text for non-strings)
+// and added is false. Missing parent objects are created. Layout of everything else is preserved.
+func SetMissingString(doc []byte, path []string, value string) (out []byte, existing string, added bool, err error) {
+	if len(path) == 0 {
+		return nil, "", false, fmt.Errorf("jsonedit: empty path")
+	}
+	if len(bytes.TrimSpace(doc)) == 0 {
+		doc = []byte("{\n}\n")
+	}
+	if !gjson.ValidBytes(doc) {
+		return nil, "", false, ErrInvalidJSON
+	}
+	if root := bytes.TrimSpace(doc); root[0] != '{' {
+		return nil, "", false, fmt.Errorf("%w: root is not an object", ErrWrongType)
+	}
+	st := detectStyle(doc)
+	prefix := []string{}
+	for k := 0; k < len(path)-1; k++ {
+		child := lookup(doc, append(prefix, path[k]))
+		if !child.Exists() {
+			raw := buildChain(st, len(prefix)+1, path[k+1:], quote(value))
+			out, err := insertMember(doc, st, prefix, path[k], raw)
+			return out, "", err == nil, err
+		}
+		if !child.IsObject() {
+			return nil, "", false, fmt.Errorf("%w: %s is not an object", ErrWrongType, strings.Join(append(prefix, path[k]), "."))
+		}
+		prefix = append(prefix, path[k])
+	}
+	last := path[len(path)-1]
+	if cur := lookup(doc, append(prefix, last)); cur.Exists() {
+		if cur.Type == gjson.String {
+			return doc, cur.String(), false, nil
+		}
+		return doc, cur.Raw, false, nil
+	}
+	out, err = insertMember(doc, st, prefix, last, quote(value))
+	return out, "", err == nil, err
+}
+
+// ReadString returns the string value at path (ok=false when absent or not a string).
+func ReadString(doc []byte, path []string) (string, bool) {
+	if len(bytes.TrimSpace(doc)) == 0 || !gjson.ValidBytes(doc) {
+		return "", false
+	}
+	r := lookup(doc, path)
+	if !r.Exists() || r.Type != gjson.String {
+		return "", false
+	}
+	return r.String(), true
+}
+
+// buildChain renders nested objects for keys, ending in the raw JSON leaf as the value of the last key.
+// level is the nesting level of the member that will hold the returned value.
+func buildChain(st style, level int, keys []string, rawLeaf string) string {
+	if len(keys) == 0 {
+		return rawLeaf
+	}
+	inner := buildChain(st, level+1, keys[1:], rawLeaf)
+	if st.compact {
+		return "{" + quote(keys[0]) + st.colon + inner + "}"
+	}
+	return "{" + st.eol + st.indent(level+1) + quote(keys[0]) + st.colon + inner + st.eol + st.indent(level) + "}"
+}
+
 // ReadRaw returns the compacted text of every element of the array at path (missing path: nil).
 func ReadRaw(doc []byte, path []string) ([]string, error) {
 	if len(bytes.TrimSpace(doc)) == 0 {
@@ -116,7 +182,7 @@ func appendGeneric(doc []byte, path []string, vals []string, ops genericOps) (ou
 		return nil, nil, fmt.Errorf("jsonedit: empty path")
 	}
 	if len(bytes.TrimSpace(doc)) == 0 {
-		doc = []byte("{}\n")
+		doc = []byte("{\n}\n")
 	}
 	if !gjson.ValidBytes(doc) {
 		return nil, nil, ErrInvalidJSON
@@ -243,8 +309,9 @@ func detectStyle(doc []byte) style {
 	}
 	st.spaced = bytes.Contains(doc, []byte(`", "`))
 	st.compact = !bytes.Contains(bytes.TrimSpace(doc), []byte("\n"))
-	if !bytes.Contains(doc, []byte(`": `)) {
-		st.colon = ":"
+	hasMembers := bytes.Contains(doc, []byte(`":`))
+	if (hasMembers && !bytes.Contains(doc, []byte(`": `))) || (!hasMembers && st.compact) {
+		st.colon = ":" // members without a space, or an empty one-line document like {}
 	}
 	return st
 }
