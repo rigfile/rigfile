@@ -1,8 +1,6 @@
 # Rigfile status
 
-**Current stage: Stage 1 — build complete and merged to `main` (fast-forward of `stage-1`, 2026-09-25; CI green); owner checks below still open.**
-**Next: Stage 2 (`rigfile/base-secure`) — plan drafted in `docs/stage-2-plan.md` on branch `stage-2`, S2-M0 (verify first) done 2026-09-25 (`docs/targets/{claude-code §12,git}.md`, `docs/adr/0003-scanner.md`); O1 decided (own matcher over gitleaks rules, ADR 0003 Accepted); O2 decided (1%); S2-M1 scanner committed; S2-M2 corpus committed (core recall 223/223, FP 0/550); S2-M3 git hooks, S2-M4 git host module and S2-M5/M5b base-secure content and opt-in sandbox done (`docs/base-secure.md`), S2-M6 doctor integrity + `doctor --git` and S2-M7(a) deterministic red-team suite (`docs/red-team.md`) done; decided ("go with recommendations"): O3 chain existing hooks, O9 backstop on by default; still open with recommendations that will be followed unless the owner objects: O4–O8.**
-**Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
+**Current stage: Stage 2 (`rigfile/base-secure`): BUILD COMPLETE on branch `stage-2` (S2-M0 to S2-M8 + M5b done, CI-ready, not yet pushed); S2-M9 owner sign-off pending. Stage 1 is merged to `main` (CI green). Stage 3 (multi-vendor + Windows) has NOT been started and will not be without the owner's go.**
 Last updated: 2026-09-25 (end of Stage 1 build session)
 
 ## Stage 0 result (signed off)
@@ -71,3 +69,25 @@ Working rules for Stage 1 are in `CLAUDE.md` (small PRs, threat note for securit
 
 - `rigfile rollback` restores files but does not unregister MCP servers that `apply` added through the `claude` CLI; a re-apply after a rollback then reports "server exists and is not managed by Rigfile" (use `--overwrite`). Fix planned with the Stage 2 doctor/rollback work.
 - Hook cost: on this macOS machine (each `git` call ~14 ms) pre-commit ~50 ms, commit-msg ~16 ms, agent hooks ~7 ms, the reference-transaction backstop ~0-8 ms per invocation (git calls it 5 times per commit, the `sh` shim filters most). A clean `git commit` with all hooks measured 60-150 ms in the Linux containers (noisy, includes `git add`). Go start-up (~6 ms) and git subprocesses dominate; rules already compile lazily.
+
+## Stage 2: what the owner must do (S2-M9)
+
+Exit criteria (plan §12) and the evidence:
+
+| Criterion | Evidence |
+|---|---|
+| 100% of test-corpus secrets blocked at commit | Corpus: 223/223 core positives detected by the scanner (`docs/scanner-metrics.md`, gate in CI); the real pre-commit hook blocks a token, an encoded token, a credential file name and a secret in the commit message (`cmd/rigfile/githooks_e2e_test.go`, `docs/red-team.md` git layer) |
+| All red-team prompts blocked or requiring approval | Deterministic suite: 62 of 70 attempts blocked or asked, the 8 evasions are documented and each is covered by another layer or by the opt-in sandbox (`docs/red-team.md` Part 1). **Live run against a real Claude Code has not happened** (Part 2) |
+| False positives documented and below the agreed threshold | 0 of 550 hard negatives (gate 1%, decision O2); the corpus grows whenever a real false positive turns up |
+
+Your checklist, in order:
+
+1. **Push and check CI:** `git push -u origin stage-2` (I cannot). The new `dogfood`, `e2e` (real git in Ubuntu/Fedora) and corpus/red-team gates run there.
+2. **Read** `docs/base-secure.md` (what it enforces, what it cannot, threat note) and skim `docs/red-team.md`.
+3. **Run the live red-team procedure** (`docs/red-team.md` Part 2) in a disposable VM/container with Claude Code logged in. It also settles the UNVERIFIED items: the PostToolUse `updatedToolOutput` shape and transcript contents, Write/Edit field names, whether `Read(~/.ssh/**)`/the sandbox stop a script, and `disableBypassPermissionsMode` in user settings.
+4. **Apply base-secure to your own machine** (I never touch your real config): `rigfile apply <your rig>` (or `./cmd/rigfile`), read the GIT section of the plan (it appends a block to `~/.gitconfig`, adds hooks under `~/.config/rigfile/git-hooks` that chain to your existing `~/.config/git/hooks`, and adds a block to your global excludes), approve, then `rigfile doctor` and try `git commit` in a scratch repo. Optional: `--sandbox`.
+5. **LICENSE** (§17 Q1) and merge `stage-2` into `main` when satisfied.
+
+Then Stage 3 (Codex/Cursor/Gemini adapters + Windows) is next in the plan; it starts on your go.
+
+Deviations from the Stage 2 plan worth knowing: `doctor --fix` re-applies your rig through the normal review screen instead of writing silently; the git protections are part of `apply` (opt out with `--no-git`); the sandbox is opt-in (`--sandbox`), sticky, and its enforcement is unverified until step 3.
