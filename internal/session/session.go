@@ -24,6 +24,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/digitaldreamer3462/rigfile/internal/source"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 	"github.com/digitaldreamer3462/rigfile/internal/targets"
 	"github.com/digitaldreamer3462/rigfile/internal/tools"
@@ -62,6 +63,13 @@ type Options struct {
 	Targets    []string
 	TargetDirs map[string]string
 	Have       func(string) bool // is this command on PATH? nil = exec.LookPath (used to detect installed tools)
+
+	// Sources fetches `from:` layers written as git sources (nil = the real services, cached under the state
+	// directory). Tests inject a client that talks to local fakes.
+	Sources *source.Client
+	Source  string // set by `pull`: the canonical source string of the rig itself, recorded in state.json
+	Commit  string
+	Tree    string
 }
 
 // Prepared is everything computed before anything is written.
@@ -173,7 +181,19 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 			return nil, fmt.Errorf("the embedded %s layer failed to load: %w", basesecure.Name, err)
 		}
 	}
-	res, err := layers.Resolve(top, layers.WithBase(base, layers.DirSource{Root: o.LayersDir}))
+	sc := o.Sources
+	if sc == nil {
+		sc = &source.Client{CacheDir: filepath.Join(sd, "sources"), Getenv: o.Getenv}
+	}
+	remote := layers.SourceRemote{Client: sc, Pins: map[string]source.Pin{}}
+	if b, err := os.ReadFile(filepath.Join(top.Dir, lock.FileName)); err == nil {
+		if old, err := lock.Parse(b); err == nil {
+			for src, pin := range old.Pins() {
+				remote.Pins[src] = source.Pin{Commit: pin[0], TreeSHA256: pin[1]}
+			}
+		}
+	}
+	res, err := layers.Resolve(top, layers.WithRemote(layers.WithBase(base, layers.DirSource{Root: o.LayersDir}), remote))
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +487,8 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 	absDir, _ := filepath.Abs(p.Top.Dir)
 	for _, tp := range p.Targets {
 		ts := p.State.Target(tp.T.Name)
-		ts.Rig = state.RigRef{Name: p.Top.M.Name, Version: p.Top.M.Version, Hash: tp.SHA, Dir: absDir}
+		ts.Rig = state.RigRef{Name: p.Top.M.Name, Version: p.Top.M.Version, Hash: tp.SHA, Dir: absDir,
+			Source: p.Opts.Source, Commit: p.Opts.Commit, TreeSHA256: p.Opts.Tree}
 		ts.LockSHA = hashing.Bytes(lockBytes)
 		ts.Needs = p.Needs()
 		// A run that changed nothing must not rewrite state.json just to bump a timestamp.
