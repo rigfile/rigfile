@@ -4,7 +4,7 @@ Stage 3b is built and tested against fakes (a fake Hugging Face, a fake Ollama, 
 
 ## 1. Push and read CI
 
-`git push -u origin stage-3b`. New on all three OSes: `internal/platform` hardware detection (the real probe test reads the CI machine), `internal/svc` goldens, the model tests. Windows: the scheduled-task wrapper and `RealProbe` (PowerShell memory query, `GetDiskFreeSpaceEx`).
+`git push -u origin stage-3b` (the branch was created from `stage-8`, so merge `stage-8` to `main` first, or merge this branch and get both). New on all three OSes: `internal/platform` hardware detection (the real probe test reads the CI machine), `internal/svc` goldens, the model tests. Windows: the scheduled-task wrapper and `RealProbe` (PowerShell memory query, `GetDiskFreeSpaceEx`).
 
 ## 2. Decisions
 

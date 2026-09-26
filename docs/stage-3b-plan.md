@@ -2,7 +2,7 @@
 
 **Goal (RIGFILE_PLAN.md §12, §9.5):** a rig can install, serve, and wire in a local LLM chosen for the machine's hardware.
 
-Started 2026-09-26 on branch `stage-3b`, created from `main` (Stages 1-8 merged or pushed; Stage 3b was skipped when Stage 4 went ahead).
+Started 2026-09-26 on branch `stage-3b`, created from `stage-8` (Stages 1-7 are merged; Stage 8 is pushed and awaiting a CI re-run, so `stage-3b` contains its commits: merge `stage-8` first). Stage 3b was skipped when Stage 4 went ahead.
 
 ## The plan's exit criterion cannot be met as written, so it is re-scoped
 
