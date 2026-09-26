@@ -37,6 +37,7 @@ JSON unless stated. Errors are `{"error": "..."}` with a stable HTTP status. A p
 | `GET /v1/rigs/{owner}/{name}` | optional | metadata, visibility, stars, versions the viewer may see |
 | `GET /v1/rigs/{owner}/{name}/resolve?range=^1.2` | optional | the newest non-yanked version satisfying the range (`layers.Satisfies` rules); exact versions may be yanked |
 | `GET /v1/rigs/{owner}/{name}/diff?from=&to=` | optional | what changed between two versions the viewer may see (`from` defaults to the version before `to`, `to` to the newest published): manifest items added, removed, changed, file changes with unified text diffs, and the notes that ask for review (S8-M1, `docs/diffs.md`) |
+| `GET /v1/rigs/{owner}/{name}/derived` | optional | public rigs whose newest published version builds on this one (`from:`); see `docs/forks.md` |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}` | optional | version detail; scan findings only for the owner |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}/manifest` | optional | `rigfile.yaml` |
 | `GET /v1/rigs/{owner}/{name}/versions/{v}/tarball` | optional | the gzip tarball; headers `X-Rigfile-SHA256`, `ETag`, immutable caching |

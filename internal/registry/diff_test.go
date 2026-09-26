@@ -132,3 +132,72 @@ func TestDiffBetweenVersions(t *testing.T) {
 		t.Fatalf("the owner may compare a pending version: %d", s)
 	}
 }
+
+func publishWithManifest(t *testing.T, e *env, c *client, owner, name, version, extra string) {
+	t.Helper()
+	files := goodRig(owner, name, version)
+	files["rigfile.yaml"] = manifestYAML(owner, name, version, extra)
+	if s, b := c.upload(owner, name, rigTar(t, files)); s != 202 {
+		t.Fatalf("%d %v", s, b)
+	}
+	e.scanAll()
+	if c.versionStatus(owner, name, version) != "published" {
+		t.Fatalf("%s/%s@%s: %s", owner, name, version, c.versionStatus(owner, name, version))
+	}
+	if s, _, b := c.do("POST", "/v1/rigs/"+owner+"/"+name+"/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 204 {
+		t.Fatalf("%d %s", s, b)
+	}
+}
+
+func TestDerivedRigsAndUseAsBase(t *testing.T) {
+	e := newEnv(t, nil)
+	_, jia := e.userToken("jia", 1)
+	_, bob := e.userToken("bob", 2)
+	owner, other, anon := e.as(jia), e.as(bob), e.as("")
+
+	publishWithManifest(t, e, owner, "jia", "base", "1.4.2", "")
+	publishWithManifest(t, e, other, "bob", "child", "0.1.0", "from:\n  - jia/base@^1.4\n")
+	// a private rig that builds on it is never listed
+	if s, _ := other.upload("bob", "secretrig", rigTar(t, map[string]string{"rigfile.yaml": manifestYAML("bob", "secretrig", "0.1.0", "from:\n  - jia/base@^1.4\n"), "instructions/style.md": "x\n"})); s != 202 {
+		t.Fatal(s)
+	}
+	e.scanAll()
+	// a public rig that does not build on it, and one that mentions it only in its description
+	publishWithManifest(t, e, other, "bob", "unrelated", "0.1.0", "")
+
+	s, b := anon.get("/v1/rigs/jia/base/derived")
+	if s != 200 || !strings.Contains(string(b), `"total":1`) || !strings.Contains(string(b), `"name":"child"`) || strings.Contains(string(b), "secretrig") || strings.Contains(string(b), "unrelated") {
+		t.Fatalf("%d %s", s, b)
+	}
+	if _, b := anon.get("/v1/rigs/jia/base"); !strings.Contains(string(b), `"derived":1`) {
+		t.Fatalf("%s", b)
+	}
+	page := func() string { _, b := anon.get("/r/jia/base"); return string(b) }
+	if p := page(); !strings.Contains(p, "Built on this rig (1)") || !strings.Contains(p, "bob/child") || !strings.Contains(p, "from:\n  - jia/base@^1.4") || !strings.Contains(p, "rigfile fork jia/base") {
+		t.Fatalf("the rig page must show who builds on it and a use-as-base snippet:\n%s", p)
+	}
+
+	// a newer version of the child that no longer builds on it stops counting
+	files := goodRig("bob", "child", "0.2.0")
+	if s, _ := other.upload("bob", "child", rigTar(t, files)); s != 202 {
+		t.Fatal(s)
+	}
+	e.scanAll()
+	if st := other.versionStatus("bob", "child", "0.2.0"); st != "published" {
+		t.Fatalf("0.2.0 is %s", st)
+	}
+	if _, b := anon.get("/v1/rigs/jia/base/derived"); !strings.Contains(string(b), `"total":0`) {
+		t.Fatalf("%s", b)
+	}
+	if strings.Contains(page(), "Built on this rig") {
+		t.Fatal("the section disappears with the last derived rig")
+	}
+
+	// a private base: nobody else can even ask
+	if s, _, _ := owner.do("POST", "/v1/rigs/jia/base/visibility", []byte("visibility=private"), "application/x-www-form-urlencoded"); s != 204 {
+		t.Fatal(s)
+	}
+	if s, _ := anon.get("/v1/rigs/jia/base/derived"); s != 404 {
+		t.Fatalf("%d", s)
+	}
+}

@@ -48,35 +48,11 @@ func cmdChanges(args []string, e env) int {
 	client := sourceClient(e, sd)
 	var dirs [2]string
 	for i, arg := range pos {
-		switch {
-		case isDir(arg):
-			dirs[i] = arg
-		case source.Looks(arg) || registryRef.MatchString(arg):
-			var spec source.Spec
-			if source.Looks(arg) {
-				if spec, err = source.Parse(arg); err != nil {
-					fmt.Fprintln(e.err, "rigfile:", err)
-					return 2
-				}
-			} else {
-				base, berr := registryBase(e, *registry)
-				if berr != nil {
-					fmt.Fprintln(e.err, "rigfile:", berr)
-					return 1
-				}
-				name, ref, _ := strings.Cut(arg, "@")
-				spec = source.Spec{Kind: source.Registry, URL: base, Path: name, Ref: ref}
-			}
-			got, gerr := client.Get(context.Background(), spec, nil)
-			if gerr != nil {
-				fmt.Fprintln(e.err, "rigfile:", gerr)
-				return 1
-			}
-			dirs[i] = got.Dir
-		default:
-			fmt.Fprintf(e.err, "rigfile: %q is not a directory, a registry rig or a git source\n", arg)
-			return 2
+		side, code := resolveRig(e, client, arg, *registry)
+		if code != 0 {
+			return code
 		}
+		dirs[i] = side.dir
 	}
 	r, err := rigdiff.Rigs(dirs[0], dirs[1], pos[0], pos[1])
 	if err != nil {
@@ -107,4 +83,44 @@ func updateChangeLines(prevDir, newDir, from, to string, full bool) []string {
 		lines = append(lines, "  "+l)
 	}
 	return lines
+}
+
+// resolvedRig is a rig a command was pointed at: a directory, or something fetched into the source cache.
+type resolvedRig struct {
+	dir  string
+	spec *source.Spec // nil for a directory
+}
+
+// resolveRig turns a command-line argument (rig directory, owner/name[@version] in the registry, or a git source) into a
+// directory. A non-zero code means it already told the person why.
+func resolveRig(e env, client *source.Client, arg, registry string) (resolvedRig, int) {
+	switch {
+	case isDir(arg):
+		return resolvedRig{dir: arg}, 0
+	case source.Looks(arg) || registryRef.MatchString(arg):
+		var spec source.Spec
+		if source.Looks(arg) {
+			var err error
+			if spec, err = source.Parse(arg); err != nil {
+				fmt.Fprintln(e.err, "rigfile:", err)
+				return resolvedRig{}, 2
+			}
+		} else {
+			base, err := registryBase(e, registry)
+			if err != nil {
+				fmt.Fprintln(e.err, "rigfile:", err)
+				return resolvedRig{}, 1
+			}
+			name, ref, _ := strings.Cut(arg, "@")
+			spec = source.Spec{Kind: source.Registry, URL: base, Path: name, Ref: ref}
+		}
+		got, err := client.Get(context.Background(), spec, nil)
+		if err != nil {
+			fmt.Fprintln(e.err, "rigfile:", err)
+			return resolvedRig{}, 1
+		}
+		return resolvedRig{dir: got.Dir, spec: &spec}, 0
+	}
+	fmt.Fprintf(e.err, "rigfile: %q is not a directory, a registry rig or a git source\n", arg)
+	return resolvedRig{}, 2
 }

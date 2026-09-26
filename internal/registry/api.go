@@ -17,6 +17,7 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}", s.apiRig)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/resolve", s.apiResolve)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/diff", s.apiDiff)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/derived", s.apiDerived)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}", s.apiVersion)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/manifest", s.apiManifest)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/tarball", s.apiTarball)
@@ -105,6 +106,7 @@ func (s *Server) apiRig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	isOwner := u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)
+	_, derivedCount, _ := s.Store.Derived(r.Context(), rig.Owner, rig.Name, v, 1)
 	list := make([]versionJSON, 0, len(vs))
 	latest := ""
 	for _, x := range vs {
@@ -114,7 +116,37 @@ func (s *Server) apiRig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"owner": rig.Owner, "name": rig.Name, "description": rig.Description, "visibility": rig.Visibility,
-		"stars": rig.Stars, "latest": latest, "versions": list})
+		"stars": rig.Stars, "latest": latest, "versions": list, "derived": derivedCount})
+}
+
+// apiDerived lists the public rigs built on this one. The rig itself must be visible to the viewer.
+func (s *Server) apiDerived(w http.ResponseWriter, r *http.Request) {
+	v, _, ok := s.viewer(w, r)
+	if !ok {
+		return
+	}
+	rig, err := s.Store.GetRig(r.Context(), r.PathValue("owner"), r.PathValue("name"), v)
+	if err != nil {
+		apiError(w, http.StatusNotFound, "no such rig")
+		return
+	}
+	list, total, err := s.Store.Derived(r.Context(), rig.Owner, rig.Name, v, 50)
+	if err != nil {
+		apiError(w, http.StatusInternalServerError, "could not list derived rigs")
+		return
+	}
+	type item struct {
+		Owner       string `json:"owner"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Stars       int    `json:"stars"`
+		Latest      string `json:"latest"`
+	}
+	out := make([]item, 0, len(list))
+	for _, x := range list {
+		out = append(out, item{x.Owner, x.Name, x.Description, x.Stars, x.Latest})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"total": total, "rigs": out})
 }
 
 func (s *Server) apiResolve(w http.ResponseWriter, r *http.Request) {

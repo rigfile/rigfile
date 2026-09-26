@@ -88,18 +88,21 @@ func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
 
 // RigPage is everything the rig page shows.
 type RigPage struct {
-	Rig        *Rig
-	Version    *Version
-	Versions   []Version
-	Files      []FileEntry
-	Readme     template.HTML
-	Install    string
-	InstallPin string
-	IsOwner    bool
-	Trust      *Trust
-	Registry   string
-	Layers     []string
-	Latest     string
+	Rig         *Rig
+	Version     *Version
+	Versions    []Version
+	Files       []FileEntry
+	Readme      template.HTML
+	Install     string
+	InstallPin  string
+	IsOwner     bool
+	Trust       *Trust
+	Registry    string
+	Layers      []string
+	Latest      string
+	Derived     []RigSummary
+	DerivedN    int
+	BaseSnippet string
 }
 
 func (s *Server) loadRig(w http.ResponseWriter, r *http.Request) (*RigPage, *User, string, bool) {
@@ -152,6 +155,9 @@ func (s *Server) pageRig(w http.ResponseWriter, r *http.Request) {
 		page.Layers = page.Version.Layers
 		page.Install = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + " --registry " + s.Cfg.PublicURL
 		page.Trust, _ = s.Store.Trust(r.Context(), page.Rig, page.Version)
+		page.BaseSnippet = "from:\n  - " + page.Rig.Owner + "/" + page.Rig.Name + "@^" + majorMinor(page.Version.Version)
+		viewer, _, _ := s.pageViewer(r)
+		page.Derived, page.DerivedN, _ = s.Store.Derived(r.Context(), page.Rig.Owner, page.Rig.Name, viewer, 10)
 		page.InstallPin = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + "@" + page.Version.Version + " --registry " + s.Cfg.PublicURL
 	}
 	title := page.Rig.Owner + "/" + page.Rig.Name
@@ -271,4 +277,13 @@ func (s *Server) pageVisibility(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Redirect(w, r, "/r/"+url.PathEscape(r.PathValue("owner"))+"/"+url.PathEscape(r.PathValue("name")), http.StatusSeeOther)
 	}
+}
+
+// majorMinor turns 1.4.2 into 1.4 (the range a "use as base" snippet suggests: compatible with what the page shows).
+func majorMinor(v string) string {
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) < 2 {
+		return v
+	}
+	return parts[0] + "." + parts[1]
 }

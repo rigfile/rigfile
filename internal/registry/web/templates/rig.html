@@ -27,6 +27,9 @@
 {{if .Layers}}<div>Builds on: {{range .Layers}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .Version.NeedsSecrets}}<div>Secrets you will be asked for: {{range .Version.NeedsSecrets}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .Version.NeedsLogins}}<div>Logins: {{range .Version.NeedsLogins}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}</div>
+<div class="card"><strong>Use as a base</strong><pre><code>{{.BaseSnippet}}</code></pre>
+<div class="muted">Add this to your own <code>rigfile.yaml</code> to layer on top of this rig, or run <code>rigfile fork {{.Rig.Owner}}/{{.Rig.Name}} --name you/your-rig</code> to start from a copy.</div></div>
+{{if .DerivedN}}<div class="card"><strong>Built on this rig ({{.DerivedN}})</strong><ul>{{range .Derived}}<li><a href="/r/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a> <span class="muted">{{.Stars}} ★</span></li>{{end}}</ul></div>{{end}}
 {{if .Trust}}<div class="card"><strong>Trust</strong>
 <div>Publisher <a href="/u/{{.Trust.Publisher.Login}}">{{.Trust.Publisher.Login}}</a>{{if .Trust.Publisher.Verified}} <span class="tag ok">verified {{.Trust.Publisher.VerifiedKind}}</span>{{end}}</div>
 <div class="muted">first seen {{.Trust.Publisher.FirstSeen.Format "2006-01-02"}} · {{.Trust.Publisher.PublicRigs}} public rig(s)</div>
