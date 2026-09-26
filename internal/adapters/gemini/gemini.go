@@ -194,7 +194,7 @@ func (a *adapter) mcp(p *merge.Projection) {
 				a.b.Note("MCP server %q not installed for Gemini CLI: cwd is not carried over yet", s.Name)
 				continue
 			}
-			cmd, args := common.ExecWrap(a.env.RigfileCmd, s.P.V)
+			cmd, args := common.ExecWrapFor(a.env.RigfileCmd, s.Name, s.P.V, p.SecretHosts)
 			raw = mustJSON(map[string]any{"command": cmd, "args": args})
 		}
 		entries = append(entries, common.JSONEntry{Name: s.Name, Raw: raw, Layer: s.P.Layer})

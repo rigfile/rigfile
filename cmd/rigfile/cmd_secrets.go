@@ -241,9 +241,13 @@ func (k *kvFlags) Set(s string) error { *k = append(*k, s); return nil }
 func cmdExec(args []string, e env) int {
 	fs := flag.NewFlagSet("exec", flag.ContinueOnError)
 	fs.SetOutput(e.err)
-	var secretFlags, envFlags kvFlags
+	var secretFlags, envFlags, allowFlags, bindFlags kvFlags
+	var server string
 	fs.Var(&secretFlags, "secret", "ENV=ref: set ENV from a stored secret (repeatable)")
 	fs.Var(&envFlags, "env", "K=V: set a literal, non-secret variable (repeatable)")
+	fs.Var(&allowFlags, "allow", "host[,host]: the server's network.allow (Level 2, repeatable)")
+	fs.Var(&bindFlags, "bind", "ref=host[,host]: where a secret may be sent (Level 2, repeatable)")
+	fs.StringVar(&server, "server", "", "the server's name (Level 2: audit log and broker exclusions)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -273,6 +277,39 @@ func cmdExec(args []string, e env) int {
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
 		return 1
+	}
+	var allow []string
+	for _, a := range allowFlags {
+		allow = append(allow, strings.Split(a, ",")...)
+	}
+	binds := map[string][]string{}
+	for _, b := range bindFlags {
+		ref, hosts, ok := strings.Cut(b, "=")
+		if !ok || ref == "" || hosts == "" {
+			fmt.Fprintf(e.err, "rigfile: --bind wants ref=host[,host], got %q\n", b)
+			return 2
+		}
+		binds[ref] = append(binds[ref], strings.Split(hosts, ",")...)
+	}
+	if server == "" {
+		server = filepath.Base(cmd[0])
+	}
+	if rd, derr := rigdDir(e); derr == nil {
+		l2, notice, lerr := startLevel2(rd, server, cmd, allow, binds, sec)
+		if lerr != nil {
+			fmt.Fprintln(e.err, "rigfile:", lerr)
+			return 1
+		}
+		if notice != "" {
+			fmt.Fprintln(e.err, notice)
+		}
+		if l2 != nil {
+			defer l2.end()
+			for k, v := range l2.env {
+				lit[k] = v
+			}
+			sec = map[string]string{} // the real values never reach this process
+		}
 	}
 	var st secrets.Store
 	if len(sec) > 0 {
