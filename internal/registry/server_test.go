@@ -55,6 +55,7 @@ type env struct {
 	store *registry.Store
 	gh    *fakeGitHub
 	clk   *clock
+	blobs blob.Store
 }
 
 func newEnv(t *testing.T, mut func(*registry.Config)) *env {
@@ -76,7 +77,8 @@ func newEnv(t *testing.T, mut func(*registry.Config)) *env {
 	t.Cleanup(e.srv.Close)
 	cfg.PublicURL = e.srv.URL
 	gcli := &registry.GitHubHTTP{ClientID: cfg.GitHubID, ClientSecret: cfg.GitHubSecret, WebBase: cfg.GitHubWeb, APIBase: cfg.GitHubAPI}
-	e.s = registry.NewServer(cfg, st, blob.FS{Root: t.TempDir()}, gcli, nil)
+	e.blobs = blob.FS{Root: t.TempDir()}
+	e.s = registry.NewServer(cfg, st, e.blobs, gcli, nil)
 	*holder = *e.s
 	return e
 }

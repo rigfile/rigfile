@@ -419,3 +419,46 @@ func FromDir(dir string) (map[string][]byte, error) {
 	}
 	return files, nil
 }
+
+// Audit is the server-side check of a rig that already exists as a directory: the same secret scanner and manifest
+// checks that gate `rigfile publish`, without the local-only steps (home-path rewriting, personal information).
+type Audit struct {
+	Secrets  []Finding
+	Problems []manifest.Problem
+	Unpinned []manifest.Problem // warnings about unpinned packages: fine for a private rig, refused for a public one
+	Manifest *manifest.Manifest
+	Files    int
+}
+
+// AuditDir scans every file and file name under dir and validates its manifest.
+func AuditDir(dir string, sc *scan.Scanner) (*Audit, error) {
+	a := &Audit{}
+	err := filepath.WalkDir(dir, func(fp string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, fp)
+		rel = filepath.ToSlash(rel)
+		data, err := os.ReadFile(fp)
+		if err != nil {
+			return err
+		}
+		a.Files++
+		for _, f := range sc.ScanFile(rel, data) {
+			a.Secrets = append(a.Secrets, Finding{Kind: "secret", Rule: f.RuleID, File: rel, Line: f.Line, Sample: f.Description})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	l, err := manifest.Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	a.Manifest = l.M
+	a.Problems = manifest.Check(l)
+	p := &Prepared{Problems: a.Problems}
+	a.Unpinned = p.unpinned()
+	return a, nil
+}

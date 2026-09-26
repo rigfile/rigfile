@@ -1,0 +1,340 @@
+package registry
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+func (s *Server) apiRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /v1/search", s.apiSearch)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}", s.apiRig)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/resolve", s.apiResolve)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}", s.apiVersion)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/manifest", s.apiManifest)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/tarball", s.apiTarball)
+	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/versions", s.apiUpload)
+	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/versions/{version}/yank", s.apiYank)
+	mux.HandleFunc("POST /v1/rigs/{owner}/{name}/visibility", s.apiVisibility)
+	mux.HandleFunc("PUT /v1/rigs/{owner}/{name}/star", s.apiStar(true))
+	mux.HandleFunc("DELETE /v1/rigs/{owner}/{name}/star", s.apiStar(false))
+}
+
+// viewer authenticates optionally: anonymous when there is no token, 401 when a token is presented but invalid.
+func (s *Server) viewer(w http.ResponseWriter, r *http.Request) (Viewer, *User, bool) {
+	u, ok := s.tokenUser(r)
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="rigfile"`)
+		apiError(w, http.StatusUnauthorized, "the token is not valid; run `rigfile login`")
+		return Viewer{}, nil, false
+	}
+	return ViewerOf(u), u, true
+}
+
+type versionJSON struct {
+	Version    string    `json:"version"`
+	Status     string    `json:"status"`
+	SHA256     string    `json:"tarball_sha256"`
+	Size       int64     `json:"size"`
+	CreatedAt  time.Time `json:"created_at"`
+	YankReason string    `json:"yank_reason,omitempty"`
+	Targets    []string  `json:"targets,omitempty"`
+	Secrets    []string  `json:"needs_secrets,omitempty"`
+	Logins     []string  `json:"needs_logins,omitempty"`
+	Layers     []string  `json:"layers,omitempty"`
+	Findings   []Finding `json:"findings,omitempty"`
+	Warnings   []Finding `json:"warnings,omitempty"`
+}
+
+func versionToJSON(v Version, owner bool) versionJSON {
+	j := versionJSON{Version: v.Version, Status: v.Status, SHA256: v.TarballSHA256, Size: v.Size, CreatedAt: v.CreatedAt, YankReason: v.YankReason,
+		Targets: v.Targets, Secrets: v.NeedsSecrets, Logins: v.NeedsLogins, Layers: v.Layers}
+	if owner { // findings are for the publisher (and admins); other people only learn that a version is published
+		j.Findings, j.Warnings = v.Findings, v.Warnings
+	}
+	return j
+}
+
+func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
+	if !s.limit(w, r, "search", 120, 30) {
+		return
+	}
+	v, _, ok := s.viewer(w, r)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	rs, err := s.Store.Search(r.Context(), trunc(r.URL.Query().Get("q"), 100), limit, v)
+	if err != nil {
+		apiError(w, http.StatusInternalServerError, "search failed")
+		return
+	}
+	out := make([]map[string]any, 0, len(rs))
+	for _, x := range rs {
+		out = append(out, map[string]any{"owner": x.Owner, "name": x.Name, "description": x.Description, "latest": x.Latest, "stars": x.Stars})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"rigs": out})
+}
+
+func (s *Server) apiRig(w http.ResponseWriter, r *http.Request) {
+	v, u, ok := s.viewer(w, r)
+	if !ok {
+		return
+	}
+	rig, err := s.Store.GetRig(r.Context(), r.PathValue("owner"), r.PathValue("name"), v)
+	if err != nil {
+		apiError(w, http.StatusNotFound, "no such rig")
+		return
+	}
+	vs, err := s.Store.ListVersions(r.Context(), rig.ID, v)
+	if err != nil {
+		apiError(w, http.StatusInternalServerError, "could not list versions")
+		return
+	}
+	isOwner := u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)
+	list := make([]versionJSON, 0, len(vs))
+	latest := ""
+	for _, x := range vs {
+		list = append(list, versionToJSON(x, isOwner))
+		if latest == "" && x.Status == "published" {
+			latest = x.Version
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"owner": rig.Owner, "name": rig.Name, "description": rig.Description, "visibility": rig.Visibility,
+		"stars": rig.Stars, "latest": latest, "versions": list})
+}
+
+func (s *Server) apiResolve(w http.ResponseWriter, r *http.Request) {
+	if !s.limit(w, r, "resolve", 240, 60) {
+		return
+	}
+	v, _, ok := s.viewer(w, r)
+	if !ok {
+		return
+	}
+	rng := r.URL.Query().Get("range")
+	// an exact version is looked up directly, so a yanked version still resolves (lockfiles keep working)
+	if versionRe.MatchString(rng) {
+		if _, ver, err := s.Store.GetVersion(r.Context(), r.PathValue("owner"), r.PathValue("name"), rng, v); err == nil && (ver.Status == "published" || ver.Status == "yanked") {
+			writeJSON(w, http.StatusOK, versionToJSON(*ver, false))
+			return
+		}
+		apiError(w, http.StatusNotFound, "no such version")
+		return
+	}
+	_, ver, err := s.Store.Resolve(r.Context(), r.PathValue("owner"), r.PathValue("name"), rng, v)
+	if err != nil {
+		apiError(w, http.StatusNotFound, "no published version satisfies that")
+		return
+	}
+	writeJSON(w, http.StatusOK, versionToJSON(*ver, false))
+}
+
+func (s *Server) apiVersion(w http.ResponseWriter, r *http.Request) {
+	v, u, ok := s.viewer(w, r)
+	if !ok {
+		return
+	}
+	rig, ver, err := s.Store.GetVersion(r.Context(), r.PathValue("owner"), r.PathValue("name"), r.PathValue("version"), v)
+	if err != nil {
+		apiError(w, http.StatusNotFound, "no such version")
+		return
+	}
+	writeJSON(w, http.StatusOK, versionToJSON(*ver, u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)))
+}
+
+// pullable finds a version the viewer may download: published or yanked (or, for the owner, any they can see).
+func (s *Server) pullable(w http.ResponseWriter, r *http.Request) (*Rig, *Version, bool) {
+	v, u, ok := s.viewer(w, r)
+	if !ok {
+		return nil, nil, false
+	}
+	rig, ver, err := s.Store.GetVersion(r.Context(), r.PathValue("owner"), r.PathValue("name"), r.PathValue("version"), v)
+	if err != nil {
+		apiError(w, http.StatusNotFound, "no such version")
+		return nil, nil, false
+	}
+	if ver.Status != "published" && ver.Status != "yanked" && !(u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)) {
+		apiError(w, http.StatusNotFound, "no such version")
+		return nil, nil, false
+	}
+	return rig, ver, true
+}
+
+func (s *Server) apiManifest(w http.ResponseWriter, r *http.Request) {
+	_, ver, ok := s.pullable(w, r)
+	if !ok {
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = io.WriteString(w, ver.ManifestYAML)
+}
+
+func (s *Server) apiTarball(w http.ResponseWriter, r *http.Request) {
+	if !s.limit(w, r, "download", 120, 30) {
+		return
+	}
+	rig, ver, ok := s.pullable(w, r)
+	if !ok {
+		return
+	}
+	rc, size, err := s.Blobs.Get(r.Context(), ver.TarballSHA256)
+	if err != nil {
+		s.Log.Error("blob missing", "version", ver.ID, "err", err)
+		apiError(w, http.StatusInternalServerError, "the file is unavailable")
+		return
+	}
+	defer rc.Close()
+	h := w.Header()
+	h.Set("Content-Type", "application/gzip")
+	h.Set("Content-Length", strconv.FormatInt(size, 10))
+	h.Set("X-Rigfile-SHA256", ver.TarballSHA256)
+	h.Set("ETag", `"`+ver.TarballSHA256+`"`)
+	h.Set("Content-Disposition", `attachment; filename="`+rig.Name+"-"+ver.Version+`.tar.gz"`)
+	if ver.Status == "yanked" {
+		h.Set("X-Rigfile-Yanked", "true")
+	}
+	if rig.Visibility == "public" {
+		h.Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		h.Set("Cache-Control", "private, no-store")
+	}
+	_, _ = io.Copy(w, rc)
+}
+
+func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
+	u := s.requireToken(w, r)
+	if u == nil {
+		return
+	}
+	if !s.Lim.Allow("upload|"+strconv.FormatInt(u.ID, 10), 6, 10) {
+		w.Header().Set("Retry-After", "60")
+		apiError(w, http.StatusTooManyRequests, "too many uploads; slow down")
+		return
+	}
+	owner, name := r.PathValue("owner"), r.PathValue("name")
+	if !ownerRe.MatchString(owner) || !rigNameRe.MatchString(name) {
+		apiError(w, http.StatusBadRequest, "owner and name must be lowercase letters, digits and hyphens (names may also contain . and _)")
+		return
+	}
+	if owner != u.Login && !u.IsAdmin {
+		apiError(w, http.StatusForbidden, "you can publish only under your own name ("+u.Login+"/...)")
+		return
+	}
+	if IsReservedOwner(owner) && !u.IsAdmin {
+		apiError(w, http.StatusForbidden, "the "+owner+"/ namespace is reserved")
+		return
+	}
+	if ct := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])); ct != "application/gzip" && ct != "application/x-gzip" {
+		apiError(w, http.StatusUnsupportedMediaType, "send the rig as a gzip tarball (Content-Type: application/gzip)")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, s.Cfg.MaxUpload)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			apiError(w, http.StatusRequestEntityTooLarge, "the upload is larger than "+strconv.FormatInt(s.Cfg.MaxUpload>>20, 10)+" MiB")
+			return
+		}
+		apiError(w, http.StatusBadRequest, "could not read the upload")
+		return
+	}
+	info, err := validateUpload(data, owner, name)
+	if err != nil {
+		var ue *UploadError
+		if errors.As(err, &ue) {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": ue.Msg, "problems": ue.Problems})
+			return
+		}
+		s.Log.Error("upload validation", "err", err)
+		apiError(w, http.StatusInternalServerError, "could not check the upload")
+		return
+	}
+	sha, _, err := s.Blobs.Put(r.Context(), bytes.NewReader(data), s.Cfg.MaxUpload)
+	if err != nil || sha != info.TarballSHA {
+		s.Log.Error("blob put", "err", err)
+		apiError(w, http.StatusInternalServerError, "could not store the upload")
+		return
+	}
+	info.UserID, info.Admin = u.ID, u.IsAdmin
+	ver, err := s.Store.CreateVersion(r.Context(), info.NewVersion)
+	switch {
+	case errors.Is(err, ErrConflict):
+		apiError(w, http.StatusConflict, owner+"/"+name+"@"+info.Version+" already exists; versions are immutable, publish a new version number")
+		return
+	case errors.Is(err, ErrForbidden):
+		apiError(w, http.StatusForbidden, "you do not own "+owner+"/"+name)
+		return
+	case err != nil:
+		s.Log.Error("create version", "err", err)
+		apiError(w, http.StatusInternalServerError, "could not record the version")
+		return
+	}
+	s.Store.Audit(r.Context(), u, "version.upload", owner+"/"+name+"@"+info.Version, map[string]any{"sha256": sha, "size": info.Size})
+	writeJSON(w, http.StatusAccepted, map[string]any{"owner": owner, "name": name, "version": ver.Version, "status": "pending", "tarball_sha256": sha})
+}
+
+func (s *Server) apiYank(w http.ResponseWriter, r *http.Request) {
+	u := s.requireToken(w, r)
+	if u == nil {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	_ = r.ParseForm()
+	reason := strings.TrimSpace(r.PostFormValue("reason"))
+	if reason == "" || len(reason) > 300 {
+		apiError(w, http.StatusBadRequest, "give a reason (up to 300 characters): reason=...")
+		return
+	}
+	switch err := s.Store.Yank(r.Context(), r.PathValue("owner"), r.PathValue("name"), r.PathValue("version"), reason, u); {
+	case errors.Is(err, ErrNotFound):
+		apiError(w, http.StatusNotFound, "no such published version")
+	case errors.Is(err, ErrForbidden):
+		apiError(w, http.StatusForbidden, "only the owner can yank")
+	case err != nil:
+		apiError(w, http.StatusInternalServerError, "could not yank")
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (s *Server) apiVisibility(w http.ResponseWriter, r *http.Request) {
+	u := s.requireToken(w, r)
+	if u == nil {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	_ = r.ParseForm()
+	switch err := s.Store.SetVisibility(r.Context(), r.PathValue("owner"), r.PathValue("name"), r.PostFormValue("visibility"), u); {
+	case errors.Is(err, ErrNotFound):
+		apiError(w, http.StatusNotFound, "no such rig")
+	case errors.Is(err, ErrForbidden):
+		apiError(w, http.StatusForbidden, "only the owner can change visibility")
+	case errors.Is(err, ErrConflict):
+		apiError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		apiError(w, http.StatusBadRequest, err.Error())
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (s *Server) apiStar(on bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		u := s.requireToken(w, r)
+		if u == nil {
+			return
+		}
+		if err := s.Store.SetStar(r.Context(), r.PathValue("owner"), r.PathValue("name"), u, on); err != nil {
+			apiError(w, http.StatusNotFound, "no such rig")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
