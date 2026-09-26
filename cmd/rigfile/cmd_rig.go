@@ -66,6 +66,13 @@ type rigFlags struct {
 	layers, project, claudeDir                                                 string
 	overwrite, yes, updateLock, noTools, noGit, unsafeBase, sandbox, noSandbox bool
 	targets                                                                    kvFlags
+	pulled                                                                     *pulledRig // set by `pull` and `update`
+}
+
+// pulledRig describes a rig that was fetched from a git source: recorded in state.json and shown on the screen.
+type pulledRig struct {
+	Source, Commit, Tree string
+	Banner               []string
 }
 
 func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
@@ -91,7 +98,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Sources: e.sources, Source: f.pulled.source(), Commit: f.pulled.commit(), Tree: f.pulled.tree(), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -115,12 +122,44 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	if len(pos) == 1 {
 		rigDir = pos[0]
 	}
+	return planApply(verb, rigDir, f, e)
+}
+
+func (p *pulledRig) source() string {
+	if p == nil {
+		return ""
+	}
+	return p.Source
+}
+
+func (p *pulledRig) commit() string {
+	if p == nil {
+		return ""
+	}
+	return p.Commit
+}
+
+func (p *pulledRig) tree() string {
+	if p == nil {
+		return ""
+	}
+	return p.Tree
+}
+
+// planApply is the review-and-apply flow shared by plan, apply, pull and update.
+func planApply(verb, rigDir string, f rigFlags, e env) int {
 	p, code := prepare(e, rigDir, f)
 	if p == nil {
 		return code
 	}
 	defer p.Close()
 
+	if f.pulled != nil {
+		for _, l := range f.pulled.Banner {
+			fmt.Fprintln(e.out, l)
+		}
+		fmt.Fprintln(e.out)
+	}
 	fmt.Fprintln(e.out, p.Header())
 	fmt.Fprintln(e.out)
 	if f.unsafeBase {
@@ -283,6 +322,12 @@ func printNeeds(e env, p *session.Prepared) {
 	}
 	status := secretStatuses(e, p.Plat, secretRefs(needs))
 	fmt.Fprintln(e.out)
+	loginsShown := false
+	defer func() {
+		if loginsShown {
+			fmt.Fprintln(e.out, "               `rigfile logins` walks through all of them, one after another")
+		}
+	}()
 	for _, n := range needs {
 		switch n.Kind {
 		case "secret":
@@ -301,6 +346,7 @@ func printNeeds(e env, p *session.Prepared) {
 				fmt.Fprintf(e.out, "               then run: rigfile secrets set %s\n", n.Ref)
 			}
 		case "login":
+			loginsShown = true
 			how := n.Method
 			if how == "" {
 				how = "sign in"

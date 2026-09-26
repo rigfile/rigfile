@@ -3,3 +3,6 @@
 
 # The windowed-scan equivalence test deliberately builds many key-looking lines; the values are made up.
 rule:generic-api-key internal/scan/engine_test.go
+
+# Fake OAuth token values served by the in-test provider; they only exist to prove they are never printed or logged.
+rule:generic-api-key internal/login/login_test.go

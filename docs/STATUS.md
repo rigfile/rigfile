@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 3 is COMPLETE and merged to `main` together with Stage 2 (2026-09-26; CI green on ubuntu, macOS and windows-latest). Stage 4 (Git-based sharing) is planned in `docs/stage-4-plan.md` and starts on the owner's go. Owner-run checks that CI cannot do remain open: `docs/stage-3-owner-checks.md` (Windows VM, live vendor loads, WSL glob) and the Stage 2 items below (live red-team, base-secure on the owner's machine, LICENSE).**
-Last updated: 2026-09-26 (Stage 3 merged; Stage 4 planned)
+**Current stage: Stage 4 (Git-based sharing): S4-M0 to S4-M6 BUILT on branch `stage-4` (not pushed, not merged); S4-M7 is the owner gate (`docs/stage-4-owner-checks.md`). Stages 1-3 are merged to `main`.**
+Last updated: 2026-09-26 (Stage 4 built)
 
 ## Stage 0 result (signed off)
 
@@ -113,6 +113,12 @@ Merge commit `10d820f`. CI: `stage-2` and `stage-3` green on all jobs. The first
 
 Recorded in this session: the generated `docs/red-team.md` no longer prints per-OS rule counts (it made CI on Linux see the file as stale); the `redteam` doc and tests must stay OS-neutral. Local pushes by Claude are blocked by a user-level deny on `git push`, so pushes and merges to shared branches are the owner's.
 
-## Stage 4: next
+## Stage 4: built, awaiting owner steps
 
-Plan of record: `docs/stage-4-plan.md` (S4-M0 to S4-M7). Design calls are taken with my recommendations (remote sources pinned by commit SHA and tree hash, GitHub/GitLab tarball fetch without needing `git`, minisign-verified installers, guided logins never automated). Say "go" and I start S4-M0 (`docs/sharing.md`: threat model and spec).
+Plan of record: `docs/stage-4-plan.md`; spec and threat model: `docs/sharing.md`. New commands: `pull`, `update`, `publish`, `logins`, `self-update`, `verify-signature`. New packages: `internal/{source,publish,tui,login,minisign,selfupdate}`, `tools/release`, `scripts/install.{sh,ps1}`, `.github/workflows/release.yml`, `e2e/install*.sh`.
+
+What is proven: unit and CLI tests for every step; container E2E (Ubuntu and Fedora) of publish, pull, update and rollback; an installer E2E in which the real `minisign` signs a release and `install.sh` and `rigfile verify-signature` both accept it and refuse tampering, a wrong key, a replayed signature and a missing signature; reproducible release builds; wheel installed offline with pip and run; `node --check` on the npm scripts.
+
+What is not: nothing here has run on real GitHub or GitLab, on Windows (PowerShell installer, native tests: first CI run), or with real people. No OAuth provider is registered. macOS notarization, Windows signing, rpm and an apt repository are not done. All of it, plus the LICENSE and package-name decisions and the signing key, is in `docs/stage-4-owner-checks.md`.
+
+Say "go" for Stage 5 (registry website) only after the Stage 4 exit criteria (5+ external users) are met or you decide to defer them.

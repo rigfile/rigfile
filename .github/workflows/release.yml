@@ -1,0 +1,75 @@
+name: release
+
+# Builds a signed draft release. Manual on purpose: run it from the Actions tab with a version number, or push a
+# v* tag. The job uses the `release` environment: configure required reviewers on it so a person approves each run.
+#
+# Secrets/variables (owner setup, docs/stage-4-owner-checks.md):
+#   MINISIGN_SECRET_KEY   secret    contents of the minisign secret key file
+#   MINISIGN_PASSWORD     secret    its password ("" if the key has none)
+#   MINISIGN_PUBLIC_KEY   variable  the matching public key (one base64 line); it is compiled into the binary
+#
+# NOT done here, because they need the owner's paid identities: macOS notarization (Apple Developer ID) and Windows
+# Authenticode signing. Until then the macOS and Windows binaries are unsigned and Gatekeeper/SmartScreen will warn;
+# the minisign signature and SHA-256 checks in the installers do not depend on them.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.0.0 (without the v)"
+        required: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install minisign
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+      - name: Test before releasing
+        run: go vet ./... && go test -count=1 ./...
+      - name: Build, sign and render packaging
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          MINISIGN_PUBLIC_KEY: ${{ vars.MINISIGN_PUBLIC_KEY }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -eu
+          version="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          [ -n "$MINISIGN_PUBLIC_KEY" ] || { echo "MINISIGN_PUBLIC_KEY is not set"; exit 1; }
+          umask 077
+          key="$RUNNER_TEMP/minisign.key"
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
+          printf '%s\n' "$MINISIGN_PASSWORD" | go run ./tools/release -version "$version" -out dist -pubkey "$MINISIGN_PUBLIC_KEY" -sign-key "$key"
+          rm -f "$key"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Verify what was built, the way a user would
+        run: |
+          set -eu
+          cd dist
+          minisign -V -P "${{ vars.MINISIGN_PUBLIC_KEY }}" -m SHA256SUMS -x SHA256SUMS.minisig
+          sha256sum --check --ignore-missing SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packaging-manifests
+          path: dist/packaging
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          cd dist
+          gh release create "v$VERSION" --draft --title "rigfile $VERSION" --notes "Draft: review, then publish. Verify with: minisign -V -P <key> -m SHA256SUMS" \
+            *.tar.gz *.zip *.deb SHA256SUMS SHA256SUMS.minisig install.sh install.ps1

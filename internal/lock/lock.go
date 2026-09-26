@@ -35,7 +35,12 @@ type Layer struct {
 	Name           string `json:"name"`
 	Version        string `json:"version"`
 	ManifestSHA256 string `json:"manifestSha256"`
-	Items          []Item `json:"items,omitempty"`
+	// Set for a layer fetched from a git source: the canonical source, the commit it resolved to and the content
+	// hash of the fetched tree. Later resolutions are held to these.
+	Source     string `json:"source,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	TreeSHA256 string `json:"treeSha256,omitempty"`
+	Items      []Item `json:"items,omitempty"`
 }
 
 // Item pins one file or tree referenced by a layer.
@@ -55,6 +60,9 @@ func Build(res *layers.Result, merged map[string]string) (*Lock, error) {
 	for _, ml := range res.Layers {
 		loaded := res.Loaded[ml.Name]
 		ly := Layer{Name: ml.Name, Version: ml.Version, ManifestSHA256: loaded.Hash}
+		if ri, ok := res.Remotes[ml.Name]; ok {
+			ly.Source, ly.Commit, ly.TreeSHA256 = ri.Source, ri.Commit, ri.TreeSHA256
+		}
 		items, err := layerItems(loaded)
 		if err != nil {
 			return nil, fmt.Errorf("layer %s: %w", ml.Name, err)
@@ -189,6 +197,9 @@ func Verify(existing, fresh *Lock) []string {
 		if ol.Version != nl.Version {
 			d = append(d, fmt.Sprintf("layer %s: version %s -> %s", nl.Name, ol.Version, nl.Version))
 		}
+		if ol.Source != nl.Source || ol.Commit != nl.Commit || ol.TreeSHA256 != nl.TreeSHA256 {
+			d = append(d, fmt.Sprintf("layer %s: source %s@%s -> %s@%s", nl.Name, ol.Source, short(ol.Commit), nl.Source, short(nl.Commit)))
+		}
 		if ol.ManifestSHA256 != nl.ManifestSHA256 {
 			d = append(d, fmt.Sprintf("layer %s: rigfile.yaml changed", nl.Name))
 		}
@@ -244,4 +255,22 @@ func joinLines(s []string) string {
 		b.WriteString(l)
 	}
 	return b.String()
+}
+
+func short(s string) string {
+	if len(s) > 12 {
+		return s[:12]
+	}
+	return s
+}
+
+// Pins returns, for every layer fetched from a git source, what to hold a later resolution to.
+func (l *Lock) Pins() map[string][2]string {
+	out := map[string][2]string{}
+	for _, ly := range l.Layers {
+		if ly.Source != "" {
+			out[ly.Source] = [2]string{ly.Commit, ly.TreeSHA256}
+		}
+	}
+	return out
 }

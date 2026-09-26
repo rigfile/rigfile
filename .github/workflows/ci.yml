@@ -59,6 +59,17 @@ jobs:
           go-version-file: go.mod
       - run: e2e/run.sh
 
+  installer:
+    # scripts/install.sh against a release signed by the REAL minisign tool: genuine installs, tampering is refused.
+    name: installer (real minisign)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: e2e/install.sh
+
   dogfood:
     # Rigfile scans its own history with its own scanner (working agreement 9). New findings fail the build.
     name: dogfood (rigfile doctor --git on this repo)

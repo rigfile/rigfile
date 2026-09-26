@@ -17,6 +17,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
+	"github.com/digitaldreamer3462/rigfile/internal/source"
 )
 
 // MaxDepth bounds `from:` nesting (merge-semantics §2.1 proposal).
@@ -82,6 +83,13 @@ type baseSource struct {
 	next Source
 }
 
+func (b baseSource) ResolveRemote(spec string) (*manifest.Loaded, RemoteInfo, error) {
+	if r, ok := b.next.(Remote); ok {
+		return r.ResolveRemote(spec)
+	}
+	return nil, RemoteInfo{}, fmt.Errorf("git sources are not available here")
+}
+
 func (b baseSource) Resolve(ref Ref) (*manifest.Loaded, error) {
 	if ref.Name == merge.BaseSecure {
 		if b.base == nil {
@@ -92,16 +100,41 @@ func (b baseSource) Resolve(ref Ref) (*manifest.Loaded, error) {
 	return b.next.Resolve(ref)
 }
 
+// RemoteInfo is what pins a layer fetched from a git source (recorded in rigfile.lock).
+type RemoteInfo struct {
+	Source     string // canonical source, e.g. github.com/o/r@v1
+	Commit     string
+	TreeSHA256 string
+}
+
+// Remote resolves a layer written as a git source in `from:`. A Source may also implement it (see WithRemote).
+type Remote interface {
+	ResolveRemote(spec string) (*manifest.Loaded, RemoteInfo, error)
+}
+
+// WithRemote lets `from:` entries that are git sources resolve through r; every other reference goes to next.
+func WithRemote(next Source, r Remote) Source { return remoteSource{next, r} }
+
+type remoteSource struct {
+	Source
+	r Remote
+}
+
+func (s remoteSource) ResolveRemote(spec string) (*manifest.Loaded, RemoteInfo, error) {
+	return s.r.ResolveRemote(spec)
+}
+
 // Result is the resolved layer list plus notes for the plan screen.
 type Result struct {
 	Layers   []merge.Layer
 	Loaded   map[string]*manifest.Loaded // by layer name, for file access and Check
+	Remotes  map[string]RemoteInfo       // by layer name: layers that came from a git source
 	Warnings []string
 }
 
 // Resolve linearises top and everything it inherits.
 func Resolve(top *manifest.Loaded, src Source) (*Result, error) {
-	r := &Result{Loaded: map[string]*manifest.Loaded{}}
+	r := &Result{Loaded: map[string]*manifest.Loaded{}, Remotes: map[string]RemoteInfo{}}
 	done := map[string]bool{}
 
 	// base-secure is always the lowest layer, listed or not (§2.1).
@@ -138,6 +171,24 @@ func (r *Result) walk(l *manifest.Loaded, src Source, done map[string]bool, stac
 	}
 	stack = append(stack, name)
 	for _, raw := range l.M.From {
+		if source.Looks(raw) {
+			rem, ok := src.(Remote)
+			if !ok {
+				return fmt.Errorf("%s: %s is a git source, which cannot be resolved here", name, raw)
+			}
+			child, info, err := rem.ResolveRemote(raw)
+			if err != nil {
+				return fmt.Errorf("%s: %s: %w", name, raw, err)
+			}
+			if strings.HasPrefix(child.M.Name, "rigfile/") {
+				return fmt.Errorf("%s: %s declares the reserved name %q; only the Rigfile project publishes rigfile/* (rigfile/base-secure cannot be replaced or weakened by a remote layer)", name, raw, child.M.Name)
+			}
+			if err := r.walk(child, src, done, stack, depth+1, false); err != nil {
+				return err
+			}
+			r.Remotes[child.M.Name] = info
+			continue
+		}
 		ref, err := ParseRef(raw)
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)

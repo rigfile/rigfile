@@ -1,0 +1,11 @@
+# Installer test: the real minisign tool signs a release, scripts/install.sh must verify it, and must refuse tampering.
+FROM ubuntu:24.04
+RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates minisign >/dev/null && rm -rf /var/lib/apt/lists/*
+RUN useradd -m dev
+COPY release /release-src
+COPY install.sh /install.sh.tmpl
+COPY install_scenario.sh /install_scenario.sh
+RUN chown -R dev /release-src
+USER dev
+ENV HOME=/home/dev
+CMD ["/bin/sh", "/install_scenario.sh"]

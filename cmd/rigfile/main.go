@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/digitaldreamer3462/rigfile/internal/source"
 	"github.com/digitaldreamer3462/rigfile/internal/tools"
 )
 
@@ -35,13 +37,16 @@ type env struct {
 	in          io.Reader
 	out, err    io.Writer
 	getenv      func(string) string
-	stateDir    string                              // "" = platform default
-	mcp         claudecode.MCPClient                // nil = the real `claude` CLI
-	keyringOff  bool                                // tests: force the encrypted-file secret backend
-	lookPath    func(string) (string, error)        // nil = exec.LookPath
-	tools       tools.Host                          // nil = run real package managers
-	interactive bool                                // tests: behave as if stdin/stdout were a terminal
-	hidden      func(prompt string) ([]byte, error) // tests: replaces the hidden-input prompt
+	stateDir    string                                         // "" = platform default
+	mcp         claudecode.MCPClient                           // nil = the real `claude` CLI
+	keyringOff  bool                                           // tests: force the encrypted-file secret backend
+	lookPath    func(string) (string, error)                   // nil = exec.LookPath
+	tools       tools.Host                                     // nil = run real package managers
+	interactive bool                                           // tests: behave as if stdin/stdout were a terminal
+	hidden      func(prompt string) ([]byte, error)            // tests: replaces the hidden-input prompt
+	sources     *source.Client                                 // nil = the real services, cached under the state directory
+	runCmd      func(ctx context.Context, argv []string) error // tests: replaces running a vendor login command
+	openURL     func(string) error                             // tests: replaces opening the browser
 }
 
 func (e env) look(name string) (string, error) {
@@ -72,6 +77,18 @@ func run(args []string, e env) int {
 		return cmdValidate(rest, e)
 	case "plan", "apply":
 		return cmdPlanApply(args[0], rest, e)
+	case "pull":
+		return cmdPull("pull", args[1:], e)
+	case "update":
+		return cmdPull("update", args[1:], e)
+	case "self-update":
+		return cmdSelfUpdate(args[1:], e)
+	case "verify-signature":
+		return cmdVerifySignature(args[1:], e)
+	case "logins":
+		return cmdLogins(args[1:], e)
+	case "publish":
+		return cmdPublish(args[1:], e)
 	case "diff":
 		return cmdDiff(rest, e)
 	case "rollback":
@@ -102,6 +119,12 @@ func usage(w io.Writer) {
   validate <rig-dir|file>            check a rig against the schema and its own consistency rules
   plan  [<rig-dir>]                  show what would change (nothing is written)
   apply [<rig-dir>]                  apply the rig to Claude Code (review, confirm, backup first)
+  pull <source> [--plan-only]        fetch a rig from github.com/o/r[@ref][//dir] (or gitlab.com, https/ssh git URL), review, apply
+  update [--plan-only]               re-resolve the source of the last pulled rig and show what changed
+  publish [--to-git DIR]             scrub your setup (or a rig dir) into a clean repository you can share
+  logins [--provider name]           walk through the logins the applied rig needs
+  self-update [--check]              install the latest release after verifying its signature and checksum
+  verify-signature <file> [--pubkey k] check a minisign signature
   diff                               show drift since the last apply
   rollback [<run-id>] [--list]       undo a run (newest by default)
   lock [<rig-dir>]                   write or refresh rigfile.lock

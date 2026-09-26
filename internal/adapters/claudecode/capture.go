@@ -183,7 +183,7 @@ func (c *capturer) instructions() error {
 	if len(ids) > 0 {
 		c.add("note", "instruction", "CLAUDE.md", fmt.Sprintf("%d section(s) managed by Rigfile were left out", len(ids)))
 	}
-	if strings.TrimSpace(string(body)) == "" {
+	if strings.TrimSpace(string(body)) == "" || c.skipped("instruction", "claude-md") {
 		return nil
 	}
 	if scan.LooksLikeSecret(string(body)) {
@@ -498,6 +498,9 @@ func (c *capturer) hostPath(p string) string {
 }
 
 func (c *capturer) hook(id, label, event, matcher, ifRule, command string, args []string, timeout int) {
+	if c.skipped("hook", label) {
+		return
+	}
 	// a hook that Rigfile installed: round-trips as the built-in
 	if len(args) >= 3 && args[0] == "hook" && args[1] == "run" && strings.Contains(filepath.Base(command), "rigfile") {
 		c.addHook(outHook{ID: id, Event: event, Match: c.match(matcher, ifRule), Run: "builtin:" + args[2], Timeout: timeout})
