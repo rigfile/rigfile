@@ -520,8 +520,11 @@ func (c *capturer) hook(id, label, event, matcher, ifRule, command string, args 
 		c.add("skipped", "hook", label, "its command contains text that looks like a secret")
 		return
 	}
-	if strings.Contains(full, c.o.Home) && c.o.Home != "" {
-		full = strings.ReplaceAll(full, c.o.Home, "$HOME")
+	if c.o.Home != "" {
+		// a Windows home appears as C:\Users\me or C:/Users/me depending on who wrote the command
+		for _, h := range []string{c.o.Home, filepath.ToSlash(c.o.Home)} {
+			full = strings.ReplaceAll(full, h, "$HOME")
+		}
 	}
 	script := "hooks/" + id + ".sh"
 	c.files[script] = []byte("#!/bin/sh\n" + full + "\n")
