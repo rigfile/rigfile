@@ -108,6 +108,8 @@ func run(args []string, e env) int {
 		return cmdLock(rest, e)
 	case "doctor":
 		return cmdDoctor(rest, e)
+	case "broker":
+		return cmdBroker(rest, e)
 	case "secrets":
 		return cmdSecrets(rest, e)
 	case "exec":
@@ -142,6 +144,7 @@ func usage(w io.Writer) {
   lock [<rig-dir>]                   write or refresh rigfile.lock
   doctor                             health check
   secrets set|rm|status|list         manage secrets (values are never printed)
+  broker run|status|enable|exclude   Level 2: the secret broker (docs/rigd.md)
   exec [--secret ENV=ref]... -- cmd  run cmd with secrets injected into ITS environment only
   hook run <name>                    built-in agent hook (used by Claude Code)
 

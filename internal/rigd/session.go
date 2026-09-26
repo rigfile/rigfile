@@ -14,22 +14,25 @@ import (
 // SurrogatePrefix marks a surrogate value: recognisable so the proxy can find it, meaningless everywhere else.
 const SurrogatePrefix = "rgs_sur_"
 
+// SessionTTL is how long a session lives if the launcher never closes it.
+const SessionTTL = 24 * time.Hour
+
 // MinSecretLen is the shortest real secret the broker will substitute: replacing (and scrubbing) a very short value could
 // corrupt unrelated text.
 const MinSecretLen = 8
 
 // SecretSpec is one secret a server needs.
 type SecretSpec struct {
-	Env   string   // environment variable the child reads
-	Ref   string   // the secret store reference (never sent to the child)
-	Hosts []string // where the real value may be sent (host patterns)
+	Env   string   `json:"env"`   // environment variable the child reads
+	Ref   string   `json:"ref"`   // the secret store reference (never sent to the child)
+	Hosts []string `json:"hosts"` // where the real value may be sent (host patterns)
 }
 
 // SessionSpec is what `rigfile exec` asks for.
 type SessionSpec struct {
-	Server  string
-	Secrets []SecretSpec
-	Allow   []string // the server's network.allow patterns
+	Server  string       `json:"server"`
+	Secrets []SecretSpec `json:"secrets,omitempty"`
+	Allow   []string     `json:"allow"` // the server's network.allow patterns
 }
 
 // binding ties a surrogate to a real value and the hosts it may reach.
@@ -80,7 +83,7 @@ func NewSessionStore(now func() time.Time) *SessionStore {
 	if now == nil {
 		now = time.Now
 	}
-	return &SessionStore{byID: map[string]*Session{}, byUser: map[string]*Session{}, now: now, TTL: 24 * time.Hour, MaxLive: 256}
+	return &SessionStore{byID: map[string]*Session{}, byUser: map[string]*Session{}, now: now, TTL: SessionTTL, MaxLive: 256}
 }
 
 func randStr(n int) string {
@@ -197,6 +200,15 @@ func (st *SessionStore) Authenticate(user, password string) (*Session, bool) {
 		return nil, false
 	}
 	return s, true
+}
+
+// CloseAll ends every session and wipes their values.
+func (st *SessionStore) CloseAll() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	for id, s := range st.byID {
+		st.dropLocked(id, s)
+	}
 }
 
 // Live is the number of live sessions.
