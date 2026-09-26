@@ -52,7 +52,7 @@ type Plan struct {
 func FromManifest(vs []manifest.ModelVariant) []Variant {
 	out := make([]Variant, 0, len(vs))
 	for _, v := range vs {
-		out = append(out, Variant{When: v.When, Engine: v.Engine, EngineVersion: v.EngineVersion, Model: v.Model, Revision: v.Revision,
+		out = append(out, Variant{When: v.When, Engine: v.Engine, EngineVersion: v.EngineVersion, Model: v.Model, Revision: v.Revision, Digest: v.Digest,
 			WeightsFormat: v.WeightsFormat, Args: v.Args, Source: "rig"})
 	}
 	return out

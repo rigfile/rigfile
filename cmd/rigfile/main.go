@@ -38,27 +38,28 @@ var version = "0.1.0-stage1"
 
 // env bundles process I/O and machine access so tests can drive run() with a temp HOME.
 type env struct {
-	in          io.Reader
-	out, err    io.Writer
-	getenv      func(string) string
-	stateDir    string                                                  // "" = platform default
-	mcp         claudecode.MCPClient                                    // nil = the real `claude` CLI
-	keyringOff  bool                                                    // tests: force the encrypted-file secret backend
-	lookPath    func(string) (string, error)                            // nil = exec.LookPath
-	tools       tools.Host                                              // nil = run real package managers
-	interactive bool                                                    // tests: behave as if stdin/stdout were a terminal
-	hidden      func(prompt string) ([]byte, error)                     // tests: replaces the hidden-input prompt
-	sources     *source.Client                                          // nil = the real services, cached under the state directory
-	sleep       func(time.Duration)                                     // tests: replaces the device-flow polling delay
-	pollEvery   time.Duration                                           // tests: how often publish checks the registry scan
-	runCmd      func(ctx context.Context, argv []string) error          // tests: replaces running a vendor login command
-	openURL     func(string) error                                      // tests: replaces opening the browser
-	verifySig   func(bundle, tarball []byte) (*sigverify.Result, error) // tests: replaces Sigstore verification
-	brokerAct   rigd.Activator                                          // tests: replaces launchctl / systemctl / schtasks
-	modelDeps   func(models.Deps) models.Deps                           // tests: replaces how model setup reaches the machine
-	runAgent    func(path string, args, env, drop []string) int         // tests: replaces launching codex or claude
-	hardware    *platform.Hardware                                      // tests: replaces hardware detection
-	exe         string                                                  // tests: the path installed into service files ("" = this binary)
+	in           io.Reader
+	out, err     io.Writer
+	getenv       func(string) string
+	stateDir     string                                                  // "" = platform default
+	mcp          claudecode.MCPClient                                    // nil = the real `claude` CLI
+	keyringOff   bool                                                    // tests: force the encrypted-file secret backend
+	lookPath     func(string) (string, error)                            // nil = exec.LookPath
+	tools        tools.Host                                              // nil = run real package managers
+	interactive  bool                                                    // tests: behave as if stdin/stdout were a terminal
+	hidden       func(prompt string) ([]byte, error)                     // tests: replaces the hidden-input prompt
+	sources      *source.Client                                          // nil = the real services, cached under the state directory
+	sleep        func(time.Duration)                                     // tests: replaces the device-flow polling delay
+	pollEvery    time.Duration                                           // tests: how often publish checks the registry scan
+	runCmd       func(ctx context.Context, argv []string) error          // tests: replaces running a vendor login command
+	openURL      func(string) error                                      // tests: replaces opening the browser
+	verifySig    func(bundle, tarball []byte) (*sigverify.Result, error) // tests: replaces Sigstore verification
+	brokerAct    rigd.Activator                                          // tests: replaces launchctl / systemctl / schtasks
+	modelDeps    func(models.Deps) models.Deps                           // tests: replaces how model setup reaches the machine
+	runAgent     func(path string, args, env, drop []string) int         // tests: replaces launching codex or claude
+	detectModels func() []models.Detected                                // tests: replaces looking for a running Ollama
+	hardware     *platform.Hardware                                      // tests: replaces hardware detection
+	exe          string                                                  // tests: the path installed into service files ("" = this binary)
 }
 
 func (e env) look(name string) (string, error) {

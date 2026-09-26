@@ -160,3 +160,11 @@ Plan of record: `docs/stage-8-plan.md`; owner steps: `docs/stage-8-owner-checks.
 Proven: unit and CLI tests for every part; the registry parts against a real Postgres, including an organisation red-team over every read route and a concurrent-namespace race test.
 
 Not proven: real browsers, a real registry deployment, real teams, the editors' file formats. The riskiest change is the pair of visibility fragments in `internal/registry/store_rigs.go`, which every read now goes through.
+
+## Stage 3b: local models, built, awaiting owner steps
+
+Plan of record: `docs/stage-3b-plan.md`; spec as built: `docs/models.md`; owner steps: `docs/stage-3b-owner-checks.md`. Branch `stage-3b` (from `main`, not pushed). Built: hardware detection, the model catalog (Ollama engine version and digest verified 2026-09-26), variant selection and safety validation, the MODELS plan section, pinned hash-verified Hugging Face downloads, Ollama pulls with digest check, a generic per-user service generator (`internal/svc`, also used by `rigd`), `rigfile models list|pull|status|serve|url|run|rm`, `apply --models now|later|skip`, `doctor` checks (server, loopback only, chat, tool-call smoke test), and capture of a running Ollama by `rigfile init`.
+
+**Deviation from the plan:** the exit criterion (Codex and Claude Code using the mlx-lm reference setup) is not reachable without a bridge nobody verified, so it is re-scoped: the reference setup is reproduced and served, and Codex and Claude Code (experimental) are wired only through Ollama. No gateway, no routing translation, no global agent configuration is written.
+
+Not proven: real downloads, real Apple Silicon, real service managers, real agents against a local model. See the owner checks.

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"sort"
 	"strings"
 
+	"github.com/digitaldreamer3462/rigfile/internal/models"
 	"github.com/digitaldreamer3462/rigfile/internal/rigd"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
@@ -108,4 +110,20 @@ func addBrokerChecks(st *state.State, dir string, add func(checkLevel, string, s
 		return
 	}
 	add(worst, "secret broker", "%s", strings.Join(lines, "; "))
+}
+
+// addModelChecks reports on every local model set up on this machine: server up, loopback only, chat, tool calls.
+func addModelChecks(dir string, add func(checkLevel, string, string, ...any)) {
+	recs, err := models.Load(dir)
+	if err != nil || len(recs) == 0 {
+		return
+	}
+	level := map[models.Level]checkLevel{models.OK: lvOK, models.Warn: lvWarn, models.Fail: lvFail}
+	for _, n := range recs.Names() {
+		r := recs[n]
+		r.Name = n
+		for _, c := range models.CheckModel(context.Background(), r, models.CheckOptions{}) {
+			add(level[c.Level], "model "+n+": "+c.Name, "%s", c.Detail)
+		}
+	}
 }

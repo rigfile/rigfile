@@ -31,11 +31,11 @@ Stage 0's research (`docs/targets/codex.md` §9, `claude-code.md` §9, `catalog/
 
 | # | Milestone | Acceptance | Status |
 |---|---|---|---|
-| S3b-M0 | this plan and `docs/models.md` | every rule has a named test | done (plan); spec with M2 |
-| S3b-M1 | Hardware detection (`internal/platform`), catalog loader, variant selection, safety validation (`internal/models`) | parsers per OS from fixtures; selection and rejection tables; stubs never chosen | todo |
-| S3b-M2 | Manifest integration: `models:` (role or variants) resolved in `session.Prepare`, MODELS plan section, `rigfile models plan|list`, `--models` flag | goldens; loopback and format refusals | todo |
-| S3b-M3 | Downloads: pinned Hugging Face fetcher with hash verification, Ollama pull, engine install through the tools plan | fake HTTP server tests: bad hash, wrong size, pickle refused, resume | todo |
-| S3b-M4 | Service: generic generator, install/start/stop/status, apply and rollback integration | golden files per OS, fake activator | todo |
-| S3b-M5 | Wiring: `rigfile models run codex|claude|url`, plan-screen support matrix | real child processes with fake binaries | todo |
-| S3b-M6 | `doctor` checks, capture from a running server, docs | fake servers | todo |
-| S3b-M7 | Owner gate: `docs/stage-3b-owner-checks.md` | live checks on Apple Silicon, Linux, Windows; real downloads | todo (owner) |
+| S3b-M0 | this plan and `docs/models.md` | every rule has a named test | done |
+| S3b-M1 | Hardware detection (`internal/platform`), catalog loader, variant selection, safety validation (`internal/models`) | parsers per OS from fixtures; selection and rejection tables; stubs never chosen | done |
+| S3b-M2 | Manifest integration: `models:` (role or variants) resolved in `session.Prepare`, MODELS plan section, `rigfile models plan|list`, `--models` flag | goldens; loopback and format refusals | done |
+| S3b-M3 | Downloads: pinned Hugging Face fetcher with hash verification, Ollama pull, engine install through the tools plan | fake HTTP server tests: bad hash, wrong size, pickle refused, resume | done |
+| S3b-M4 | Service: generic generator, install/start/stop/status, apply and rollback integration | golden files per OS, fake activator | done |
+| S3b-M5 | Wiring: `rigfile models run codex|claude|url`, plan-screen support matrix | real child processes with fake binaries | done |
+| S3b-M6 | `doctor` checks, capture from a running server, docs | fake servers | done |
+| S3b-M7 | Owner gate: `docs/stage-3b-owner-checks.md` | live checks on Apple Silicon, Linux, Windows; real downloads | built; awaiting the owner (`docs/stage-3b-owner-checks.md`) |

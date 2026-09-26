@@ -236,3 +236,64 @@ func TestMLXModelsAreNotRunnableThroughAgents(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestInitCapturesARunningOllamaModelPinnedByDigest(t *testing.T) {
+	src := newMachine(t)
+	put(t, filepath.Join(src.home, ".claude"), "CLAUDE.md", "# Mine\n", 0o644)
+	out := filepath.Join(t.TempDir(), "rig")
+	var buf, errb bytes.Buffer
+	code := runWith(src, &buf, &errb, func(e *env) {
+		e.detectModels = func() []models.Detected {
+			return []models.Detected{{Engine: "ollama", Version: "0.34.4", Model: "qwen3:8b", Digest: "500a1f067a9f", Port: 11434}}
+		}
+	}, "init", "--out", out, "--name", "jia/captured")
+	if code != 0 || !strings.Contains(buf.String(), "qwen3:8b") || !strings.Contains(buf.String(), "only the network port was read") {
+		t.Fatalf("%d\n%s\n%s", code, buf.String(), errb.String())
+	}
+	doc := string(mustRead(t, filepath.Join(out, "rigfile.yaml")))
+	for _, want := range []string{"models:\n  qwen3-8b:", "engine: ollama", `engine_version: "0.34.4"`, "digest: 500a1f067a9f", "model: qwen3:8b"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("missing %q:\n%s", want, doc)
+		}
+	}
+	// the captured rig plans, with the digest carried into the plan
+	r := runHW(src, linuxHW, "plan", out, "--no-git")
+	if r.code != 0 || !strings.Contains(r.out, "qwen3:8b via ollama 0.34.4") {
+		t.Fatalf("%+v", r)
+	}
+	// with no Ollama running there is no models block
+	out2 := filepath.Join(t.TempDir(), "rig2")
+	if r := src.run("", "init", "--out", out2); r.code != 0 || strings.Contains(string(mustRead(t, filepath.Join(out2, "rigfile.yaml"))), "models:") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestDoctorChecksEachSetUpModel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/tags":
+			w.Write([]byte(`{"models":[]}`))
+		case "/v1/chat/completions":
+			w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+		}
+	}))
+	defer srv.Close()
+	_, p, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	port, _ := strconv.Atoi(p)
+	m := newMachine(t)
+	rec := models.Records{"local-coder": {Name: "local-coder", Engine: "ollama", Model: "qwen3:8b", Host: "127.0.0.1", Port: port, API: srv.URL + "/v1"}}
+	if err := rec.Save(m.stateDir()); err != nil {
+		t.Fatal(err)
+	}
+	r := m.run("", "doctor")
+	for _, want := range []string{"model local-coder: server", "model local-coder: loopback only", "model local-coder: chat", "model local-coder: tool calls", "CHAT ONLY"} {
+		if !strings.Contains(r.out, want) {
+			t.Errorf("missing %q:\n%s", want, r.out)
+		}
+	}
+	// a model whose server is down is a warning line, not a crash
+	srv.Close()
+	if r := m.run("", "doctor"); !strings.Contains(r.out, "not answering") {
+		t.Fatalf("%s", r.out)
+	}
+}
