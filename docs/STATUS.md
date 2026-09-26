@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 5 (registry website MVP): S5-M0 to S5-M6 BUILT on branch `stage-5` (not pushed, not merged); S5-M7 is the owner gate (`docs/stage-5-owner-checks.md`). Stages 1-4 are merged to `main`. The exit criterion needs an EXTERNAL security review that I cannot provide.**
-Last updated: 2026-09-26 (Stage 5 built)
+**Current stage: Stage 5 (registry website MVP) is BUILT and MERGED to `main` together with Stages 1-4 (2026-09-26; CI green on all ten jobs). Stage 6 (trust and supply chain) has NOT been started and starts on the owner's go. Open owner items: the external security review and lawyer review that Stage 5's exit criteria require, a real deployment with real GitHub sign-in, and the Stage 2-4 owner checklists (`docs/stage-3-owner-checks.md`, `docs/stage-4-owner-checks.md`, `docs/stage-5-owner-checks.md`).**
+Last updated: 2026-09-26 (Stage 5 merged)
 
 ## Stage 0 result (signed off)
 
