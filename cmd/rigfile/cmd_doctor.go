@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
+	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
 	"github.com/digitaldreamer3462/rigfile/internal/secrets"
 	"github.com/digitaldreamer3462/rigfile/internal/session"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
@@ -91,6 +92,19 @@ func cmdDoctor(args []string, e env) int {
 	if err != nil {
 		add(lvFail, "state", "%v", err)
 		return printChecks(e, cs)
+	}
+	if gts := st.Targets[gitmod.Target]; gts != nil && len(gts.Items) > 0 {
+		var bad []string
+		for _, d := range state.Check(gts.Items, nil) {
+			if d.Status != state.OK {
+				bad = append(bad, fmt.Sprintf("%s (%s)", d.Item.Key, d.Status))
+			}
+		}
+		if len(bad) == 0 {
+			add(lvOK, "git protections", "hooks, core.hooksPath and the global gitignore match what was applied")
+		} else {
+			add(lvFail, "git protections", "differ from what was applied: %s (see `rigfile diff`)", strings.Join(bad, "; "))
+		}
 	}
 	ts := st.Targets[session.Target]
 	if ts == nil || len(ts.Items) == 0 {

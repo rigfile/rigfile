@@ -16,6 +16,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
+	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
 	"github.com/digitaldreamer3462/rigfile/internal/hashing"
 	"github.com/digitaldreamer3462/rigfile/internal/layers"
 	"github.com/digitaldreamer3462/rigfile/internal/lock"
@@ -41,6 +42,10 @@ type Options struct {
 	MCP        claudecode.MCPClient
 	Overwrite  bool
 	ToolsHost  tools.Host // nil = the real machine
+
+	NoGit      bool   // skip the git module (global gitignore + secret-scanning hooks)
+	RigfileBin string // absolute path of the rigfile executable written into the git hooks; "" = this executable
+	NoBackstop bool   // do not install the reference-transaction backstop (decision O9: on by default)
 }
 
 // Prepared is everything computed before anything is written.
@@ -56,6 +61,7 @@ type Prepared struct {
 	State    *state.State
 	Plan     *engine.Plan // nil if the rig has errors
 	Tools    tools.Plan   // what apply would install (planned, never run here)
+	GitPlan  *engine.Plan // the git module (base-secure); nil with --no-git
 
 	Lock      *lock.Lock
 	LockPath  string
@@ -157,6 +163,23 @@ func Prepare(o Options) (*Prepared, error) {
 	if p.Plan, err = claudecode.Build(env, p.Proj); err != nil {
 		return nil, err
 	}
+	if !o.NoGit {
+		bin := o.RigfileBin
+		if bin == "" {
+			if bin, err = os.Executable(); err == nil {
+				if r, rerr := filepath.EvalSymlinks(bin); rerr == nil {
+					bin = r
+				}
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+		if p.GitPlan, err = gitmod.Build(gitmod.Options{Plat: pi, Getenv: o.Getenv, Rigfile: bin, Backstop: !o.NoBackstop,
+			State: p.State.Targets[gitmod.Target], Overwrite: o.Overwrite}); err != nil {
+			return nil, err
+		}
+	}
 	cat, err := tools.LoadCatalog()
 	if err != nil {
 		return nil, err
@@ -177,6 +200,24 @@ func Prepare(o Options) (*Prepared, error) {
 		p.Plan.Notes = append(p.Plan.Notes, w)
 	}
 	return p, nil
+}
+
+// Changes counts every actionable change, including the git module's.
+func (p *Prepared) Changes() int {
+	n := p.Plan.Changes()
+	if p.GitPlan != nil {
+		n += p.GitPlan.Changes()
+	}
+	return n
+}
+
+// Refused counts items left untouched because something else was in the way.
+func (p *Prepared) Refused() int {
+	n := len(p.Plan.Conflicts())
+	if p.GitPlan != nil {
+		n += len(p.GitPlan.Conflicts())
+	}
+	return n
 }
 
 // Needs lists the secrets and logins the rig requires, from the merged model (names and descriptions
@@ -258,7 +299,7 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := &Result{Applied: p.Plan.Changes(), Refused: len(p.Plan.Conflicts())}
+	res := &Result{Applied: p.Changes(), Refused: p.Refused()}
 
 	// Fail BEFORE touching the machine if rigfile.lock cannot be written next to the rig.
 	needLock := !p.HasLock || len(p.LockDiffs) > 0
@@ -281,6 +322,17 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 	fail := func(err error) (*Result, error) {
 		_, _ = w.Commit("FAILED: " + x.Note)
 		return nil, err
+	}
+	if p.GitPlan != nil {
+		gts := p.State.Target(gitmod.Target)
+		if err := p.GitPlan.Apply(&engine.Exec{W: w}, gts); err != nil {
+			_, _ = w.Commit("FAILED: " + x.Note)
+			return nil, err
+		}
+		if p.GitPlan.Changes() > 0 || gts.RunID == "" {
+			gts.AppliedAt = now().UTC().Format(time.RFC3339)
+			gts.RunID = runID
+		}
 	}
 	lockBytes, err := p.Lock.Marshal()
 	if err != nil {

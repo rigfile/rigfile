@@ -24,4 +24,29 @@ echo hand-edit > "$HOME/.claude/agents/reviewer.md"
 rigfile diff > $out && fail "diff should report drift" || true;         has "agent" $out
 echo "== rollback";  rigfile rollback --force > $out;                   has "rolled back" $out
 [ ! -e "$HOME/.claude/skills" ] || fail "skills not rolled back"
+echo "== git protections (base-secure)"
+# apply again after the rollback. --overwrite: rollback does not unregister MCP servers (known gap), so the
+# server registered by the first apply would otherwise be reported as 'not managed by Rigfile'
+rigfile apply /rig --yes --overwrite > $out;                                    has "applied" $out
+hp="$(git config --global --get core.hooksPath)"
+[ "$hp" = "$HOME/.config/rigfile/git-hooks" ] || fail "core.hooksPath is '$hp'"
+grep -q '!.env.example' "$HOME/.config/git/ignore" || fail "global gitignore block missing"
+export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.test GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.test
+repo=$(mktemp -d); cd "$repo"; git init -q -b main; echo hello > README.md
+git add -A; git commit -q -m clean || fail "a clean commit was blocked"
+# the fake token is assembled at run time so this script never contains a whole credential
+tok="gh""p_""wJ4kP9xQm2Rt7VbN5cLd8HyZaE3sUfG6TiOo"
+printf 'token = "%s"\n' "$tok" > leak.py; git add -A
+if git commit -q -m leak 2> $out; then fail "a commit with a secret was allowed"; fi;  has "commit blocked" $out
+if grep -q "$tok" $out; then fail "the hook printed the secret"; fi
+before=$(git rev-parse HEAD)
+if git commit -q --no-verify -m sneaky 2> $out; then fail "--no-verify let a secret commit through"; fi;  has "ref update blocked" $out
+[ "$(git rev-parse HEAD)" = "$before" ] || fail "the branch moved"
+git reset -q; rm leak.py
+# timing on a real Linux git (informational)
+s=$(date +%s%N); for i in 1 2 3 4 5; do echo $i > f$i; git add -A; git commit -q -m c$i; done; e=$(date +%s%N)
+echo "  5 clean commits with hooks: $(( (e - s) / 5000000 )) ms each"
+cd - > /dev/null
+rigfile rollback --force > $out;                                    has "rolled back" $out
+[ -z "$(git config --global --get core.hooksPath)" ] || fail "core.hooksPath should be gone after rollback"
 echo "E2E OK"

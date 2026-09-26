@@ -11,6 +11,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
+	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/session"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
@@ -61,8 +62,8 @@ func cmdValidate(args []string, e env) int {
 // ---- plan / apply -----------------------------------------------------------------------------
 
 type rigFlags struct {
-	layers, project, claudeDir          string
-	overwrite, yes, updateLock, noTools bool
+	layers, project, claudeDir                 string
+	overwrite, yes, updateLock, noTools, noGit bool
 }
 
 func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
@@ -71,6 +72,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 	fs.StringVar(&f.layers, "layers", "", "directory holding inherited layers: <dir>/<owner>/<name>/rigfile.yaml")
 	fs.StringVar(&f.project, "project", "", "project directory for scope: project instructions")
 	fs.StringVar(&f.claudeDir, "claude-dir", "", "Claude Code config directory (default ~/.claude or $CLAUDE_CONFIG_DIR)")
+	fs.BoolVar(&f.noGit, "no-git", false, "skip the git protections (global gitignore and secret-scanning hooks)")
 	fs.BoolVar(&f.overwrite, "overwrite", false, "replace hand-edited managed content and items Rigfile does not own")
 	if withApply {
 		fs.BoolVar(&f.yes, "yes", false, "apply without asking")
@@ -83,7 +85,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools,
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit,
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)
@@ -125,6 +127,10 @@ func cmdPlanApply(verb string, args []string, e env) int {
 		fmt.Fprintln(e.out)
 	}
 	p.Plan.Render(e.out)
+	if p.GitPlan != nil && (len(p.GitPlan.Ops) > 0 || len(p.GitPlan.Notes) > 0) {
+		fmt.Fprintln(e.out)
+		p.GitPlan.Render(e.out)
+	}
 	printTools(e, p.Tools)
 	printNeeds(e, p)
 	if p.HasLock && len(p.LockDiffs) > 0 {
@@ -144,8 +150,8 @@ func cmdPlanApply(verb string, args []string, e env) int {
 	if f.noTools {
 		runTools = nil
 	}
-	if (p.Plan.Changes() > 0 || len(runTools) > 0) && !f.yes {
-		if !confirm(e, fmt.Sprintf("\nApply %d change(s)%s?  [a]pply  [q]uit ", p.Plan.Changes(), plural(len(runTools), " and install 1 tool", fmt.Sprintf(" and install %d tools", len(runTools))))) {
+	if (p.Changes() > 0 || len(runTools) > 0) && !f.yes {
+		if !confirm(e, fmt.Sprintf("\nApply %d change(s)%s?  [a]pply  [q]uit ", p.Changes(), plural(len(runTools), " and install 1 tool", fmt.Sprintf(" and install %d tools", len(runTools))))) {
 			fmt.Fprintln(e.out, "aborted; nothing changed")
 			return 1
 		}
@@ -310,12 +316,20 @@ func cmdDiff(args []string, e env) int {
 		return 1
 	}
 	ts := st.Targets[session.Target]
-	if ts == nil || len(ts.Items) == 0 {
+	gts := st.Targets[gitmod.Target]
+	if (ts == nil || len(ts.Items) == 0) && (gts == nil || len(gts.Items) == 0) {
 		fmt.Fprintln(e.out, "nothing has been applied yet")
 		return 0
 	}
-	fmt.Fprintf(e.out, "Claude Code   %s@%s   applied %s   run %s\n", ts.Rig.Name, ts.Rig.Version, ts.AppliedAt, ts.RunID)
-	ds := state.Check(ts.Items, map[string]state.Probe{state.KindMCP: claudecode.MCPProbe(mcpClient(e))})
+	var ds []state.Drift
+	if ts != nil && len(ts.Items) > 0 {
+		fmt.Fprintf(e.out, "Claude Code   %s@%s   applied %s   run %s\n", ts.Rig.Name, ts.Rig.Version, ts.AppliedAt, ts.RunID)
+		ds = state.Check(ts.Items, map[string]state.Probe{state.KindMCP: claudecode.MCPProbe(mcpClient(e))})
+	}
+	if gts != nil && len(gts.Items) > 0 {
+		fmt.Fprintf(e.out, "Git protections (base-secure)   applied %s   run %s\n", gts.AppliedAt, gts.RunID)
+		ds = append(ds, state.Check(gts.Items, nil)...)
+	}
 	bad := 0
 	for _, d := range ds {
 		mark := "✔"

@@ -117,7 +117,7 @@ func (p *Plan) Identities() map[string]bool {
 
 var sectionOrder = []struct{ category, title string }{
 	{"instruction", "INSTRUCTIONS"}, {"skill", "SKILLS"}, {"agent", "AGENTS"}, {"command", "COMMANDS"},
-	{"mcp", "MCP SERVERS"}, {"hook", "HOOKS"}, {"permission", "PERMISSIONS"},
+	{"mcp", "MCP SERVERS"}, {"hook", "HOOKS"}, {"permission", "PERMISSIONS"}, {"git", "GIT"},
 }
 
 // Render prints the plan grouped by category (plan §5.1). ⚠ marks things that execute code.

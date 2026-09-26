@@ -1,7 +1,7 @@
 # Rigfile status
 
 **Current stage: Stage 1 — build complete and merged to `main` (fast-forward of `stage-1`, 2026-09-25; CI green); owner checks below still open.**
-**Next: Stage 2 (`rigfile/base-secure`) — plan drafted in `docs/stage-2-plan.md` on branch `stage-2`, S2-M0 (verify first) done 2026-09-25 (`docs/targets/{claude-code §12,git}.md`, `docs/adr/0003-scanner.md`); O1 decided (own matcher over gitleaks rules, ADR 0003 Accepted); O2 decided (1%); S2-M1 scanner committed; S2-M2 corpus committed (core recall 223/223, FP 0/550); S2-M3 git hooks built (uncommitted; reference-transaction backstop works); awaiting owner decisions O3–O9.**
+**Next: Stage 2 (`rigfile/base-secure`) — plan drafted in `docs/stage-2-plan.md` on branch `stage-2`, S2-M0 (verify first) done 2026-09-25 (`docs/targets/{claude-code §12,git}.md`, `docs/adr/0003-scanner.md`); O1 decided (own matcher over gitleaks rules, ADR 0003 Accepted); O2 decided (1%); S2-M1 scanner committed; S2-M2 corpus committed (core recall 223/223, FP 0/550); S2-M3 git hooks and S2-M4 git host module done; decided ("go with recommendations"): O3 chain existing hooks, O9 backstop on by default; still open with recommendations that will be followed unless the owner objects: O4–O8.**
 **Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
 Last updated: 2026-09-25 (end of Stage 1 build session)
 
@@ -66,3 +66,8 @@ Working rules for Stage 1 are in `CLAUDE.md` (small PRs, threat note for securit
 - A Python scaffold (`pyproject.toml`, `src/rigfile`, `tests/`, `README.md`) existed before Stage 0 and was committed by the owner as `42bd6bc "stage 0"` (branch `stage-0-spec`, also pushed to `origin`). With Go chosen it is not the product; keep as dev tooling or delete: the owner's call. It is not part of the Stage 0 deliverables.
 - `origin/HEAD` currently points at `stage-0-spec` (first branch pushed). Local `main` is created from it at sign-off; pushing `main` and making it GitHub's default branch is left to the owner.
 - Global secret-scanning git hooks (gitleaks) are installed on the owner's machine outside this repo (`~/.config/git/hooks`); they run on commits and pushes here. This is a stopgap until base-secure (Stage 2).
+
+## Known limits (Stage 1/2)
+
+- `rigfile rollback` restores files but does not unregister MCP servers that `apply` added through the `claude` CLI; a re-apply after a rollback then reports "server exists and is not managed by Rigfile" (use `--overwrite`). Fix planned with the Stage 2 doctor/rollback work.
+- Git protections on real Linux (container E2E, stock git): a clean `git commit` with pre-commit and the backstop installed takes ~65-75 ms. Startup cost of the rule set and git subprocesses dominate; optimisation is tracked in S2-M8.

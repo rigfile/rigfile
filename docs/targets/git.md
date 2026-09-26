@@ -45,3 +45,10 @@ All confirmed with real `git` in temp repos (`internal/githook`, `cmd/rigfile/gi
 | Cost | `git commit`: ~20 ms bare. `rigfile hook pre-commit` adds ~50-75 ms **on this machine, where each git subprocess costs ~12 ms** (Apple's `/usr/bin/git` shim); it spawns 4 (`diff --cached`, `cat-file --batch`, `write-tree`, and the git dir when `GIT_DIR` is not exported). The backstop adds 0-35 ms depending on the shim version measured (noisy): a commit whose tree pre-commit approved needs **zero git subprocesses** (the new commit's tree and parent are read from the loose object file) and only a ~6 ms Go start-up. Linux with a stock git will be much faster; re-measure in the container E2E. |
 
 Design consequences: pre-commit records the approved index tree in `<git-dir>/rigfile-scanned-trees`; the backstop skips commits whose tree is in that set; it fails **open** on internal errors (a bug must not brick every ref update) but blocks on findings; pre-commit and pre-push fail **closed**.
+
+## S2-M4: how the module changes git configuration (2026-09-25)
+
+- **Config edit strategy.** Rigfile never rewrites the user's lines in `~/.gitconfig`. It appends a marked block (`# rigfile:begin base-secure-git ... # rigfile:end ...`, valid gitconfig comments) containing `[core] hooksPath = <dir>`. Git uses the LAST value, so this wins; deleting the block restores the previous effective value. Confirmed with real git in `internal/gitmod` tests (the user's `core.hooksPath` line stays byte-identical and first).
+- **Excludes.** When `core.excludesFile` is set the block goes into that file; when unset it goes into git's default `$XDG_CONFIG_HOME/git/ignore` (`~/.config/git/ignore`). No config line is added for excludes.
+- **Every hook name needs a file** in the hooks dir (git looks nowhere else once `core.hooksPath` is set), so the dir holds 28 two-line shims plus one dispatcher.
+- **Linux (Ubuntu 24.04, Fedora 41, stock git, arm64 containers):** all E2E checks pass; clean commit with hooks ~63-75 ms each (5-commit average).

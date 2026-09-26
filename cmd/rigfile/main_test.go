@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -731,5 +732,78 @@ func TestJiaRigFixture(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(m.home, ".claude")); !os.IsNotExist(err) {
 		t.Fatal("plan wrote to the machine")
+	}
+}
+
+func TestGitProtectionsArePartOfApplyDiffDoctorAndRollback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("git module targets macOS and Linux in Stage 2")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	m := newMachine(t)
+	rig := newRig(t)
+
+	r := m.run("", "plan", rig)
+	for _, want := range []string{"Git protections (base-secure)", "GIT", "core.hooksPath", "⚠ executes code", "reference-transaction"} {
+		if r.code != 0 || !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".gitconfig")); !os.IsNotExist(err) {
+		t.Fatal("plan must not write the git config")
+	}
+
+	if r := m.run("", "apply", rig, "--yes"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	conf := string(mustRead(t, filepath.Join(m.home, ".gitconfig")))
+	hooks := filepath.Join(m.home, ".config", "rigfile", "git-hooks")
+	if !strings.Contains(conf, "hooksPath") || !strings.Contains(conf, hooks) {
+		t.Fatalf("global config lacks the hooks path:\n%s", conf)
+	}
+	if !strings.Contains(string(mustRead(t, filepath.Join(m.home, ".config", "git", "ignore"))), "!.env.example") {
+		t.Fatal("global gitignore block missing")
+	}
+	if r := m.run("", "diff"); r.code != 0 || !strings.Contains(r.out, "Git protections") || !strings.Contains(r.out, "no drift") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "doctor"); !strings.Contains(r.out, "git protections") || strings.Contains(r.out, "✘ git protections") {
+		t.Fatalf("%+v", r)
+	}
+	// a hand-edit of a hook shows as drift
+	_ = os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	if r := m.run("", "diff"); r.code != 1 || !strings.Contains(r.out, "hooks") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "doctor"); r.code != 1 || !strings.Contains(r.out, "✘ git protections") {
+		t.Fatalf("%+v", r)
+	}
+	// rollback removes the git changes together with everything else from that run
+	if r := m.run("", "rollback", "--force"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	for _, p := range []string{filepath.Join(m.home, ".gitconfig"), hooks} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("%s should be gone after rollback", p)
+		}
+	}
+}
+
+func TestNoGitFlagSkipsTheGitModule(t *testing.T) {
+	m := newMachine(t)
+	rig := newRig(t)
+	r := m.run("", "plan", rig, "--no-git")
+	if strings.Contains(r.out, "Git protections") {
+		t.Fatalf("%s", r.out)
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	for _, p := range []string{".gitconfig", ".config/git", ".config/rigfile"} {
+		if _, err := os.Stat(filepath.Join(m.home, p)); !os.IsNotExist(err) {
+			t.Fatalf("--no-git must not create %s", p)
+		}
 	}
 }
