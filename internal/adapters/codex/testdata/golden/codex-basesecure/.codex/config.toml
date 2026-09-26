@@ -1,0 +1,16 @@
+# rigfile:begin base-secure-settings sha256=392e032fb928
+# base-secure: ask before risky commands, and keep writes inside the workspace (your own settings below win)
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+# rigfile:end base-secure-settings
+
+# rigfile:begin mcp-alpaca sha256=19204eb575ff
+[mcp_servers.alpaca]
+command = 'rigfile'
+args = ['exec', '--secret', 'ALPACA_API_KEY=alpaca/api_key', '--env', 'ALPACA_PAPER=true', '--', 'npx', '-y', 'alpaca-mcp@1.4.2']
+# rigfile:end mcp-alpaca
+
+# rigfile:begin mcp-docs sha256=3a09caafb627
+[mcp_servers.docs]
+url = 'https://mcp.example.test/mcp'
+# rigfile:end mcp-docs

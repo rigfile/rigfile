@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/adaptertest"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
@@ -36,6 +38,14 @@ func TestGoldenFilesAreIdenticalOnEveryOS(t *testing.T) {
 			r.Apply(p, st, StateTarget)
 			got := r.Tree(".codex", ".agents")
 			adaptertest.Golden(t, "codex", got)
+			// with base-secure's mapping on: sandbox/approval defaults at the top plus command rules
+			r2 := adaptertest.New(t, nil)
+			p2, err := build(t, r2, goos, nil, func(e *Env) { e.BaseSecure = true })
+			if err != nil {
+				t.Fatal(err)
+			}
+			r2.Apply(p2, state.New(), StateTarget)
+			adaptertest.Golden(t, "codex-basesecure", r2.Tree(".codex", ".agents"))
 			if first == nil {
 				first = got
 			} else if len(first) != len(got) {
@@ -126,7 +136,7 @@ func TestNotesForWhatCodexCannotTake(t *testing.T) {
 	r.Put(r.Home, ".codex/AGENTS.override.md", "mine\n", 0o644)
 	p, _ := build(t, r, "linux", nil, nil)
 	notes := strings.Join(p.Notes, "\n")
-	for _, want := range []string{"hook(s) not installed for Codex", "permission rule(s) not written for Codex", "AGENTS.override.md", "Codex has no per-agent tool allowlist"} {
+	for _, want := range []string{"hook(s) not installed for Codex", "2 file read/edit deny rule(s) NOT enforced on Codex", "AGENTS.override.md", "Codex has no per-agent tool allowlist"} {
 		if !strings.Contains(notes, want) {
 			t.Errorf("missing note %q in:\n%s", want, notes)
 		}
@@ -146,4 +156,54 @@ func render(p *engine.Plan) string {
 	var b strings.Builder
 	p.Render(&b)
 	return b.String()
+}
+
+func TestBaseSecureMappingWritesDefaultsOnTopAndRulesButNeverOverridesTheUser(t *testing.T) {
+	r := adaptertest.New(t, nil)
+	user := "# mine\nmodel = \"gpt-x\"\n\n[profiles.fast]\nmodel = \"m\"\n"
+	r.Put(r.Home, ".codex/config.toml", user, 0o644)
+	st := state.New()
+	p, err := build(t, r, "linux", st, func(e *Env) { e.BaseSecure = true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Apply(p, st, StateTarget)
+	cfg := r.Read(".codex/config.toml")
+	if !strings.HasPrefix(cfg, "# rigfile:begin base-secure-settings") || !strings.Contains(cfg, `approval_policy = "on-request"`) || !strings.Contains(cfg, `sandbox_mode = "workspace-write"`) || !strings.Contains(cfg, user) {
+		t.Fatalf("defaults go in a region at the top, above the user's tables:\n%s", cfg)
+	}
+	var v map[string]any
+	if err := toml.Unmarshal([]byte(cfg), &v); err != nil || v["approval_policy"] != "on-request" || v["model"] != "gpt-x" {
+		t.Fatalf("valid TOML with the keys at the top level: %v %v", err, v)
+	}
+	rules := r.Read(".codex/rules/rigfile-base-secure.rules")
+	if !strings.Contains(rules, `pattern = ["git", "push"]`) || !strings.Contains(rules, `decision = "prompt"`) {
+		t.Fatalf("the rig's ask rule becomes a prompt rule:\n%s", rules)
+	}
+	if p2, _ := build(t, r, "linux", st, func(e *Env) { e.BaseSecure = true }); p2.Changes() != 0 {
+		t.Fatalf("second plan must change nothing:\n%s", render(p2))
+	}
+	// the user's own settings win
+	r2 := adaptertest.New(t, nil)
+	r2.Put(r2.Home, ".codex/config.toml", "approval_policy = \"never\"\n", 0o644)
+	p3, _ := build(t, r2, "linux", nil, func(e *Env) { e.BaseSecure = true })
+	r2.Apply(p3, state.New(), StateTarget)
+	got := r2.Read(".codex/config.toml")
+	if strings.Contains(got, `approval_policy = "on-request"`) || !strings.Contains(got, `sandbox_mode = "workspace-write"`) || !strings.Contains(strings.Join(p3.Notes, "\n"), "left as it is") {
+		t.Fatalf("%s\n%v", got, p3.Notes)
+	}
+}
+
+func TestArgvPrefix(t *testing.T) {
+	for in, want := range map[string]string{"git push*": "git push", "rm -rf*": "rm -rf", "env": "env", "sudo*": "sudo", "git push --force*": "git push --force"} {
+		got, ok := argvPrefix(in)
+		if !ok || strings.Join(got, " ") != want {
+			t.Errorf("%q -> %v %v", in, got, ok)
+		}
+	}
+	for _, in := range []string{"git*--no-verify*", "curl*| sh*", "*", ""} {
+		if _, ok := argvPrefix(in); ok {
+			t.Errorf("%q must not be expressible", in)
+		}
+	}
 }

@@ -252,6 +252,11 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 		if tp.T.Title != "" {
 			tp.Plan.Target = tp.T.Title
 		}
+		if !o.UnsafeBase {
+			if n := targets.BaseSecureNote(tp.T.Name); n != "" {
+				tp.Plan.Notes = append(tp.Plan.Notes, n)
+			}
+		}
 	}
 	p.Plan = prim.Plan
 	if !o.NoGit {

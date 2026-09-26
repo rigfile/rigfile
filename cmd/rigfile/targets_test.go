@@ -207,3 +207,41 @@ func TestGeminiCliIsConfiguredWhenDetected(t *testing.T) {
 		t.Fatal("rollback removes the file the run created")
 	}
 }
+
+func TestEveryDetectedTargetSaysHowMuchOfBaseSecureItEnforces(t *testing.T) {
+	m := newMachine(t)
+	rig := newRig(t)
+	for _, d := range []string{".codex", ".gemini", ".cursor"} {
+		_ = os.MkdirAll(filepath.Join(m.home, d), 0o755)
+	}
+	r := m.run("", "plan", rig, "--no-git")
+	for _, want := range []string{"base-secure on Codex CLI: PARTLY enforced", "base-secure on Gemini CLI: instructions only, NOT enforced", "base-secure on Cursor: instructions only, NOT enforced", "Targets: claude-code, codex, cursor, gemini-cli"} {
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	// Codex gets the real mapping from the embedded base layer: defaults, and rules for git push / --force / env
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	rules := string(mustRead(t, filepath.Join(m.home, ".codex", "rules", "rigfile-base-secure.rules")))
+	for _, want := range []string{`pattern = ["git", "push", "--force"]`, `decision = "forbidden"`, `pattern = ["git", "push"]`, `decision = "prompt"`, `pattern = ["env"]`} {
+		if !strings.Contains(rules, want) {
+			t.Fatalf("Codex rules missing %q:\n%s", want, rules)
+		}
+	}
+	cfg := string(mustRead(t, filepath.Join(m.home, ".codex", "config.toml")))
+	if !strings.HasPrefix(cfg, "# rigfile:begin base-secure-settings") {
+		t.Fatalf("%s", cfg)
+	}
+	// the security baseline reaches every instructions target
+	for _, f := range []string{".codex/AGENTS.md", ".gemini/GEMINI.md"} {
+		if !strings.Contains(string(mustRead(t, filepath.Join(m.home, f))), "Security baseline (managed by rigfile/base-secure") {
+			t.Fatalf("%s lacks the security baseline", f)
+		}
+	}
+	// a normal (no --no-git) doctor still passes with several targets applied
+	if r := m.run("", "diff"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+}

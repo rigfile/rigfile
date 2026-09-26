@@ -43,6 +43,9 @@ var (
 type Options struct {
 	// Overwrite replaces a region even if it was edited since it was written.
 	Overwrite bool
+	// Prepend puts a NEW region at the top of the file instead of the end (TOML top-level keys must precede any
+	// table). Existing regions are always replaced in place.
+	Prepend bool
 }
 
 // Style describes a comment syntax.
@@ -128,6 +131,9 @@ func Upsert(doc []byte, st Style, id string, body []byte, opt Options) (out []by
 	block := renderBlock(st, id, sum, canon, eol)
 
 	if !found {
+		if opt.Prepend {
+			return prependBlock(doc, block, eol), true, nil
+		}
 		return appendBlock(doc, block, eol), true, nil
 	}
 	if r.Hash != "" && r.Drifted && !opt.Overwrite {
@@ -156,15 +162,17 @@ func Remove(doc []byte, st Style, id string) (out []byte, removed bool, err erro
 		return doc, false, err
 	}
 	lines := splitLines(doc)
-	start := r.begin
+	start, next := r.begin, r.end+1
 	if r.end == len(lines)-1 && start > 0 && strings.TrimSpace(string(lines[start-1])) == "" {
 		start-- // drop our separator only when the region was at EOF
+	} else if start == 0 && next < len(lines) && strings.TrimSpace(string(lines[next])) == "" {
+		next++ // a region at the very top was followed by our separator
 	}
 	var b bytes.Buffer
 	for _, l := range lines[:start] {
 		b.Write(l)
 	}
-	for _, l := range lines[r.end+1:] {
+	for _, l := range lines[next:] {
 		b.Write(l)
 	}
 	return b.Bytes(), true, nil
@@ -231,6 +239,16 @@ func appendBlock(doc []byte, block, eol string) []byte {
 		b.WriteString(eol)
 	}
 	b.WriteString(block)
+	return b.Bytes()
+}
+
+func prependBlock(doc []byte, block, eol string) []byte {
+	var b bytes.Buffer
+	b.WriteString(block)
+	if len(doc) > 0 {
+		b.WriteString(eol) // one blank separator; Remove drops exactly one when the region is first
+		b.Write(doc)
+	}
 	return b.Bytes()
 }
 

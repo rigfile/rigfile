@@ -205,10 +205,12 @@ func sortEntries(es []hashing.Entry) {
 
 // Region is one marked block Rigfile owns inside a user file.
 type Region struct {
-	ID    string // marker id, unique per file
-	Key   string // state key and review-screen label
-	Body  []byte
-	Layer string // where it comes from, for the screen
+	ID       string // marker id, unique per file
+	Key      string // state key and review-screen label
+	Category string // state category of this region; "" = the RegionSet's category
+	Prepend  bool   // new regions go to the top of the file (TOML top-level keys)
+	Body     []byte
+	Layer    string // where it comes from, for the screen
 }
 
 // RegionSet plans every region of one destination file as ONE write (one backup, one op). style is the comment
@@ -231,9 +233,13 @@ func (b *Builder) RegionSet(category, dest string, style splice.Style, styleName
 			b.Fail(fmt.Errorf("%s: %w (fix the markers by hand; Rigfile will not edit a file it cannot parse safely)", b.Short(dest), ferr))
 			return
 		}
+		cat := category
+		if r.Category != "" {
+			cat = r.Category
+		}
 		fail := func(msg string) {
 			conflicts = append(conflicts, "! "+msg)
-			if prev, mine := b.Owned(category, r.Key, dest); mine {
+			if prev, mine := b.Owned(cat, r.Key, dest); mine {
 				keep = append(keep, prev)
 			}
 		}
@@ -244,7 +250,7 @@ func (b *Builder) RegionSet(category, dest string, style splice.Style, styleName
 		var next []byte
 		var changed bool
 		if toml {
-			next, changed, err = splice.UpsertTOML(doc, r.ID, r.Body, splice.Options{Overwrite: b.Env.Overwrite})
+			next, changed, err = splice.UpsertTOML(doc, r.ID, r.Body, splice.Options{Overwrite: b.Env.Overwrite, Prepend: r.Prepend})
 		} else {
 			next, changed, err = splice.Upsert(doc, style, r.ID, r.Body, splice.Options{Overwrite: b.Env.Overwrite})
 		}
@@ -266,7 +272,7 @@ func (b *Builder) RegionSet(category, dest string, style splice.Style, styleName
 		}
 		doc = next
 		got, _, _ := splice.Find(doc, style, r.ID)
-		items = append(items, state.Item{Category: category, Key: r.Key, Kind: state.KindRegion, Path: dest, Hash: got.Hash,
+		items = append(items, state.Item{Category: cat, Key: r.Key, Kind: state.KindRegion, Path: dest, Hash: got.Hash,
 			Detail: map[string]string{"region": r.ID, "style": styleName}})
 	}
 	current := map[string]bool{}

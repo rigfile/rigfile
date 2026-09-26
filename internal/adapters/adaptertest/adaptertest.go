@@ -114,8 +114,13 @@ func (r *Rig) Plat(goos string) *platform.Info {
 		goos = "darwin"
 	}
 	pi, err := platform.New(platform.Options{GOOS: goos, GOARCH: "arm64", Getenv: func(k string) string {
-		if k == "HOME" || k == "USERPROFILE" {
+		switch k {
+		case "HOME", "USERPROFILE":
 			return r.Home
+		case "APPDATA":
+			return filepath.Join(r.Home, "AppData", "Roaming")
+		case "LOCALAPPDATA":
+			return filepath.Join(r.Home, "AppData", "Local")
 		}
 		return ""
 	}})
@@ -190,7 +195,10 @@ func Golden(t *testing.T, name string, got map[string]string) {
 	t.Helper()
 	root := filepath.Join("testdata", "golden", name)
 	if *UpdateGolden {
-		_ = os.RemoveAll(root)
+		if !wiped[name] { // several per-OS subtests share one golden directory: clear it once
+			wiped[name] = true
+			_ = os.RemoveAll(root)
+		}
 		for rel, c := range got {
 			p := filepath.Join(root, filepath.FromSlash(rel))
 			_ = os.MkdirAll(filepath.Dir(p), 0o755)
@@ -233,6 +241,8 @@ func Golden(t *testing.T, name string, got map[string]string) {
 		}
 	}
 }
+
+var wiped = map[string]bool{}
 
 // OSes are the three operating systems every adapter is tested on.
 var OSes = []string{"macos", "linux", "windows"}

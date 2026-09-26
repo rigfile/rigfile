@@ -1,0 +1,9 @@
+# managed by rigfile: command rules from your rig and rigfile/base-secure. Most restrictive decision wins across matches.
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "rigfile",
+    match = ["git push"],
+)
+

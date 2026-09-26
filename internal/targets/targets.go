@@ -15,7 +15,9 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
+	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudedesktop"
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/codex"
+	"github.com/digitaldreamer3462/rigfile/internal/adapters/cursor"
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/gemini"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
@@ -56,7 +58,7 @@ type Target struct {
 	Always bool
 }
 
-var registry = []Target{claudeCode(), codexTarget(), geminiTarget()}
+var registry = []Target{claudeCode(), codexTarget(), geminiTarget(), cursorTarget(), claudeDesktopTarget()}
 
 // Register adds a target (adapters call it from init in their own packages; tests add fakes).
 func Register(t Target) { registry = append(registry, t) }
@@ -270,7 +272,7 @@ func codexTarget() Target {
 			if err != nil {
 				return nil, err
 			}
-			return codex.Build(codex.Env{Plat: c.Plat, CodexDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
+			return codex.Build(codex.Env{Plat: c.Plat, CodexDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile, BaseSecure: c.BaseSecure}, proj)
 		},
 	}
 }
@@ -302,4 +304,81 @@ func geminiTarget() Target {
 			return gemini.Build(gemini.Env{Plat: c.Plat, GeminiDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
 		},
 	}
+}
+
+func cursorTarget() Target {
+	dir := func(c Ctx) (string, error) {
+		if c.Dir != "" {
+			return c.Dir, nil
+		}
+		return cursor.CursorDirFor(c.Plat)
+	}
+	return Target{
+		Name: "cursor", Title: "Cursor",
+		Available: func(*platform.Info) (bool, string) { return true, "" },
+		Detect: func(c Ctx) Detection {
+			if d, err := dir(c); err == nil && exists(d) {
+				return Detection{true, d + " exists"}
+			}
+			if have(c, "cursor") {
+				return Detection{true, "`cursor` is on PATH"}
+			}
+			return Detection{false, "no ~/.cursor and no `cursor` on PATH"}
+		},
+		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			return cursor.Build(cursor.Env{Plat: c.Plat, CursorDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
+		},
+	}
+}
+
+func claudeDesktopTarget() Target {
+	dir := func(c Ctx) (string, error) {
+		if c.Dir != "" {
+			return c.Dir, nil
+		}
+		return claudedesktop.DesktopDirFor(c.Plat)
+	}
+	return Target{
+		Name: "claude-desktop", Title: "Claude Desktop",
+		Available: claudedesktop.Available,
+		Detect: func(c Ctx) Detection {
+			if d, err := dir(c); err == nil && exists(d) {
+				return Detection{true, d + " exists"}
+			}
+			return Detection{false, "no Claude app-data directory"}
+		},
+		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			return claudedesktop.Build(claudedesktop.Env{Plat: c.Plat, DesktopDir: d, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
+		},
+	}
+}
+
+// BaseSecureNote says, in one line for the plan screen, how much of base-secure a target can enforce
+// (docs/base-secure.md, S3-M6). "" for Claude Code, which has its own full section.
+func BaseSecureNote(name string) string {
+	caps, err := LoadCapabilities()
+	if err != nil {
+		return ""
+	}
+	c, ok := caps[name]
+	if !ok {
+		return ""
+	}
+	switch c.BaseSecure {
+	case "partial":
+		return "base-secure on " + c.Title + ": PARTLY enforced. The security-baseline instructions, command rules and sandbox/approval defaults are installed; file-read denies and hooks cannot be enforced (see the notes above)."
+	case "instructions_only":
+		return "base-secure on " + c.Title + ": instructions only, NOT enforced. The tool has no documented permission rules or hook contract Rigfile can use yet, so the deny lists and guard hooks do not apply here."
+	case "none":
+		return c.Title + ": base-secure does not apply (MCP servers only). Secrets never reach its config file: servers are wrapped with `rigfile exec`."
+	}
+	return ""
 }
