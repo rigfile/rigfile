@@ -133,3 +133,47 @@ func TestTargetSelectionRules(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestCodexIsConfiguredWhenDetectedAndUndoneByRollback(t *testing.T) {
+	m := newMachine(t)
+	rig := newRig(t)
+
+	// no ~/.codex and no `codex` on PATH: reported, not configured
+	r := m.run("", "plan", rig, "--no-git")
+	if !strings.Contains(r.out, "NOT CONFIGURED  codex: not detected") {
+		t.Fatalf("%+v", r)
+	}
+	// ~/.codex exists: Codex gets its own section
+	_ = os.MkdirAll(filepath.Join(m.home, ".codex"), 0o755)
+	r = m.run("", "plan", rig, "--no-git")
+	for _, want := range []string{"Targets: claude-code, codex", "AGENTS.md", ".agents/skills/pdf", "config.toml", "not installed for Codex"} {
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("plan missing %q:\n%s", want, r.out)
+		}
+	}
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	cfg := string(mustRead(t, filepath.Join(m.home, ".codex", "config.toml")))
+	if !strings.Contains(cfg, "[mcp_servers.alpaca]") || strings.Contains(cfg, "secret://") {
+		t.Fatalf("%s", cfg)
+	}
+	if r := m.run("", "diff"); r.code != 0 || !strings.Contains(r.out, "Codex") || !strings.Contains(r.out, "no drift") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "rollback", "--force"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".agents", "skills", "pdf")); !os.IsNotExist(err) {
+		t.Fatal("rollback must remove the Codex skill too")
+	}
+	// CODEX_HOME moves the config directory
+	m.env["CODEX_HOME"] = filepath.Join(m.home, "elsewhere")
+	_ = os.MkdirAll(m.env["CODEX_HOME"], 0o755)
+	if r := m.run("", "apply", rig, "--yes", "--no-git", "--overwrite"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(m.env["CODEX_HOME"], "config.toml")); err != nil {
+		t.Fatal("CODEX_HOME was ignored")
+	}
+}

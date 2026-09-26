@@ -1,0 +1,10 @@
+# rigfile:begin mcp-alpaca sha256=19204eb575ff
+[mcp_servers.alpaca]
+command = 'rigfile'
+args = ['exec', '--secret', 'ALPACA_API_KEY=alpaca/api_key', '--env', 'ALPACA_PAPER=true', '--', 'npx', '-y', 'alpaca-mcp@1.4.2']
+# rigfile:end mcp-alpaca
+
+# rigfile:begin mcp-docs sha256=3a09caafb627
+[mcp_servers.docs]
+url = 'https://mcp.example.test/mcp'
+# rigfile:end mcp-docs

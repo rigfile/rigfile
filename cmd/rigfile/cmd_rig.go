@@ -91,7 +91,7 @@ func rigFlagSet(name string, e env, f *rigFlags, withApply bool) *flag.FlagSet {
 func prepare(e env, rigDir string, f rigFlags) (*session.Prepared, int) {
 	p, err := session.Prepare(session.Options{
 		RigDir: rigDir, LayersDir: f.layers, Getenv: e.getenv, StateDir: e.stateDir,
-		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets),
+		ClaudeDir: f.claudeDir, ProjectDir: f.project, MCP: mcpClient(e), Overwrite: f.overwrite, ToolsHost: e.tools, NoGit: f.noGit, UnsafeBase: f.unsafeBase, SandboxOn: f.sandbox, SandboxOff: f.noSandbox, Targets: []string(f.targets), Have: func(c string) bool { _, err := e.look(c); return err == nil },
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)

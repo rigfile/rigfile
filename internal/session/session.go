@@ -61,6 +61,7 @@ type Options struct {
 	// machine and the ones the rig names in `targets.include`. TargetDirs overrides a target's config directory.
 	Targets    []string
 	TargetDirs map[string]string
+	Have       func(string) bool // is this command on PATH? nil = exec.LookPath (used to detect installed tools)
 }
 
 // Prepared is everything computed before anything is written.
@@ -496,7 +497,7 @@ func (p *Prepared) ctx(name string) targets.Ctx {
 		dir = o.ClaudeDir
 	}
 	c := targets.Ctx{Plat: p.Plat, Getenv: o.Getenv, ProjectDir: o.ProjectDir, Overwrite: o.Overwrite, BaseSecure: !o.UnsafeBase,
-		Sandbox: p.Sandbox, Dir: dir, MCP: o.MCP}
+		Sandbox: p.Sandbox, Dir: dir, MCP: o.MCP, Have: o.Have}
 	if p.State != nil {
 		c.State = p.State.Targets[name]
 	}

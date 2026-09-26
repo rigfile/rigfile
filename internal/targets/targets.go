@@ -15,6 +15,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
+	"github.com/digitaldreamer3462/rigfile/internal/adapters/codex"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
@@ -54,7 +55,7 @@ type Target struct {
 	Always bool
 }
 
-var registry = []Target{claudeCode()}
+var registry = []Target{claudeCode(), codexTarget()}
 
 // Register adds a target (adapters call it from init in their own packages; tests add fakes).
 func Register(t Target) { registry = append(registry, t) }
@@ -242,4 +243,33 @@ func Matrix() (string, error) {
 	}
 	b.WriteString("\n")
 	return b.String(), nil
+}
+
+func codexTarget() Target {
+	dir := func(c Ctx) (string, error) {
+		if c.Dir != "" {
+			return c.Dir, nil
+		}
+		return codex.CodexDirFor(c.Plat, c.Getenv)
+	}
+	return Target{
+		Name: "codex", Title: "Codex",
+		Available: func(*platform.Info) (bool, string) { return true, "" },
+		Detect: func(c Ctx) Detection {
+			if d, err := dir(c); err == nil && exists(d) {
+				return Detection{true, d + " exists"}
+			}
+			if have(c, "codex") {
+				return Detection{true, "`codex` is on PATH"}
+			}
+			return Detection{false, "no ~/.codex and no `codex` on PATH"}
+		},
+		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			return codex.Build(codex.Env{Plat: c.Plat, CodexDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
+		},
+	}
 }
