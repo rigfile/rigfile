@@ -428,3 +428,28 @@ func TestDecodedSecretsAreFoundAndReportedAtTheOriginalLine(t *testing.T) {
 		t.Fatalf("%+v", f)
 	}
 }
+
+func TestRedactBlanksSecretsAndKeepsTheRest(t *testing.T) {
+	s := newScanner(t, Options{})
+	text := "before\ntoken = \"" + fakeGH + "\"\nafter " + fakeAWS + " end\n"
+	got, fs := s.Redact(text)
+	if strings.Contains(got, fakeGH) || strings.Contains(got, fakeAWS) {
+		t.Fatalf("secret survived redaction: %q", got)
+	}
+	if !strings.Contains(got, "[REDACTED:github-pat]") || !strings.Contains(got, "[REDACTED:aws-access-token]") || !strings.HasPrefix(got, "before\ntoken = \"") || !strings.HasSuffix(got, " end\n") {
+		t.Fatalf("%q", got)
+	}
+	if len(fs) < 2 {
+		t.Fatalf("%+v", fs)
+	}
+	// nothing to redact: identical text
+	if same, fs := s.Redact("just words\n"); same != "just words\n" || len(fs) != 0 {
+		t.Fatalf("%q %v", same, fs)
+	}
+	// an encoded secret: the whole encoded segment goes
+	enc := base64.StdEncoding.EncodeToString([]byte("token=" + fakeGH))
+	got, _ = s.Redact("payload: " + enc + "\n")
+	if strings.Contains(got, enc) || !strings.Contains(got, "[REDACTED:") {
+		t.Fatalf("%q", got)
+	}
+}

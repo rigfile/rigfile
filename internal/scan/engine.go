@@ -97,10 +97,10 @@ func (s *Scanner) MaxFileBytes() int { return s.opts.MaxFileBytes }
 // ScanText scans text (a file's contents, a diff, a shell command). name is used for path-scoped rules
 // and reporting; pass "" for text that is not a file.
 func (s *Scanner) ScanText(name, text string) []Finding {
-	return s.scanText(name, text, 0)
+	return s.scanText(name, text, 0, nil)
 }
 
-func (s *Scanner) scanText(name, text string, depth int) []Finding {
+func (s *Scanner) scanText(name, text string, depth int, sink *[]redSpan) []Finding {
 	name = strings.ReplaceAll(name, `\`, "/")
 	if text == "" && name == "" {
 		return nil
@@ -115,9 +115,10 @@ func (s *Scanner) scanText(name, text string, depth int) []Finding {
 
 	var out []Finding
 	type raw struct {
-		f      Finding
-		secret string
-		rule   *rule
+		f          Finding
+		secret     string
+		rule       *rule
+		start, end int // byte span of the secret in text
 	}
 	var raws []raw
 	for _, r := range s.rs.rules {
@@ -185,8 +186,12 @@ func (s *Scanner) scanText(name, text string, depth int) []Finding {
 			if allowed(s.rs.global, name, secret, match, line) || allowed(r.allow, name, secret, match, line) {
 				continue
 			}
+			ss := idx[0]
+			if k := strings.Index(text[idx[0]:end], secret); k >= 0 {
+				ss = idx[0] + k
+			}
 			raws = append(raws, raw{Finding{Kind: "content", RuleID: r.id, Description: r.description, Path: name,
-				Line: startLine, End: endLine, Column: col, Fingerprint: fingerprint(r.id, name, secret)}, secret, r})
+				Line: startLine, End: endLine, Column: col, Fingerprint: fingerprint(r.id, name, secret)}, secret, r, ss, ss + len(secret)})
 		}
 	}
 	// gitleaks' dedupe: a "generic" finding is dropped when a specific rule found the same secret on that line.
@@ -202,10 +207,13 @@ func (s *Scanner) scanText(name, text string, depth int) []Finding {
 		}
 		if keep {
 			out = append(out, a.f)
+			if sink != nil {
+				*sink = append(*sink, redSpan{a.start, a.end, a.f.RuleID})
+			}
 		}
 	}
 	if depth < maxDecodeDepth {
-		out = append(out, s.scanDecoded(name, text, lines, depth)...)
+		out = append(out, s.scanDecoded(name, text, lines, depth, sink)...)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Path != out[j].Path {
@@ -291,4 +299,37 @@ func allowed(lists []*allowlist, path, secret, match, line string) bool {
 		}
 	}
 	return false
+}
+
+// redSpan is a byte range of scanned text to blank out.
+type redSpan struct {
+	start, end int
+	rule       string
+}
+
+// Redact returns text with every detected secret replaced by [REDACTED:<rule>], and the findings. Encoded
+// secrets (base64 and friends) are redacted as the whole encoded segment. It is for text that is about to
+// enter a model's context (PostToolUse hooks); findings carry no values, as always.
+func (s *Scanner) Redact(text string) (string, []Finding) {
+	var spans []redSpan
+	fs := s.scanText("", text, 0, &spans)
+	if len(spans) == 0 {
+		return text, fs
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
+	var b strings.Builder
+	pos := 0
+	for _, sp := range spans {
+		if sp.start < pos { // overlaps an earlier span
+			if sp.end > pos {
+				pos = sp.end
+			}
+			continue
+		}
+		b.WriteString(text[pos:sp.start])
+		b.WriteString("[REDACTED:" + sp.rule + "]")
+		pos = sp.end
+	}
+	b.WriteString(text[pos:])
+	return b.String(), fs
 }

@@ -807,3 +807,29 @@ func TestNoGitFlagSkipsTheGitModule(t *testing.T) {
 		}
 	}
 }
+
+func TestHookWriteGuardAndRedactCommands(t *testing.T) {
+	m := newMachine(t)
+	tok := "gh" + "p_" + "wJ4kP9xQm2Rt7VbN5cLd8HyZaE3sUfG6TiOo"
+	pre, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_input": map[string]string{"file_path": "a.py", "content": "token = \"" + tok + "\"\n"}})
+	r := m.run(string(pre), "hook", "run", "write-guard")
+	if r.code != 0 || !strings.Contains(r.out, `"permissionDecision":"deny"`) || strings.Contains(r.out, tok) {
+		t.Fatalf("%+v", r)
+	}
+	clean, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_input": map[string]string{"file_path": "a.py", "content": "print(1)\n"}})
+	if r := m.run(string(clean), "hook", "run", "write-guard"); r.code != 0 || r.out != "" {
+		t.Fatalf("%+v", r)
+	}
+	post, _ := json.Marshal(map[string]any{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": map[string]string{"stdout": "K=" + tok + "\n"}})
+	r = m.run(string(post), "hook", "run", "redact")
+	if r.code != 0 || !strings.Contains(r.out, "updatedToolOutput") || !strings.Contains(r.out, "[REDACTED:github-pat]") || strings.Contains(r.out, tok) {
+		t.Fatalf("%+v", r)
+	}
+	// wrong event: no opinion
+	if r := m.run(string(post), "hook", "run", "write-guard"); r.code != 0 || r.out != "" {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run(string(pre), "hook", "run", "redact"); r.code != 0 || r.out != "" {
+		t.Fatalf("%+v", r)
+	}
+}

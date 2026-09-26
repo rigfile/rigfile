@@ -58,7 +58,7 @@ func runs(text string, min int, in func(byte) bool) [][2]int {
 	return out
 }
 
-func (s *Scanner) scanDecoded(name, text string, lines lineIndex, depth int) []Finding {
+func (s *Scanner) scanDecoded(name, text string, lines lineIndex, depth int, sink *[]redSpan) []Finding {
 	var out []Finding
 	budget := maxDecodedTotal
 	segs := 0
@@ -69,7 +69,10 @@ func (s *Scanner) scanDecoded(name, text string, lines lineIndex, depth int) []F
 		segs++
 		budget -= len(decoded)
 		startLine, endLine, col := lines.locate(start, end)
-		for _, f := range s.scanText(name, decoded, depth+1) {
+		for _, f := range s.scanText(name, decoded, depth+1, nil) {
+			if sink != nil {
+				*sink = append(*sink, redSpan{start, end, f.RuleID})
+			}
 			f.Description = "(decoded) " + f.Description
 			f.Line, f.End, f.Column = startLine, endLine, col
 			out = append(out, f)

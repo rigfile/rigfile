@@ -29,6 +29,8 @@ type Input struct {
 	HookEventName string          `json:"hook_event_name"`
 	ToolName      string          `json:"tool_name"`
 	ToolInput     json.RawMessage `json:"tool_input"`
+	ToolResponse  json.RawMessage `json:"tool_response"` // PostToolUse
+	CWD           string          `json:"cwd"`
 }
 
 // Verdict is the outcome of a rule.
@@ -95,49 +97,6 @@ var (
 	pipeToShell = regexp.MustCompile(`(?is)\b(curl|wget)\b[^|;&]*\|\s*(sudo\s+)?(ba|z|da|k)?sh\b|\b(iwr|irm|invoke-webrequest|invoke-restmethod)\b[^|;&]*\|\s*(iex|invoke-expression)\b`)
 )
 
-func checkShell(cmd string) Decision {
-	if pipeToShell.MatchString(cmd) {
-		return Decision{Ask, "This pipes a download straight into a shell. Download the script, review it, then run it.", "no-pipe-to-shell"}
-	}
-	for _, sub := range splitCommands(cmd) {
-		w := fields(sub)
-		if len(w) == 0 {
-			continue
-		}
-		w = stripAssignments(w)
-		if len(w) == 0 || w[0] != "git" {
-			continue
-		}
-		args := w[1:]
-		// git [global options] <subcommand> ...
-		sub, rest := gitSubcommand(args)
-		switch sub {
-		case "commit", "push", "merge", "rebase", "am", "cherry-pick":
-			if noVerifyFlag(sub, rest) {
-				return Decision{Deny, "Bypassing git hooks (--no-verify) is not allowed: hooks protect against committing secrets. Fix what the hook reported instead.", "no-git-bypass"}
-			}
-		case "config":
-			if hooksPath.MatchString(strings.Join(rest, " ")) {
-				return Decision{Deny, "Changing core.hooksPath disables the repository's safety hooks and is not allowed.", "no-git-bypass"}
-			}
-		case "add":
-			for _, a := range rest {
-				if strings.HasPrefix(a, "-") {
-					continue
-				}
-				if scan.IsSensitiveFilename(a) {
-					return Decision{Deny, fmt.Sprintf("%s looks like a credential file; do not stage it. Add it to .gitignore and use a secret reference.", scan.Base(a)), "no-stage-secrets"}
-				}
-			}
-		}
-		if hooksPath.MatchString(strings.Join(args, " ")) && sub != "config" {
-			// git -c core.hooksPath=/dev/null commit ...
-			return Decision{Deny, "Overriding core.hooksPath disables the repository's safety hooks and is not allowed.", "no-git-bypass"}
-		}
-	}
-	return Decision{}
-}
-
 func noVerifyFlag(sub string, rest []string) bool {
 	// Long options that take their value as the NEXT token (so that token is text, not a flag).
 	valueLong := map[string]bool{"--message": true, "--file": true, "--author": true, "--date": true, "--cleanup": true,
@@ -187,16 +146,6 @@ func gitSubcommand(args []string) (string, []string) {
 		}
 	}
 	return "", nil
-}
-
-func stripAssignments(w []string) []string {
-	for len(w) > 0 && strings.Contains(w[0], "=") && !strings.HasPrefix(w[0], "-") && !strings.Contains(w[0], "/") {
-		w = w[1:]
-	}
-	if len(w) > 0 && (w[0] == "sudo" || w[0] == "env" || w[0] == "command" || w[0] == "exec") {
-		return stripAssignments(w[1:])
-	}
-	return w
 }
 
 // splitCommands splits a command line on ;, &&, ||, |, & and newlines, outside quotes.
@@ -284,7 +233,9 @@ func (d Decision) Output() ([]byte, error) {
 // Builtins are the hook names a rig may reference as `run: builtin:<name>`, with the canonical events
 // each supports. `rigfile hook run <name>` dispatches to them.
 var Builtins = map[string][]string{
-	"guard": {"pre_tool_use"},
+	"guard":       {"pre_tool_use"},  // shell command rules (S2-M5: full §8.2 list)
+	"write-guard": {"pre_tool_use"},  // secrets in Write/Edit content
+	"redact":      {"post_tool_use"}, // secrets in tool output, before the model sees it
 }
 
 // KnownBuiltin reports whether name is a built-in hook.

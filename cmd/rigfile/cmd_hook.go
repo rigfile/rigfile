@@ -58,17 +58,37 @@ func cmdHook(args []string, e env) int {
 		fmt.Fprintln(e.err, "rigfile hook: could not read hook input; blocking:", err)
 		return 2
 	}
+	scf := hook.ScannerFunc(githook.DefaultScanner)
 	switch name {
-	case "guard":
+	case "guard", "write-guard":
 		if in.HookEventName != "" && in.HookEventName != "PreToolUse" {
 			return 0 // not our event: no opinion
 		}
-		out, err := hook.PreToolUse(in).Output()
+		var d hook.Decision
+		if name == "guard" {
+			d = hook.PreToolUse(in)
+		} else {
+			d = hook.WriteGuard(in, scf)
+		}
+		out, err := d.Output()
 		if err != nil {
 			fmt.Fprintln(e.err, "rigfile hook:", err)
 			return 2
 		}
 		if out != nil {
+			fmt.Fprintln(e.out, string(out))
+		}
+	case "redact":
+		if in.HookEventName != "" && in.HookEventName != "PostToolUse" {
+			return 0
+		}
+		out, ok, err := hook.Redact(in, scf)
+		if err != nil {
+			// PostToolUse cannot un-run the tool and exit 2 would only add noise: fail open, loudly.
+			fmt.Fprintln(e.err, "rigfile hook: WARNING: could not check tool output for secrets:", err)
+			return 0
+		}
+		if ok {
 			fmt.Fprintln(e.out, string(out))
 		}
 	}
