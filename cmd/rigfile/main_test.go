@@ -17,6 +17,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/digitaldreamer3462/rigfile/internal/source"
 )
 
 // ---- harness ----------------------------------------------------------------------------------
@@ -68,6 +69,7 @@ type machine struct {
 	mcp   *fakeMCP
 	tools *fakeTools
 	env   map[string]string
+	src   *source.Client // git sources for pull/update; nil = the real services
 }
 
 func newMachine(t *testing.T) *machine {
@@ -85,7 +87,7 @@ func (m *machine) run(stdin string, args ...string) result {
 	var out, errb bytes.Buffer
 	code := run(args, env{
 		in: strings.NewReader(stdin), out: &out, err: &errb,
-		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, keyringOff: true, tools: m.tools,
+		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, sources: m.src, keyringOff: true, tools: m.tools,
 		lookPath: func(n string) (string, error) {
 			if n == "rigfile" || n == "claude" {
 				return "/usr/local/bin/" + n, nil
