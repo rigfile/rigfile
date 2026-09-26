@@ -78,6 +78,8 @@ func run(args []string, e env) int {
 		return cmdPull("pull", args[1:], e)
 	case "update":
 		return cmdPull("update", args[1:], e)
+	case "publish":
+		return cmdPublish(args[1:], e)
 	case "diff":
 		return cmdDiff(rest, e)
 	case "rollback":

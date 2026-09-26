@@ -70,6 +70,7 @@ type machine struct {
 	tools *fakeTools
 	env   map[string]string
 	src   *source.Client // git sources for pull/update; nil = the real services
+	tty   bool           // behave as an interactive terminal (scripted key presses on stdin)
 }
 
 func newMachine(t *testing.T) *machine {
@@ -87,7 +88,7 @@ func (m *machine) run(stdin string, args ...string) result {
 	var out, errb bytes.Buffer
 	code := run(args, env{
 		in: strings.NewReader(stdin), out: &out, err: &errb,
-		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, sources: m.src, keyringOff: true, tools: m.tools,
+		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, sources: m.src, interactive: m.tty, keyringOff: true, tools: m.tools,
 		lookPath: func(n string) (string, error) {
 			if n == "rigfile" || n == "claude" {
 				return "/usr/local/bin/" + n, nil
