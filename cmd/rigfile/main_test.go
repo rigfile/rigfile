@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/digitaldreamer3462/rigfile/internal/apply"
+	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/scan"
 )
 
@@ -92,7 +93,30 @@ func (m *machine) run(stdin string, args ...string) result {
 			return "", errors.New("not found")
 		},
 	})
-	return result{code, out.String(), errb.String()}
+	// Plan screens print paths with the OS separator; the assertions are written with "/", so compare like with like.
+	return result{code, portable(out.String()), portable(errb.String())}
+}
+
+// portable turns Windows path separators in program output into "/" (a no-op elsewhere).
+func portable(s string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ReplaceAll(s, `\`, "/")
+	}
+	return s
+}
+
+// stateDir is where Rigfile keeps state.json and backups on this OS for this machine's environment
+// (~/.rigfile on macOS/Linux, %LOCALAPPDATA%\rigfile on Windows).
+func (m *machine) stateDir() string {
+	pi, err := platform.New(platform.Options{Getenv: func(k string) string { return m.env[k] }})
+	if err != nil {
+		m.t.Fatal(err)
+	}
+	d, err := pi.StateDir()
+	if err != nil {
+		m.t.Fatal(err)
+	}
+	return d
 }
 
 func put(t *testing.T, root, rel, content string, mode os.FileMode) {
@@ -176,8 +200,8 @@ func TestPlanShowsTheReviewScreenAndWritesNothing(t *testing.T) {
 			t.Errorf("plan output missing %q:\n%s", want, r.out)
 		}
 	}
-	for _, p := range []string{".claude", ".rigfile"} {
-		if _, err := os.Stat(filepath.Join(m.home, p)); !os.IsNotExist(err) {
+	for _, p := range []string{filepath.Join(m.home, ".claude"), m.stateDir()} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
 			t.Fatalf("plan created %s", p)
 		}
 	}
@@ -207,7 +231,7 @@ func TestApplyThenIdempotentThenDriftThenRollback(t *testing.T) {
 		t.Fatal("lockfile not written next to the rig")
 	}
 	if runtime.GOOS != "windows" {
-		if st, _ := os.Stat(filepath.Join(m.home, ".rigfile", "state.json")); st.Mode().Perm() != 0o600 {
+		if st, _ := os.Stat(filepath.Join(m.stateDir(), "state.json")); st.Mode().Perm() != 0o600 {
 			t.Fatalf("state.json mode %v", st.Mode().Perm())
 		}
 	}
@@ -216,12 +240,12 @@ func TestApplyThenIdempotentThenDriftThenRollback(t *testing.T) {
 	}
 
 	// second apply changes nothing and creates no new run
-	runsBefore, _ := apply.ListRuns(filepath.Join(m.home, ".rigfile", "backups"))
+	runsBefore, _ := apply.ListRuns(filepath.Join(m.stateDir(), "backups"))
 	r = m.run("", "apply", rig, "--yes")
 	if r.code != 0 || !strings.Contains(r.out, "nothing to change") || !strings.Contains(r.out, "no changes") {
 		t.Fatalf("%+v", r)
 	}
-	if runsAfter, _ := apply.ListRuns(filepath.Join(m.home, ".rigfile", "backups")); len(runsAfter) != len(runsBefore) {
+	if runsAfter, _ := apply.ListRuns(filepath.Join(m.stateDir(), "backups")); len(runsAfter) != len(runsBefore) {
 		t.Fatalf("a no-op apply must not create a run: %d -> %d", len(runsBefore), len(runsAfter))
 	}
 
@@ -940,7 +964,7 @@ func TestUnsafeBaseFlagIsLoudRecordedAndReversible(t *testing.T) {
 	if r := m.run("", "apply", rig, "--yes", "--no-git", "--i-understand-unsafe-base"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
-	sd := filepath.Join(m.home, ".rigfile", "state.json")
+	sd := filepath.Join(m.stateDir(), "state.json")
 	if !strings.Contains(string(mustRead(t, sd)), `"unsafeBase"`) {
 		t.Fatal("the unsafe apply must be recorded in state.json")
 	}

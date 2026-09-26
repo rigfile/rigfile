@@ -73,7 +73,7 @@ func TestSeveralTargetsShareOnePlanScreenStateLockAndRollback(t *testing.T) {
 		t.Fatalf("lock must pin every target:\n%s", lockTxt)
 	}
 	// state, diff and doctor see both targets
-	stTxt := string(mustRead(t, filepath.Join(m.home, ".rigfile", "state.json")))
+	stTxt := string(mustRead(t, filepath.Join(m.stateDir(), "state.json")))
 	if !strings.Contains(stTxt, `"windsurf"`) || !strings.Contains(stTxt, `"claude-code"`) {
 		t.Fatalf("%s", stTxt)
 	}
