@@ -160,3 +160,5 @@ Plan of record: `docs/stage-8-plan.md`; owner steps: `docs/stage-8-owner-checks.
 Proven: unit and CLI tests for every part; the registry parts against a real Postgres, including an organisation red-team over every read route and a concurrent-namespace race test.
 
 Not proven: real browsers, a real registry deployment, real teams, the editors' file formats. The riskiest change is the pair of visibility fragments in `internal/registry/store_rigs.go`, which every read now goes through.
+
+**Stage 8 addendum (branch `stage-8b`, from `stage-8`):** the GitHub Copilot in VS Code adapter is built, project-scoped (`docs/targets/vscode-copilot.md`). Matrix regenerated.

@@ -1,4 +1,4 @@
-# Target: GitHub Copilot in VS Code (S8-M6) — NOT BUILT: user-level paths UNVERIFIED
+# Target: GitHub Copilot in VS Code (S8-M6) — BUILT, PROJECT SCOPE ONLY (user-level paths UNVERIFIED)
 
 **Date checked:** 2026-09-26, through a summarising fetcher and search.
 
@@ -9,13 +9,15 @@
 | Instructions | `https://code.visualstudio.com/docs/copilot/customization/custom-instructions`: project `.github/copilot-instructions.md`, `AGENTS.md` (setting `chat.useAgentsMdFile`), `.github/instructions/**/*.instructions.md` (frontmatter `name`, `description`, `applyTo`), and `CLAUDE.md` / `.claude/rules`. User level: `~/.copilot/copilot-instructions.md` and `~/.copilot/instructions/**/*.instructions.md` (for "Copilot agent host sessions"). | Project-level: verified. User-level: the page ties it to one session type; **UNVERIFIED** for the ordinary VS Code chat. |
 | Input variables vs `rigfile exec` | `${input:...}` keeps a secret out of the file and out of git, like `secret://` refs do, but the value lives in VS Code's store and is handed to the server's environment: Level 1 at best. Wrapping with `rigfile exec` (and, later, Level 2) is stronger. | Design |
 
-## Decision
+## Decision (as built)
 
-No adapter. A useful one needs a scope decision (project files vs the user profile) and the profile path; both are the owner's call, and the user path is unverified.
+The adapter (`internal/adapters/vscodecopilot`) is **project-scoped**, which is what was verified: `rigfile apply <rig> --project <dir> [--target vscode-copilot]` writes
 
-## What settles it (owner)
+- MCP servers into `<project>/.vscode/mcp.json` under `servers` (`type: stdio` through `rigfile exec`, or `type: http` with `url`/`headers`; remote servers whose headers reference secrets are skipped with a note; `${input:...}` was not used because the value would live in VS Code's store, not Rigfile's);
+- **project-scope** instructions into a marked section of `<project>/.github/copilot-instructions.md`.
 
-1. Say whether Rigfile should write **project** files for this target (`rigfile apply --project <dir>` writing `.vscode/mcp.json` and `.github/copilot-instructions.md`), which is fully verified and needs no user-path knowledge, or the **user profile**.
-2. For the user profile: run **MCP: Open User Configuration** on each OS and note the path (including a non-default profile).
+Rules that follow from "these files are committed": no secret value ever (only `secret://` refs turned into `rigfile exec --secret` arguments); **user-scope instructions are never written** (a note says why and how to mark one `scope: project`); nothing is written without `--project`, and nothing outside it; a plan note reminds that teammates need `rigfile` installed and that `targets: [claude-code]` on an item keeps a personal server out. The target is auto-selected only when a project is given and it has a `.vscode` directory (or `code` is on PATH); it never touches the user profile.
 
-Project-scope is the recommendation: it is verified, portable across OSes, reviewable in a pull request, and does not touch the person's editor profile. It needs `scope: project` support for MCP servers in the manifest (today `scope: project` exists for instructions only), which is a schema change to discuss first.
+`mcp.json` may contain comments in VS Code; Rigfile's layout-preserving editor handles plain JSON only, so a commented file is left **untouched** with a note listing the servers to add by hand (JSONC editing is future work). Skills, subagents, commands, hooks and permissions have no verified equivalent and are reported, not written. No manifest schema change was needed.
+
+Still to verify (owner): the user-profile `mcp.json` path per OS and profile, if a user-level mode is ever wanted; that VS Code loads the generated `.vscode/mcp.json` entries (`rigfile exec` from PATH) on each OS; that Copilot reads the marked section of `copilot-instructions.md`.

@@ -1,0 +1,16 @@
+target: vscode-copilot
+title: GitHub Copilot in VS Code
+os: [macos, linux, windows]
+config_paths:
+  macos: "<project>/.vscode/mcp.json, <project>/.github/copilot-instructions.md"
+  linux: "<project>/.vscode/mcp.json, <project>/.github/copilot-instructions.md"
+  windows: "<project>\\.vscode\\mcp.json, <project>\\.github\\copilot-instructions.md"
+categories:
+  instructions: {support: partial, note: "project scope only: a marked section in <project>/.github/copilot-instructions.md; user-scope instructions are not written (no verified personal location, and a committed file must not hold personal text)"}
+  skills: {support: no, note: "no verified Copilot equivalent"}
+  agents: {support: no, note: "no verified Copilot equivalent"}
+  commands: {support: no, note: "no verified Copilot equivalent"}
+  mcp_servers: {support: partial, note: "project scope only: servers in <project>/.vscode/mcp.json (needs --project); stdio through rigfile exec; remote servers without secret headers"}
+  hooks: {support: no, note: "no verified Copilot equivalent"}
+  permissions: {support: no, note: "no documented per-rule permissions"}
+base_secure: instructions_only

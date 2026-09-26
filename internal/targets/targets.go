@@ -19,6 +19,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/codex"
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/cursor"
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/gemini"
+	"github.com/digitaldreamer3462/rigfile/internal/adapters/vscodecopilot"
 	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
@@ -62,7 +63,7 @@ type Target struct {
 	Always bool
 }
 
-var registry = []Target{claudeCode(), codexTarget(), geminiTarget(), cursorTarget(), claudeDesktopTarget()}
+var registry = []Target{claudeCode(), codexTarget(), geminiTarget(), cursorTarget(), claudeDesktopTarget(), vscodeCopilotTarget()}
 
 // Register adds a target (adapters call it from init in their own packages; tests add fakes).
 func Register(t Target) { registry = append(registry, t) }
@@ -363,6 +364,29 @@ func cursorTarget() Target {
 				return nil, err
 			}
 			return cursor.Build(cursor.Env{Plat: c.Plat, CursorDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
+		},
+	}
+}
+
+// vscodeCopilotTarget is project-scoped: it is detected only when a project directory is given and looks like a VS Code
+// project (or `code` is installed), and it never writes outside that directory.
+func vscodeCopilotTarget() Target {
+	return Target{
+		Name: "vscode-copilot", Title: "GitHub Copilot in VS Code",
+		Available: func(*platform.Info) (bool, string) { return true, "" },
+		Detect: func(c Ctx) Detection {
+			switch {
+			case c.ProjectDir == "":
+				return Detection{false, "project-scoped: pass --project <dir> (its user-level files were not verified)"}
+			case exists(filepath.Join(c.ProjectDir, ".vscode")):
+				return Detection{true, c.ProjectDir + "/.vscode exists"}
+			case have(c, "code"):
+				return Detection{true, "`code` is on PATH and a project was given"}
+			}
+			return Detection{false, "no .vscode in the project and no `code` on PATH"}
+		},
+		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
+			return vscodecopilot.Build(vscodecopilot.Env{Plat: c.Plat, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
 		},
 	}
 }
