@@ -22,17 +22,63 @@ func anyMatch(res []*regexp.Regexp, s string) bool {
 	return false
 }
 
+// stopwordCoverage is the share of a secret's letters/digits that stopwords explain. gitleaks suppresses a
+// finding when the secret merely CONTAINS any stopword, and the generic rule's list has ~1,400 dictionary
+// words, so a random 25-character key that happens to contain "meta" is silently dropped (found by the
+// S2-M2 corpus). Rigfile suppresses only when stopwords account for at least this share of the secret, which
+// still removes word-built identifiers ("authorization_backend_configuration") but keeps random secrets.
+const stopwordCoverage = 0.6
+
+// placeholderMarkers are stopwords that say "this is not a real credential" wherever they appear in the
+// secret, so they suppress on contain (like gitleaks) instead of by coverage: "...EXAMPLEKEY", "change-me",
+// "xxxxx". They are long enough that a random secret will not contain one by chance.
+var placeholderMarkers = []string{"example", "sample", "placeholder", "changeme", "change-me", "change_me", "redacted", "dummy", "xxxxx",
+	"replaceme", "replace-me", "replace_me", "yourkey", "your-key", "your_key", "yourtoken", "your-token", "your_token", "yoursecret", "your-secret",
+	"your_secret", "fixme"}
+
 func containsStop(words []string, secret string) bool {
 	if len(words) == 0 || secret == "" {
 		return false
 	}
 	l := strings.ToLower(secret)
-	for _, w := range words {
-		if strings.Contains(l, w) {
-			return true
+	for _, m := range placeholderMarkers {
+		if strings.Contains(l, m) {
+			for _, w := range words {
+				if w == m {
+					return true
+				}
+			}
 		}
 	}
-	return false
+	covered := make([]bool, len(l))
+	any := false
+	for _, w := range words {
+		for from := 0; from < len(l); {
+			i := strings.Index(l[from:], w)
+			if i < 0 {
+				break
+			}
+			any = true
+			for k := from + i; k < from+i+len(w); k++ {
+				covered[k] = true
+			}
+			from += i + 1
+		}
+	}
+	if !any {
+		return false
+	}
+	total, hit := 0, 0
+	for i := 0; i < len(l); i++ {
+		c := l[i]
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c >= 128 {
+			total++
+			if covered[i] {
+				hit++
+			}
+		}
+	}
+	return total > 0 && float64(hit) >= stopwordCoverage*float64(total)
 }
 
 func fingerprint(rule, path, secret string) string {

@@ -1,7 +1,10 @@
 package scan
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -327,6 +330,101 @@ func TestNonASCIITextKeepsOffsetsAligned(t *testing.T) {
 	text := strings.Repeat("İİİİ ünïcödé ", 200) + "\napi_key = \"Zk3JqW9xLm2Pn7VbT5cRd8Hy\"\n"
 	f := s.ScanText("u.txt", text)
 	if len(f) != 1 || f[0].Line != 2 {
+		t.Fatalf("%+v", f)
+	}
+}
+
+func TestStopwordsSuppressWordIdentifiersButNotRandomSecretsContainingAWord(t *testing.T) {
+	s := newScanner(t, Options{})
+	// a random 25-char key that happens to contain the dictionary word "meta" is still a secret
+	if f := s.ScanText("c.ini", "password = "+cat("EMEta9dA1st2", "Yt8U7FZEFYjGu")+"\n"); len(f) != 1 {
+		t.Fatalf("random secret containing a stopword must be flagged: %+v", f)
+	}
+	// but a value built from dictionary words is not
+	if f := s.ScanText("c.py", "api_key = \"authorization_backend_configuration\"\n"); len(f) != 0 {
+		t.Fatalf("%+v", f)
+	}
+	// placeholder markers suppress wherever they appear
+	if f := s.ScanText("c.env", "SECRET_KEY="+cat("wJalrXUtnFEMI7K7MDENGbPx", "RfiCYEXAMPLEKEY")+"\n"); len(f) != 0 {
+		t.Fatalf("%+v", f)
+	}
+}
+
+func TestGenericRuleDoesNotJoinAcrossLines(t *testing.T) {
+	s := newScanner(t, Options{})
+	if f := s.ScanText(".env.example", "API_KEY=\nSECRET_KEY=change-me-please-now\nTOKEN=\n"); len(f) != 0 {
+		t.Fatalf("an empty value must not borrow the next line: %+v", f)
+	}
+}
+
+func TestRigfileRules(t *testing.T) {
+	s := newScanner(t, Options{})
+	pw := cat("Xk29", "sLq81Zp3", "Wm7Rt5")
+	for name, text := range map[string]string{
+		"postgres":   "url: postgres://app:" + pw + "@db.internal.test:5432/x\n",
+		"redis":      "REDIS=redis://:" + pw + "@cache.internal.test:6379\n",
+		"basic-auth": "wget https://ci:" + pw + "@repo.test/a.tgz\n",
+		"netrc":      "machine api.test login ci password " + pw + "\n",
+	} {
+		f := s.ScanText("x.txt", text)
+		found := false
+		for _, x := range f {
+			found = found || strings.HasPrefix(x.RuleID, "rigfile-")
+		}
+		if !found {
+			t.Errorf("%s: no rigfile rule fired: %+v", name, f)
+		}
+	}
+	for _, text := range []string{
+		"url: postgres://user:password@localhost:5432/app\n",
+		"url: https://user@host.test/path\n",
+		"url: https://host.test:8443/a:b@c\n",
+		"DATABASE_URL=postgres://${DB_USER}:${DB_PASS}@db/app\n",
+	} {
+		if f := s.ScanText("x.txt", text); len(f) != 0 {
+			t.Errorf("false positive on %q: %+v", text, f)
+		}
+	}
+	// derived-value names are not credentials
+	if f := s.ScanText("x.yaml", "token_hash: "+cat("9f86d081884c7d659a2f", "eaa0c55ad015a3bf4f1b")+"\n"); len(f) != 0 {
+		t.Fatalf("%+v", f)
+	}
+}
+
+func TestDecodedSecretsAreFoundAndReportedAtTheOriginalLine(t *testing.T) {
+	s := newScanner(t, Options{})
+	enc := func(x string) string { return base64.StdEncoding.EncodeToString([]byte(x)) }
+	inner := "token=" + fakeGH
+	text := "line one\nline two\ndata: " + enc(inner) + "\n"
+	f := s.ScanText("a.yaml", text)
+	if len(f) != 1 || f[0].Line != 3 || !strings.HasPrefix(f[0].Description, "(decoded)") {
+		t.Fatalf("%+v", f)
+	}
+	// base64 inside base64 (depth 2) is found; depth 3 is not attempted
+	two := "d: " + enc(enc(inner)) + "\n"
+	if f := s.ScanText("a.yaml", two); len(f) != 1 {
+		t.Fatalf("depth 2: %+v", f)
+	}
+	three := "d: " + enc(enc(enc(inner))) + "\n"
+	if f := s.ScanText("a.yaml", three); len(f) != 0 {
+		t.Fatalf("depth 3 should not be decoded: %+v", f)
+	}
+	// hex and percent-encoded
+	if f := s.ScanText("a.txt", "x = \""+hex.EncodeToString([]byte(fakeAWS))+"\"\n"); len(f) != 1 {
+		t.Fatalf("hex: %+v", f)
+	}
+	if f := s.ScanText("a.txt", "u=https://h.test/cb?t="+strings.ReplaceAll(url.QueryEscape("token="+fakeGH), "%3D", "%3D")+"\n"); len(f) == 0 {
+		t.Fatalf("percent: %+v", f)
+	}
+	// binary-looking blobs and ordinary long identifiers are ignored
+	blob := make([]byte, 300)
+	for i := range blob {
+		blob[i] = byte(i*7 + 13)
+	}
+	if f := s.ScanText("img.html", "<img src=\"data:image/png;base64,"+enc(string(blob))+"\">\n"); len(f) != 0 {
+		t.Fatalf("%+v", f)
+	}
+	if f := s.ScanText("a.py", "some_really_long_snake_case_function_name_here_for_testing = 1\n"); len(f) != 0 {
 		t.Fatalf("%+v", f)
 	}
 }

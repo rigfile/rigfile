@@ -1,7 +1,7 @@
 # Rigfile status
 
 **Current stage: Stage 1 — build complete and merged to `main` (fast-forward of `stage-1`, 2026-09-25; CI green); owner checks below still open.**
-**Next: Stage 2 (`rigfile/base-secure`) — plan drafted in `docs/stage-2-plan.md` on branch `stage-2`, S2-M0 (verify first) done 2026-09-25 (`docs/targets/{claude-code §12,git}.md`, `docs/adr/0003-scanner.md`); O1 decided (own matcher over gitleaks rules, ADR 0003 Accepted); S2-M1 scanner engine built (uncommitted); awaiting owner decisions O2–O8.**
+**Next: Stage 2 (`rigfile/base-secure`) — plan drafted in `docs/stage-2-plan.md` on branch `stage-2`, S2-M0 (verify first) done 2026-09-25 (`docs/targets/{claude-code §12,git}.md`, `docs/adr/0003-scanner.md`); O1 decided (own matcher over gitleaks rules, ADR 0003 Accepted); O2 decided (1%); S2-M1 scanner committed; S2-M2 corpus + metrics built (core recall 223/223, FP 0/550); awaiting owner decisions O3–O8.**
 **Stage 0: COMPLETE, signed off by the owner 2026-09-25.**
 Last updated: 2026-09-25 (end of Stage 1 build session)
 

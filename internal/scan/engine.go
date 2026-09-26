@@ -86,6 +86,10 @@ func (s *Scanner) ScanFile(path string, data []byte) []Finding {
 // ScanText scans text (a file's contents, a diff, a shell command). name is used for path-scoped rules
 // and reporting; pass "" for text that is not a file.
 func (s *Scanner) ScanText(name, text string) []Finding {
+	return s.scanText(name, text, 0)
+}
+
+func (s *Scanner) scanText(name, text string, depth int) []Finding {
 	name = strings.ReplaceAll(name, `\`, "/")
 	if text == "" && name == "" {
 		return nil
@@ -152,6 +156,13 @@ func (s *Scanner) ScanText(name, text string) []Finding {
 					}
 				}
 			}
+			if r.window > 0 { // generic key/value rule: the value must be on the same line as its name
+				// gitleaks' pattern lets `[\s'"=]{0,5}` cross a newline, so `API_KEY=` (empty) followed by the next
+				// line's `SECRET_KEY=change-me` reads as one assignment. Found by the .env.example corpus class.
+				if i := strings.Index(match, secret); i > 0 && strings.Contains(match[:i], "\n") {
+					continue
+				}
+			}
 			if r.entropy != 0 && shannonEntropy(secret) <= r.entropy {
 				continue
 			}
@@ -181,6 +192,9 @@ func (s *Scanner) ScanText(name, text string) []Finding {
 		if keep {
 			out = append(out, a.f)
 		}
+	}
+	if depth < maxDecodeDepth {
+		out = append(out, s.scanDecoded(name, text, lines, depth)...)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Path != out[j].Path {

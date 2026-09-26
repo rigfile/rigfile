@@ -26,6 +26,11 @@ var gitleaksSHA string
 //go:embed rules/VERSION
 var gitleaksVersion string
 
+// rigfileTOML holds Rigfile's own additions (gitleaks format), reviewed in this repo.
+//
+//go:embed rules/rigfile.toml
+var rigfileTOML []byte
+
 // RulesVersion is the gitleaks tag the embedded rules come from.
 func RulesVersion() string { return strings.TrimSpace(gitleaksVersion) }
 
@@ -106,7 +111,7 @@ func DefaultRuleset() (*Ruleset, error) {
 			defaultErr = fmt.Errorf("scan: embedded gitleaks rules do not match their recorded hash (got %s)", got[:12])
 			return
 		}
-		defaultRS, defaultErr = ParseRules(gitleaksTOML)
+		defaultRS, defaultErr = ParseRules(gitleaksTOML, rigfileTOML)
 		if defaultRS != nil {
 			defaultRS.Version = RulesVersion()
 		}
@@ -118,10 +123,16 @@ func hashHex(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString
 
 // ParseRules compiles a gitleaks-format TOML config. Any rule that Go's regexp cannot compile is an error
 // (no rule is silently dropped: a dropped rule is a hole).
-func ParseRules(data []byte) (*Ruleset, error) {
+func ParseRules(datas ...[]byte) (*Ruleset, error) {
 	var c tomlConfig
-	if err := toml.Unmarshal(data, &c); err != nil {
-		return nil, fmt.Errorf("scan: rules: %w", err)
+	for _, data := range datas {
+		var one tomlConfig
+		if err := toml.Unmarshal(data, &one); err != nil {
+			return nil, fmt.Errorf("scan: rules: %w", err)
+		}
+		c.Allowlists = append(c.Allowlists, one.Allowlist)
+		c.Allowlists = append(c.Allowlists, one.Allowlists...)
+		c.Rules = append(c.Rules, one.Rules...)
 	}
 	rs := &Ruleset{}
 	compileAllow := func(t tomlAllow, where string) (*allowlist, error) {
@@ -148,7 +159,7 @@ func ParseRules(data []byte) (*Ruleset, error) {
 		}
 		return a, nil
 	}
-	for _, t := range append([]tomlAllow{c.Allowlist}, c.Allowlists...) {
+	for _, t := range c.Allowlists {
 		if len(t.Paths)+len(t.Regexes)+len(t.StopWords)+len(t.Commits) == 0 {
 			continue
 		}

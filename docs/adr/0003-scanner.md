@@ -33,3 +33,17 @@ Option 1. Additions: `NOTICE` with the MIT text; `scripts/update-gitleaks-rules`
 - **Deliberately different:** inline `gitleaks:allow` is OFF by default (an agent can write the marker itself; `.rigfile-allow` is the only suppression); commit allowlists never match (no commit context); every rule that fails to compile is an error, not skipped.
 - **Not implemented yet (known recall gaps):** gitleaks' decoding pass (base64/hex/percent-encoded secrets are not found) and `requiredRules` (unused in v8.30.1's default config). Both go to the corpus in S2-M2 as measured misses; decoding is added if the recall target needs it.
 - Speed: a single Aho-Corasick pass finds present keywords (replaced ~500 `strings.Contains` passes: 130 ms → 1.5 ms on 5k lines); the one expensive rule (`generic-api-key`, ~110 ms alone on a 500 KB diff) runs only on windows around its keyword hits, with an equivalence test against a full scan. 5,001 dense lines with a hit: ~5 ms.
+
+## What S2-M2's corpus changed (2026-09-25)
+The corpus (223 core positives in 47 families, 550 hard negatives, 70 file-name cases; `docs/scanner-metrics.md`) measured the plain gitleaks default config at **91.5% core recall** and found real gaps, all fixed without weakening the gate:
+
+| Finding | Fix |
+|---|---|
+| No gitleaks rule for passwords in URLs (`postgres://user:pw@host`, `https://user:pw@host`, redis/amqp/mongodb) or netrc `machine … password …` (0/17) | `internal/scan/rules/rigfile.toml`: `rigfile-url-credentials`, `rigfile-netrc-password` (entropy floor + placeholder stopwords) |
+| **Stopword-by-substring hides real secrets**: gitleaks drops a finding when the secret merely *contains* any of ~1,400 dictionary stopwords; a random 25-char key containing "meta" was silently missed | Stopwords now suppress only when they explain ≥60% of the secret's letters/digits (word-built identifiers like `authorization_backend_configuration` are still suppressed); ~20 placeholder markers (`example`, `changeme`, `xxxxx`, `redacted`…) still suppress by containment |
+| Generic key/value rule joined `API_KEY=` (empty) with the next line's `SECRET_KEY=change-me` across the newline: 25/25 `.env.example` false positives once the stopword rule was corrected | The generic rule's value must be on the same line as its name |
+| Hash/digest/fingerprint-named assignments (`token_hash`, `key_fingerprint`) flagged (20 of 60 in that family) | Global line allowlist for names ending in hash/digest/fingerprint/checksum/etag/sha* |
+| Encoded secrets (base64, hex, percent-encoded) 0/10 | `internal/scan/decode.go`: byte-loop candidate finder, depth ≤ 2, ≤ 256 segments, only mostly-printable decodes are scanned; findings are reported at the original line, description prefixed "(decoded)" |
+
+Speed after all of this: 5,001 dense lines ≈ 8 ms (a first version of the decoder used regexps and cost 90 ms; byte loops fixed that).
+Caveat on the FP number: 0 of 550 is measured on *our* hard negatives; it is evidence, not proof. The corpus grows whenever a real false positive or miss turns up.
