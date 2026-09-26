@@ -1,0 +1,7 @@
+.git
+dist
+e2e/build
+e2e/build-install
+node_modules
+*.md
+!docs/*.md

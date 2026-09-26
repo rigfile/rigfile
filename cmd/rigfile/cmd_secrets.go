@@ -47,13 +47,20 @@ func passphrase(e env) func() (string, error) {
 	}
 }
 
+// keyringDisabled is true when the OS keychain must not be used: in tests, and for scripts and CI that set
+// RIGFILE_SECRETS_BACKEND=file (the encrypted file backend, which needs RIGFILE_PASSPHRASE_FILE). Any script that runs the
+// real CLI on a developer machine must set it, so it never reaches the developer's own keychain.
+func keyringDisabled(e env) bool {
+	return e.keyringOff || e.getenv("RIGFILE_SECRETS_BACKEND") == "file"
+}
+
 func openStore(e env, pi *platform.Info) (secrets.Store, error) {
 	sd, err := stateDirFor(e, pi)
 	if err != nil {
 		return nil, err
 	}
 	o := secrets.OpenOptions{FilePath: filepath.Join(sd, "secrets.age"), Passphrase: passphrase(e)}
-	if e.keyringOff {
+	if keyringDisabled(e) {
 		o.KeyringProbe = func() error { return errors.New("keychain disabled") }
 		o.WorkFactor = 10
 	}
@@ -80,7 +87,7 @@ func secretRefs(needs []state.Need) []string {
 // secretStatuses reads set/not-set WITHOUT prompting: only the OS keychain is consulted. With the
 // encrypted-file backend the status is unknown (it would need a passphrase), so nothing is returned.
 func secretStatuses(e env, pi *platform.Info, refs []string) map[string]string {
-	if e.keyringOff || len(refs) == 0 || secrets.KeyringAvailable() != nil {
+	if keyringDisabled(e) || len(refs) == 0 || secrets.KeyringAvailable() != nil {
 		return nil
 	}
 	out := map[string]string{}

@@ -18,6 +18,18 @@ import (
 // New returns a migrated database in a fresh schema that is dropped when the test ends.
 func New(t testing.TB) *sql.DB {
 	t.Helper()
+	db, err := registry.Open(context.Background(), DSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+// DSN returns a connection string for a fresh, empty schema (dropped when the test ends). Callers that run the service
+// itself (which migrates on start) use this instead of New.
+func DSN(t testing.TB) string {
+	t.Helper()
 	base := os.Getenv("RIGFILE_TEST_DATABASE_URL")
 	if base == "" {
 		t.Skip("RIGFILE_TEST_DATABASE_URL is not set (see scripts/registry-test.sh)")
@@ -40,14 +52,9 @@ func New(t testing.TB) *sql.DB {
 	q := u.Query()
 	q.Set("search_path", schema)
 	u.RawQuery = q.Encode()
-	db, err := registry.Open(ctx, u.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	t.Cleanup(func() {
-		db.Close()
 		_, _ = admin.ExecContext(context.Background(), `DROP SCHEMA `+schema+` CASCADE`)
 		admin.Close()
 	})
-	return db
+	return u.String()
 }

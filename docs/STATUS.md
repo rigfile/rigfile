@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 4 (Git-based sharing): S4-M0 to S4-M6 BUILT on branch `stage-4` (not pushed, not merged); S4-M7 is the owner gate (`docs/stage-4-owner-checks.md`). Stages 1-3 are merged to `main`.**
-Last updated: 2026-09-26 (Stage 4 built)
+**Current stage: Stage 5 (registry website MVP): S5-M0 to S5-M6 BUILT on branch `stage-5` (not pushed, not merged); S5-M7 is the owner gate (`docs/stage-5-owner-checks.md`). Stages 1-4 are merged to `main`. The exit criterion needs an EXTERNAL security review that I cannot provide.**
+Last updated: 2026-09-26 (Stage 5 built)
 
 ## Stage 0 result (signed off)
 
@@ -122,3 +122,16 @@ What is proven: unit and CLI tests for every step; container E2E (Ubuntu and Fed
 What is not: nothing here has run on real GitHub or GitLab, on Windows (PowerShell installer, native tests: first CI run), or with real people. No OAuth provider is registered. macOS notarization, Windows signing, rpm and an apt repository are not done. All of it, plus the LICENSE and package-name decisions and the signing key, is in `docs/stage-4-owner-checks.md`.
 
 Say "go" for Stage 5 (registry website) only after the Stage 4 exit criteria (5+ external users) are met or you decide to defer them.
+
+
+## Stage 5: built, awaiting owner steps
+
+Plan of record: `docs/stage-5-plan.md`; spec and threat model: `docs/registry.md`; my security self-review: `docs/registry-security.md`. New: `internal/registry` (+ `blob`, `dbtest`), `internal/regclient`, `cmd/rigfile-registry`, `Dockerfile.registry`, `deploy/docker-compose.yml`, `e2e/registry.sh`, CLI commands `login`, `logout`, `whoami`, `publish --to-registry`, `pull owner/name`, registry-backed `from:` layers.
+
+Design call worth knowing: one Go service (same scanner and validation code as the CLI) rather than Next.js + a separate API; pages are server-rendered with no script at all (CSP `default-src 'none'`).
+
+Proven: store, API, auth flows, scan worker, pages (including hostile-content tests) and the CLI end to end against a real Postgres (`scripts/registry-test.sh`; CI job `registry (postgres)`); container E2E with the real image and two simulated machines; `govulncheck` clean.
+
+Not proven: real GitHub sign-in, a real S3/R2 bucket, a real deployment, Windows/macOS runs of the new tests (they skip without a database), legal review, external security review, real users. See `docs/stage-5-owner-checks.md`.
+
+Incident during the build: my first host-side E2E script ran the real CLI and triggered a macOS Keychain dialog on the owner's Mac (nothing was stored). Fixed with `RIGFILE_SECRETS_BACKEND=file`, which every host script must set.

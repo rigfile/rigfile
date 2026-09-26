@@ -77,7 +77,7 @@ Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r
 | Pending and rejected versions are invisible to everyone but the owner | `TestVisibilityPredicate` |
 | A secret in any file rejects the version; the findings never contain the value | `TestScanRejectsSecretsWithoutLeakingThem` |
 | Public rigs must pin; private ones only warn | `TestPinningPublicVersusPrivate` |
-| Private and missing rigs are indistinguishable (404) | `TestPrivateRigsAre404` |
+| Private and missing rigs are indistinguishable (404) | `TestVisibilityPredicate` (private and missing are byte-identical), `TestPagesShowPublicRigsAndKeepPrivateOnesPrivate` |
 | Tokens and sessions are stored hashed, expire, and can be revoked | `TestTokensAreHashedExpireAndRevoke` |
 | OAuth `state` mismatch, replay and missing cookie are refused | `TestOAuthStateIsChecked` |
 | Device flow: pending, slow_down, approval, denial, expiry, reuse of a used code | `TestDeviceFlow` |
@@ -85,7 +85,7 @@ Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r
 | README, manifest and file contents cannot inject script | `TestPagesEscapeHostileContent` |
 | Security headers on every response, CSP without inline script | `TestSecurityHeaders` |
 | Rate limits on auth, device polling and upload | `TestRateLimits` |
-| A yanked version still pulls by exact version; a removed one does not | `TestYankAndRemove` |
+| A yanked version still pulls by exact version; a removed one does not | `TestResolveRangesAndYankAndRemove`, `TestReportFlowAndTakedown` |
 | The worker survives a crash and does not double-scan | `TestWorkerRecoversAndLocks` |
 
 ## 7. Threat model (registry-specific; the general one is RIGFILE_PLAN.md §11)
@@ -113,3 +113,13 @@ Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r
 ## 8. Operations (S5-M6)
 
 Configuration is environment variables (`RIGFILE_REGISTRY_*`): listen address, public URL, database URL, blob backend (`fs:/path` or `s3://bucket` with endpoint and keys), GitHub OAuth client id and secret, session key, admin logins, rate-limit settings. Secrets are read from the environment or files, never from flags. Migrations run at start (`rigfile-registry migrate`). `docker compose up` runs the service, Postgres and (optionally) MinIO for local trials.
+
+## 9. As built: differences from the sketch above
+
+- **Reports** need a signed-in user (GitHub identity), are rate limited per user and address, and cannot be used to probe private rigs (`TestReportFlowAndTakedown`). Admins act through the operator tools, not through web pages: `rigfile-registry admin reports|resolve-report|takedown|disable-user|audit`.
+- **Bootstrap and break-glass:** `admin create-user` and `admin token` make an account and a token without GitHub. They need shell access to the deployment and are audited; the container E2E uses them.
+- **`DeviceInterval`** (default 5 s) is configurable so tests do not wait.
+- **Layers from the registry:** `from: [owner/name@range]` resolves through the registry when no local layers directory has it, and is pinned in `rigfile.lock` (`source`, `commit` = tarball SHA-256, `treeSha256`).
+- **Registry sources** are written `rigfile+https://host/owner/name[@range]` in `state.json` and the lock.
+- **The CLI's token** lives in the secret store under `registry/<host>/token`. `RIGFILE_SECRETS_BACKEND=file` forces the encrypted-file backend (scripts and CI must set it: they must never reach a developer's OS keychain).
+- **Not built (later):** organisations, forks ("use as base"), comments, download counts, verified publishers, typosquat detection (Stage 6), a shared rate limiter, email notifications.

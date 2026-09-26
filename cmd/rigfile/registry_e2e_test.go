@@ -187,3 +187,17 @@ func TestRegistryEndToEndPublishThenPullOnAnotherMachine(t *testing.T) {
 		t.Fatalf("revoked tokens: %d", revoked)
 	}
 }
+
+func TestSecretsBackendFileSwitchDisablesTheKeychain(t *testing.T) {
+	if !keyringDisabled(env{getenv: func(k string) string {
+		if k == "RIGFILE_SECRETS_BACKEND" {
+			return "file"
+		}
+		return ""
+	}}) {
+		t.Fatal("RIGFILE_SECRETS_BACKEND=file must disable the OS keychain")
+	}
+	if keyringDisabled(env{getenv: func(string) string { return "" }}) {
+		t.Fatal("the keychain is the default")
+	}
+}
