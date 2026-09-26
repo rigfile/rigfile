@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 2 (`rigfile/base-secure`): BUILD COMPLETE on branch `stage-2` (S2-M0 to S2-M8 + M5b done, CI-ready, not yet pushed); S2-M9 owner sign-off pending. Stage 1 is merged to `main` (CI green). Stage 3 (multi-vendor + Windows) has NOT been started and will not be without the owner's go.**
-Last updated: 2026-09-25 (end of Stage 1 build session)
+**Current stage: Stage 3 (multi-vendor adapters + Windows): BUILD COMPLETE on branch `stage-3` (S3-M0 to S3-M9 done, S3-M10 = owner gate: `docs/stage-3-owner-checks.md`). Stage 2 (`stage-2`) still awaits its S2-M9 owner sign-off; `stage-3` is built on top of it. Neither branch is pushed (pushes are the owner's).**
+Last updated: 2026-09-26 (end of Stage 3 build session)
 
 ## Stage 0 result (signed off)
 
@@ -91,3 +91,17 @@ Your checklist, in order:
 Then Stage 3 (Codex/Cursor/Gemini adapters + Windows) is next in the plan; it starts on your go.
 
 Deviations from the Stage 2 plan worth knowing: `doctor --fix` re-applies your rig through the normal review screen instead of writing silently; the git protections are part of `apply` (opt out with `--no-git`); the sandbox is opt-in (`--sandbox`), sticky, and its enforcement is unverified until step 3.
+
+
+## Stage 3: what the owner must do (S3-M10)
+
+Built (plan: `docs/stage-3-plan.md`): target registry with per-target merge/projection/plan/state/lock; Codex, Gemini CLI, Cursor and Claude Desktop adapters on a shared toolkit; per-target base-secure mapping with honest "enforced / partly / instructions only" wording on every plan screen; `rigfile init --from <target>` capture with round-trip tests; Windows platform (user-only ACLs, `LockFileEx`, `.cmd` shim launching, PowerShell rules, Git-for-Windows hook paths, reserved-name check, CRLF/LF handling); WSL detection with cross-boundary denies; CI matrix with `windows-latest`; multi-target container E2E (Ubuntu and Fedora both pass locally).
+
+**Not verified by anyone yet:** every line of Windows code has been compiled, vetted and unit-tested through injected environments, but not run on Windows; no adapter has been loaded by the real vendor tool. Both are the checklist in `docs/stage-3-owner-checks.md`:
+
+1. Push (`git push -u origin stage-2 stage-3`), read the CI jobs, send me the `windows-latest` log if red.
+2. Windows 11 clean-VM procedure (section 2 there).
+3. Live vendor checks 1-7 (section 5), and the WSL glob check (section 4).
+4. Finish the Stage 2 checklist above, then merge `stage-2` and `stage-3` into `main`.
+
+Deviations worth knowing: Windows CI runs without `-race` and without the scanner timing gate; `init --from` cannot tell whole-file items Rigfile wrote (skills, agents) from yours unless `state.json` owns them, so run it before the first apply; Gemini CLI hooks/permissions and Cursor rules/hooks are not written at all (contracts unverified; the plan screen says so).
