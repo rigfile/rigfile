@@ -1,6 +1,6 @@
 # Private sync between your own machines: design (S8, deferred item)
 
-Status: **design for your decisions; no code.** RIGFILE_PLAN.md §6 gives a manifest key `private:` ("never published; synced only to owner's machines") and §12 lists "private memory sync between the owner's own machines (end-to-end encrypted)" under Stage 8. `private:` is already in the schema and is honoured by publish (never included). Nothing syncs yet. This document says how it should, and where your decisions change the design.
+Status: **BUILT (2026-09-26, branch `stage-8c`)**, using the recommendations below for every decision (§5, "as decided"). RIGFILE_PLAN.md §6 gives a manifest key `private:` ("never published; synced only to owner's machines") and §12 lists "private memory sync between the owner's own machines (end-to-end encrypted)" under Stage 8. Sections 1-4 are the design; **§7 is what was built and what differs**.
 
 ## 1. Goal and non-goals
 
@@ -78,3 +78,43 @@ The registry could store the encrypted objects for signed-in users (same crypto,
 | P-M6 | Owner gate | Two real machines; a real private repo |
 
 Everything before P-M5 needs no vendor formats; P-M5 is the only part blocked on verifying Claude Code's memory layout from official docs.
+
+## 7. As built
+
+Implemented in `internal/vault` (crypto, roster, index, sync engine) and `cmd/rigfile/cmd_sync.go` (`rigfile sync ...`).
+
+**Decisions taken (my recommendations):** transport is bring-your-own, a directory that may be a git repository you own (`--git`: fast-forward before, commit and push after; never force-push, never rewrite history); the registry is not a transport; conflicts keep both sides; the recovery passphrase is **not built** (losing every device loses the vault, as documented); revocation is "stops reading future writes, keeps the past". **Memory:** only files you `track` are synced: a file under your home (e.g. `~/.claude/CLAUDE.md`) or a path a rig lists under `private:` (`--rig <dir>`). Per-project Claude Code memory (mapping a project to a stable id) is **not built** and stays **UNVERIFIED** (the vendor's memory layout was not read, and Rigfile does not read your real `~/.claude` unless you track a file yourself).
+
+**Cryptography.** Confidentiality: age X25519, every file and the index encrypted to every enrolled device. Authenticity: age does not authenticate a sender (anyone with public keys can produce valid ciphertext), so each device also has an Ed25519 key. The device list is a **signed hash chain** (`rosters/000001.json` ...): version *n* names the hash of *n-1* and is signed by a device that was enrolled in *n-1*. Each device **pins** the roster it trusts; a chain that does not contain the pinned version unchanged, or is shorter, is refused. The index is signed by its writer (who must be in the current roster), encrypted, and carries a per-device counter; a device remembers the highest counter it has seen and refuses lower ones (rollback). Every object's plaintext hash and size are in the signed index, so a substituted ciphertext is refused.
+
+**Enrolment without a server.** `sync join` creates keys and posts a PUBLIC join request; it prints the device's fingerprint (five groups of four hex digits). On an enrolled device `sync approve <device> --fingerprint <that>` refuses a request whose fingerprint differs, so someone who can write to the storage cannot slip a device in. The approver prints the new **vault fingerprint** (a hash of the roster); `sync finish --fingerprint <it>` on the joining device pins the roster only if it matches. `revoke` re-encrypts the index and every object to the remaining devices and deletes the old ciphertext; `rekey` repairs an interrupted change.
+
+**Local safety.** A device writes only to paths **it** chose with `track`; a name arriving from the vault can never create a file (`TestSyncScansTracksSafelyAndRefusesCredentialPaths`). Pulls go through the journaled writer (backup first, `rigfile rollback` undoes them). Files must be regular (no links or directories), at most 64 MiB, at most 5000 in a vault. `track` refuses well-known credential locations (`.ssh`, `.aws`, `.gnupg`, `.kube`, `.docker`, `.netrc`, `.npmrc`, `.env`, `id_*`, Rigfile's own state) and anything outside the home directory. **Every push runs the secret scanner**; a finding refuses the file (rule names only, never the value) unless you pass `--allow-secrets <name>`.
+
+**`private:` and publishing.** A path under `private:` that the manifest also ships (an instruction, skill, agent or command inside it) is now a manifest **error**, so `validate`, `publish`, the registry's upload check and `apply` all refuse it. Files that are not referenced by the manifest were never published (the publisher copies only what the manifest names).
+
+### Red team of a hostile storage (all in `internal/vault/vault_test.go`)
+
+| The storage (or someone who can write to it) tries to | Result | Test |
+|---|---|---|
+| read the files or their names | ✔ only ciphertext and public keys are stored; a device's secret never is | `TestTheStorageSeesOnlyCiphertextAndPublicKeys` |
+| serve an older snapshot | ✔ refused (counters) | `TestForgeriesAndRollbackAreDetected` |
+| write its own index, encrypted to everyone | ✔ refused: not signed by an enrolled device | same |
+| swap an object for another well-formed ciphertext | ✔ refused: the signed hash does not match; nothing is written | `TestASwappedObjectAndAForgedRosterAreRefused` |
+| add its own device to the roster | ✔ refused: not signed by a member | same |
+| rewrite the roster history | ✔ refused: does not contain the pinned version | same |
+| post a join request and get it approved | ✔ refused: the fingerprint must match the joining device's screen | `TestEnrolmentNeedsTheRightFingerprint` |
+| serve a different vault to a joining device | ✔ refused: the vault fingerprint must match | same |
+| keep reading after a device is revoked | ✔ new data is not encrypted to it; old ciphertext is removed (git history keeps old data readable by it) | `TestRevokeReEncryptsEverythingToTheRemainingDevices` |
+| leave a device change half-done | ✔ detected with a clear message; `rekey` repairs | `TestAnInterruptedDeviceChangeIsRepairedByRekey` |
+| hide a deletion or an edit | — **not stopped**: a storage that withholds ALL new writes (or serves the current snapshot forever) looks like "no changes"; counters only prove it never goes backwards |  |
+| learn when and how much you sync | — **not stopped**: file counts, sizes and times are visible |  |
+
+Also tested end to end through the commands: two machines converging, conflicts kept apart (exit code 3), a revoked device shut out, and git as the transport (the repository holds `index.age` and objects, never a file name): `TestSyncTwoMachinesThroughTheCommands`, `TestSyncScansTracksSafelyAndRefusesCredentialPaths`, `TestSyncOverAGitRepositoryYouOwn`.
+
+### Owner checks
+
+1. Two real machines, a private git repository you own: `init`, `join`, `approve`, `finish`, `track`, `push`, `pull`, and confirm the fingerprints match on both screens.
+2. Windows: `platform.WritePrivate` for the state files, path handling for tracked files, git available.
+3. **Check what you track.** The scanner is heuristic: a personal `CLAUDE.md` can hold text you would not want on a second machine's disk.
+4. Nothing was verified against the real Claude Code memory layout; decide whether you want per-project memory synced, which needs that verification first.

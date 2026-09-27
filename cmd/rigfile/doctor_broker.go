@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -108,4 +110,22 @@ func addBrokerChecks(st *state.State, dir string, add func(checkLevel, string, s
 		return
 	}
 	add(worst, "secret broker", "%s", strings.Join(lines, "; "))
+}
+
+// addSyncCheck reports the private-sync membership of this device (from its own settings; the secret store is not opened).
+func addSyncCheck(sd string, add func(checkLevel, string, string, ...any)) {
+	b, err := os.ReadFile(filepath.Join(syncDir(sd), "config.json"))
+	if err != nil {
+		return
+	}
+	var cfg syncConfig
+	if json.Unmarshal(b, &cfg) != nil {
+		add(lvWarn, "sync", "the sync settings are damaged")
+		return
+	}
+	if _, err := os.Stat(cfg.Dir); err != nil {
+		add(lvWarn, "sync", "the vault directory %s is not there (is the drive or folder available?)", cfg.Dir)
+		return
+	}
+	add(lvOK, "sync", "device %s, vault %s, %d file(s) tracked", cfg.Device, cfg.Dir, len(cfg.Tracked))
 }

@@ -286,3 +286,35 @@ func TestWindowsReservedNames(t *testing.T) {
 		}
 	}
 }
+
+func TestPrivatePathsCannotAlsoBeShipped(t *testing.T) {
+	l := load(t, map[string]string{
+		"rigfile.yaml": base + `instructions:
+  - {id: mine, file: memory/notes.md}
+  - {id: ok, file: instructions/style.md}
+skills:
+  - {path: memory/skills/pdf}
+private:
+  - memory/
+`,
+		"memory/notes.md":            "personal",
+		"instructions/style.md":      "public",
+		"memory/skills/pdf/SKILL.md": skillMD,
+	})
+	ps := Check(l)
+	for _, want := range []string{"instructions[0].file: memory/notes.md is listed under `private:`", "skills[0].path: memory/skills/pdf is listed under `private:`"} {
+		if !findings(ps, Error, want) {
+			t.Errorf("missing %q in\n%v", want, ps)
+		}
+	}
+	if findings(ps, Error, "instructions[1]") {
+		t.Errorf("a public instruction was flagged: %v", ps)
+	}
+	// private paths that nothing ships are fine
+	l = load(t, map[string]string{"rigfile.yaml": base + "instructions:\n  - {id: ok, file: instructions/style.md}\nprivate:\n  - memory/\n", "instructions/style.md": "x"})
+	for _, p := range Check(l) {
+		if p.Level == Error && strings.Contains(p.Msg, "private") {
+			t.Fatalf("%v", p)
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -67,6 +68,34 @@ func Check(l *Loaded) []Problem {
 		ps = append(ps, Problem{level, where, fmt.Sprintf(format, a...)})
 	}
 	m, dir := l.M, l.Dir
+
+	// ---- a path that is `private:` (synced only between your own machines, docs/private-sync.md) must not also be something the
+	// rig ships: publishing would send it to everyone ----
+	if len(m.Private) > 0 {
+		var shipped []struct{ where, path string }
+		for i, x := range m.Instructions {
+			shipped = append(shipped, struct{ where, path string }{fmt.Sprintf("instructions[%d].file", i), x.File})
+		}
+		for i, x := range m.Skills {
+			if x.Path != "" {
+				shipped = append(shipped, struct{ where, path string }{fmt.Sprintf("skills[%d].path", i), x.Path})
+			}
+		}
+		for i, x := range m.Agents {
+			shipped = append(shipped, struct{ where, path string }{fmt.Sprintf("agents[%d].path", i), x.Path})
+		}
+		for i, x := range m.Commands {
+			shipped = append(shipped, struct{ where, path string }{fmt.Sprintf("commands[%d].path", i), x.Path})
+		}
+		for _, sh := range shipped {
+			for _, pv := range m.Private {
+				a, b := strings.TrimSuffix(path.Clean(sh.path), "/"), strings.TrimSuffix(path.Clean(pv), "/")
+				if a == b || strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/") {
+					add(Error, sh.where, "%s is listed under `private:` and also shipped by the rig: publishing would send your private files to everyone. Move it out of private:, or stop referencing it", sh.path)
+				}
+			}
+		}
+	}
 
 	// ---- duplicate identities, incl. case-insensitive collisions (macOS/Windows file systems) ----
 	dup := func(cat string, keys []string) {

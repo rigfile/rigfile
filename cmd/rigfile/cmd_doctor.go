@@ -187,6 +187,8 @@ func cmdDoctor(args []string, e env) int {
 		addBrokerChecks(st, rd, add)
 	}
 
+	addSyncCheck(sd, add)
+
 	// secret backend quality
 	switch {
 	case e.keyringOff:
