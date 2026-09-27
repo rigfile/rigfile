@@ -6,7 +6,7 @@
 
 1. **What will change:** the exact text `rigfile plan` prints (files, MCP servers, hooks, permissions, tools, warnings), escaped.
 2. **What you need to provide:** a checklist. For each secret the rig declares: whether it is already stored, why it is needed, where to get it, and a password field to store it in your operating system's secret store (or the encrypted file). For each sign-in: what it is for, and the command that walks through it (`rigfile logins`; sign-ins are vendor flows that stay in the terminal).
-3. **Apply:** a checkbox ("I have read the plan") and a button. It runs `rigfile apply --yes` for the rig: every file is backed up first, `rigfile rollback` undoes it, and a rig whose lockfile no longer matches is refused exactly as on the command line.
+3. **Apply:** a checkbox ("I have read the plan") and a button. It runs `rigfile apply --yes` for the rig: every file is backed up first, `rigfile rollback` undoes it, and a rig whose lockfile no longer matches is refused exactly as on the command line. An item that conflicts with something the rig does not own (exit code 3: "applied but some items were refused") is a normal, protective outcome, not a failure — the page still says "Done", with the refusal itself named in the transcript. Only a real error (any other non-zero exit code) shows "That did not work".
 
 Flags are the same as `plan` and `apply` (`--layers`, `--registry`, `--target`, `--no-git` ...), plus `--no-open` to print the address instead of opening a browser. The page stops with the Stop button, Ctrl-C, or after 30 minutes without a request.
 
@@ -29,4 +29,4 @@ What it does not do: it is not a defence against another program running as you 
 
 ## Tests
 
-`internal/localui`: `TestLandingSwapsTheTokenForACookieAndEscapesEverything`, `TestGuardRefusesRebindingCrossOriginAndMissingCSRF`, `TestApplySucceedsWithARealBrowsersNullOrigin`, `TestStoringSecretsAndApplying`, `TestQuitAndIdleTimeout`. `cmd/rigfile`: `TestUIShowsThePlanStoresDeclaredSecretsAndApplies` (the whole command: plan, declared and undeclared secrets, apply, quit; nothing written by looking).
+`internal/localui`: `TestLandingSwapsTheTokenForACookieAndEscapesEverything`, `TestGuardRefusesRebindingCrossOriginAndMissingCSRF`, `TestApplySucceedsWithARealBrowsersNullOrigin`, `TestStoringSecretsAndApplying`, `TestQuitAndIdleTimeout`. `cmd/rigfile`: `TestUIShowsThePlanStoresDeclaredSecretsAndApplies` (the whole command: plan, declared and undeclared secrets, apply, quit; nothing written by looking), `TestUIApplyWithRefusedConflictsIsShownAsSuccess` (a protective refusal is not shown as a failure).

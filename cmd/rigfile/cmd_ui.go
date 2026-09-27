@@ -57,10 +57,18 @@ func cmdUI(args []string, e env) int {
 		if errb.Len() > 0 {
 			text += "\n" + errb.String()
 		}
-		if rc != 0 {
+		switch rc {
+		case 0:
+			return text, nil
+		case 3:
+			// "applied but some items were refused (conflicts)" (main.go's own exit codes): the refusal is the
+			// tool protecting something it does not own, not a failure. The transcript already says so (the "!"
+			// lines and the "N item(s) were refused" summary); showing "That did not work" on top of that reads
+			// as an error and is not one.
+			return text, nil
+		default:
 			return text, fmt.Errorf("rigfile %s finished with code %d", verb, rc)
 		}
-		return text, nil
 	}
 	var storeOnce sync.Once
 	var store secrets.Store
