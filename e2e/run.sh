@@ -1,11 +1,15 @@
 #!/bin/sh
 # Container E2E: for each distro, start from a fresh image, apply the e2e rig as an unprivileged user
-# and check the result. Usage: e2e/run.sh [ubuntu|fedora|alpine|arch ...]   (default: ubuntu fedora alpine)
+# and check the result. Usage: e2e/run.sh [ubuntu|fedora|alpine|debian|arch ...]   (default: all but arch)
 # macOS is not covered here: see e2e/README.md for the owner-run Tart procedure.
 #
 # alpine proves Rigfile degrades honestly on a distro its tool catalog has no entries for at all (musl libc,
 # busybox shell, no apk in catalog/tools.yaml: "no supported package manager found", not a crash) -- not
 # verified apk package support, which would need real package names researched first.
+#
+# debian is the closest safe proxy for Raspberry Pi OS (Debian-based) without real Pi hardware; catalog/tools.yaml
+# already records Debian-bookworm-specific package facts (distinct from Ubuntu's) but this distro was never
+# run through the scenario until 2026-09-27.
 #
 # arch (pacman) is NOT in the default set: archlinux has no official arm64 image, so on an Apple Silicon host
 # it only runs under QEMU's amd64 emulation, which is unreliable for this Go binary -- found live, 2026-09-27:
@@ -16,7 +20,7 @@
 # verified only from catalog/tools.yaml (code review, not an end-to-end run).
 set -eu
 cd "$(dirname "$0")/.."
-distros="${*:-ubuntu fedora alpine}"
+distros="${*:-ubuntu fedora alpine debian}"
 hostarch="$(docker info --format '{{.Architecture}}')"
 case "$hostarch" in x86_64) hostgoarch=amd64 ;; aarch64|arm64) hostgoarch=arm64 ;; *) echo "unsupported docker arch $hostarch" >&2; exit 1 ;; esac
 

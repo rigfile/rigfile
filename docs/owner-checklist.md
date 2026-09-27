@@ -51,7 +51,7 @@ One list, drawn from the per-stage owner-check documents (linked in each row). N
 **Live services:** the Sigstore trusted-root fetch (TUF), a real keyless signature from GitHub Actions, OSV lookups on real packages, the static-analysis rules against real-world rigs (`docs/stage-6-owner-checks.md` §3).
 **Browser checks:** the registry pages (diffs, collections, organisations, a hostile file shown as text), `/admin` actions (`docs/stage-6-owner-checks.md` §3.5, `docs/stage-8-owner-checks.md` §4).
 **Private sync:** two real machines and a private git repository: `init`, `join`, `approve` (compare the fingerprints), `finish`, `track`, `push`, `pull`, `revoke` (`docs/private-sync.md` §7).
-**ARM and other distros** (Raspberry Pi OS arm64, Alpine, Windows on ARM): `self-update`, `apply`, `broker run`. Partial progress 2026-09-27: `e2e/run.sh` (Ubuntu, Fedora) now runs natively on real arm64 hardware (this is an Apple Silicon dev machine; Docker containers there are real arm64, not emulated) every time it's been run, not just on CI's amd64 runners; a real Raspberry Pi and Alpine remain open, as does Windows on ARM.
+**ARM and other distros** (Raspberry Pi OS arm64, Alpine, Windows on ARM): `self-update`, `apply`, `broker run`. Progress 2026-09-27: `e2e/run.sh` now runs Ubuntu, Fedora, Alpine and Debian natively on real arm64 hardware (this is an Apple Silicon dev machine); Alpine confirmed honest degradation on musl/busybox with no `apk` catalog entries; Debian is the closest safe proxy for Raspberry Pi OS available without real Pi hardware, and passed. Still open: real Raspberry Pi hardware itself, and Windows on ARM.
 
 ## E. Known gaps you should be told about, not tasks
 

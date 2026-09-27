@@ -1,0 +1,14 @@
+FROM debian:bookworm-slim
+# The closest safe proxy for Raspberry Pi OS (Debian-based) this project can run without real Pi hardware.
+# catalog/tools.yaml already records Debian-bookworm-specific package observations (distinct from Ubuntu's,
+# e.g. gh's version, uv's unavailability outside sid/forky) but this distro was never run through the e2e
+# scenario until now.
+RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git ca-certificates >/dev/null && rm -rf /var/lib/apt/lists/*
+RUN useradd -m dev
+COPY build/rigfile /usr/local/bin/rigfile
+COPY fake-claude /usr/local/bin/claude
+COPY --chown=dev rig /rig
+COPY scenario.sh /scenario.sh
+USER dev
+ENV HOME=/home/dev
+CMD ["/bin/sh", "/scenario.sh"]

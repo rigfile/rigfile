@@ -59,7 +59,7 @@ jobs:
           go-version-file: go.mod
       # ubuntu-latest is a native amd64 runner, so arch (pacman) is reliable here; e2e/run.sh's own default
       # excludes it because it is not reliable under QEMU emulation on an Apple Silicon dev machine.
-      - run: e2e/run.sh ubuntu fedora alpine arch
+      - run: e2e/run.sh ubuntu fedora alpine debian arch
 
   registry:
     # The registry against a real Postgres: store, API, auth, scan worker, pages, and the CLI end to end.
