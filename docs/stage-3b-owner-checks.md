@@ -10,7 +10,7 @@ Stage 3b is built and tested against fakes (a fake Hugging Face, a fake Ollama, 
 
 | Decision | Recommendation |
 |---|---|
-| Re-scope the exit criterion as above | yes; a gateway to Claude Code is unsupported by Anthropic and a Responses bridge for Codex was never verified |
+| ~~Re-scope the exit criterion as above~~ | **Confirmed 2026-09-27**: yes; a gateway to Claude Code is unsupported by Anthropic, and the Codex Responses bridge remains unbuilt — re-checked against OpenAI's current docs (`docs/targets/codex.md`, checked 2026-09-27): `--oss`'s local provider is a closed `ollama\|lmstudio` enum (mlx-lm cannot be added to it), and a custom `model_providers` entry needs the Responses API, which `mlx_lm.server` does not speak. Building the bridge means a real translation server, considered and deferred as its own future milestone |
 | Codex only on Ollama's default port | keep until someone verifies how `--oss` is pointed elsewhere (`docs/models.md` §4) |
 | Claude Code through Ollama stays "experimental" | yes; say so in the README |
 | Catalog stubs (32 GB Apple, NVIDIA llama.cpp) stay unapplied | yes, until researched; the 32 GB Mac gets the 16 GB model meanwhile |
