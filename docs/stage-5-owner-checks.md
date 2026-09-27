@@ -10,22 +10,22 @@ The registry is built and tested here against a real Postgres, a fake GitHub and
 
 | Decision | Notes |
 |---|---|
-| **Domain and hosting** | The CLI has no default registry URL until you have one (`RIGFILE_REGISTRY`, `--registry`). Where does it run (a VM with Docker, Fly.io, Render, Cloud Run, Kubernetes)? It is one stateless container plus Postgres plus a bucket. |
-| **Bucket** | Cloudflare R2 is what the plan suggests; any S3-compatible bucket works (`RIGFILE_REGISTRY_BLOB=s3` and the `RIGFILE_REGISTRY_S3_*` variables). Not tested against a real R2 endpoint: only against a fake S3 server. |
-| ~~**GitHub sign-in**~~ | Decided/done 2026-09-26: OAuth App created under the `rigfile` org, homepage and callback `https://rigfile.bytebuilderslab.app` / `/auth/callback`, wildcard matching off, device flow off (Rigfile has its own). `RIGFILE_REGISTRY_GITHUB_CLIENT_ID=Ov23licYmVqaKBqv1rNb`; set `..._CLIENT_SECRET` (or `..._SECRET_FILE`) from the platform's own secret store at deploy time, never in the repo. No scopes are requested. **Still never tested against the real github.com**: do a real sign-in once staging is deployed. |
+| ~~**Domain and hosting**~~ | Decided/done 2026-09-27: Fly.io (managed platform, one app, two machines, `auto_stop_machines`), Neon Postgres (point-in-time restore), Cloudflare R2. Domain `rigfile.bytebuilderslab.app`, CNAME to the Fly `.fly.dev` hostname per Fly's own guidance for subdomains. Live at `https://rigfile.bytebuilderslab.app`. |
+| ~~**Bucket**~~ | Decided/done 2026-09-27: Cloudflare R2, real endpoint (`<account-id>.r2.cloudflarestorage.com`), scoped API token. Publish → scan → blob write confirmed working against the real bucket. |
+| ~~**GitHub sign-in**~~ | Decided/done 2026-09-26, **tested live 2026-09-27**: OAuth App under the `rigfile` org, homepage and callback `https://rigfile.bytebuilderslab.app` / `/auth/callback`, wildcard matching off, device flow off (Rigfile has its own). `RIGFILE_REGISTRY_GITHUB_CLIENT_ID=Ov23licYmVqaKBqv1rNb`; `..._CLIENT_SECRET` set via `fly secrets set` by the owner directly, never pasted to me. No scopes requested. A real `rigfile login` against the real deployment worked. |
 | ~~**Admins**~~ | Decided 2026-09-26: sole admin while in staging, checked on-demand (a report or takedown request), not on a schedule. `RIGFILE_REGISTRY_ADMINS=digitaldreamer3462`. Revisit before public launch or when a second person needs `/admin` — there is still no alerting (§6 below), so a report is only seen by running `rigfile-registry admin reports`. |
 | ~~**Retention of rejected uploads**~~ | Decided 2026-09-26: delete the archive at once (docs/registry-security.md §2); the rejection reason stays on the version row so the uploader still sees why. |
 | ~~**GitHub rename hijack**~~ | Decided 2026-09-26: reserve vacated logins that own rigs (built; docs/registry-security.md §1). Back up the database before migration 0005 as well. |
 | **Multi-instance** | The rate limiter is per process. Run one instance until a shared limiter exists. |
 
-## 3. First deployment (staging first)
+## 3. First deployment (staging first) — **done 2026-09-27**
 
-1. Provision Postgres 15+ and the bucket; keep credentials in the platform's secret store, never in the image.
-2. Run the image (`Dockerfile.registry`) behind a TLS-terminating proxy. Set `RIGFILE_REGISTRY_PUBLIC_URL=https://<domain>`. If the proxy is the only thing that can reach the container, set `RIGFILE_REGISTRY_TRUST_PROXY=1` **only if** it appends the real client address as the last `X-Forwarded-For` entry.
-3. `rigfile-registry migrate` (also runs at start). `GET /healthz`.
-4. Sign in with GitHub in a browser; run `rigfile login --registry https://<domain>`; publish a rig (`rigfile publish <dir> --to-registry`); pull it from another machine.
-5. Back up the database and the bucket; test a restore. **No procedure is provided by the software.**
-6. Watch `rigfile-registry admin reports` and `admin audit` (there is no email or alerting).
+1. ~~Provision Postgres 15+ and the bucket~~ — Neon Postgres + Cloudflare R2, credentials set via `fly secrets set`, never in the image or the repo.
+2. ~~Run the image behind a TLS-terminating proxy~~ — Fly.io terminates TLS; `RIGFILE_REGISTRY_PUBLIC_URL=https://rigfile.bytebuilderslab.app`; `RIGFILE_REGISTRY_TRUST_PROXY=1` set (Fly's proxy appends the real client address as the last `X-Forwarded-For` entry).
+3. ~~`rigfile-registry migrate`; `GET /healthz`~~ — migrations run automatically on start (the Dockerfile's `CMD ["serve"]`); `/healthz` returns healthy, TLS verified.
+4. ~~Sign in with GitHub; publish; pull~~ — real `rigfile login` and real `rigfile publish <dir> --to-registry` both done against the live deployment (see `docs/STATUS.md` "Registry: live deployment" for the one real finding: the pin-check blocks *any* registry upload, private or public, not only `--public` ones). **Still open: pulling a published rig from a second real machine/account** — not yet exercised against the live deployment (the container E2E already proves the mechanism).
+5. Back up the database and the bucket; test a restore. **Still open** — no restore has been rehearsed yet, and no procedure is provided by the software.
+6. Watch `rigfile-registry admin reports` and `admin audit` (there is no email or alerting). **Still open** — not yet exercised against the live deployment.
 
 ## 4. Legal
 
@@ -43,6 +43,6 @@ Decide who reads reports, how fast, and what your escalation is for malware and 
 
 | Criterion | Evidence today | Open |
 |---|---|---|
-| `rigfile publish` → page appears after the scan → another user `rigfile pull owner/name` works | container E2E (`e2e/registry.sh`: real image, Postgres, two machines) and `TestRegistryEndToEndPublishThenPullOnAnotherMachine` | the same on a real deployment with real GitHub sign-in |
+| `rigfile publish` → page appears after the scan → another user `rigfile pull owner/name` works | container E2E (`e2e/registry.sh`: real image, Postgres, two machines) and `TestRegistryEndToEndPublishThenPullOnAnotherMachine`; **`rigfile login` + `rigfile publish --to-registry` done live 2026-09-27 against the real deployment**, page confirmed | pulling the published rig from a second real account/machine against the live deployment |
 | Security review of auth, upload and scanning complete | self-review with tests and `govulncheck` | **external review (§6)** |
 | Terms, acceptable-use policy, takedown process | drafts and working tools | lawyer (§4) |

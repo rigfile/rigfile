@@ -132,9 +132,17 @@ Design call worth knowing: one Go service (same scanner and validation code as t
 
 Proven: store, API, auth flows, scan worker, pages (including hostile-content tests) and the CLI end to end against a real Postgres (`scripts/registry-test.sh`; CI job `registry (postgres)`); container E2E with the real image and two simulated machines; `govulncheck` clean.
 
-Not proven: real GitHub sign-in, a real S3/R2 bucket, a real deployment, Windows/macOS runs of the new tests (they skip without a database), legal review, external security review, real users. See `docs/stage-5-owner-checks.md`.
+~~Not proven: real GitHub sign-in, a real S3/R2 bucket, a real deployment~~ — **done 2026-09-27**, see "Registry: live deployment" below. Still not proven: Windows/macOS runs of the new tests (they skip without a database), legal review, external security review, real users other than the owner. See `docs/stage-5-owner-checks.md`.
 
 Incident during the build: my first host-side E2E script ran the real CLI and triggered a macOS Keychain dialog on the owner's Mac (nothing was stored). Fixed with `RIGFILE_SECRETS_BACKEND=file`, which every host script must set.
+
+### Registry: live deployment (`main`, 2026-09-27)
+
+Deployed to production: **`https://rigfile.bytebuilderslab.app`** (Fly.io app `rigfile`, two `app` machines, `auto_stop_machines`; Neon Postgres, point-in-time restore up to 30 days; Cloudflare R2 for the blob bucket; DNS is a CNAME at the owner's registrar to the Fly `.fly.dev` hostname, per Fly's own guidance for a subdomain). `/healthz` and TLS both verified. GitHub OAuth App `Ov23licYmVqaKBqv1rNb` (org `rigfile`), secrets set via `fly secrets set` by the owner directly (never pasted to me).
+
+Owner then ran the exit criterion end to end for real: `rigfile login`, `rigfile publish <dir> --to-registry` (private by default), the registry page. One real finding along the way: **the pin-check applies to every registry publish, private or public** — `publish.Prepared.Blocked()` runs before the `--public` branch in `cmd_publish.go`, so an unpinned `uvx`/`npx`/`pipx` package blocks even a private upload (rationale: a private rig can be flipped public later without a new upload, so the bar is enforced once, at upload time). Not a bug; documented here since the CLI's own message ("a public rig must pin what it runs") reads as public-only. Fixed by pinning the owner's own `alpaca-mcp-server` entry to the real current PyPI release. Publish → scan → registry page all confirmed working live.
+
+Not yet run: a restore drill from the Neon backup, and a second real GitHub account pulling a published rig from a different machine (the container E2E already proves the mechanism; this would prove it against the live deployment).
 
 
 ## Stage 6: built, awaiting owner steps

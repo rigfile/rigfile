@@ -30,7 +30,7 @@ One list, drawn from the per-stage owner-check documents (linked in each row). N
 - **Release signing:** generate the minisign key, set the GitHub secrets and variable, create the `release` environment, keep an offline backup, write the key-loss incident plan (`docs/stage-4-owner-checks.md` §3). Dry-run the `release` workflow on a scratch repository first.
 - **Code signing:** Apple Developer ID ($99/yr) and a Windows Authenticode/Azure Trusted Signing identity (§4 there). Until then installers rely on minisign and SHA-256.
 - **Package channels:** Homebrew tap, Scoop bucket, winget PR, npm, PyPI, apt hosting; dnf/rpm is not built (§5 there).
-- **Deploy the registry** (staging first), real GitHub sign-in, backups **and a tested restore** (`docs/stage-5-owner-checks.md` §3).
+- ~~**Deploy the registry**~~ **done 2026-09-27**: live at `https://rigfile.bytebuilderslab.app` (Fly.io + Neon + Cloudflare R2); real GitHub sign-in and a real `publish --to-registry` both confirmed. Still open: backups **and a tested restore**, and a pull from a second real account (`docs/stage-5-owner-checks.md` §3).
 - **Lawyer:** terms, acceptable use, takedown and a privacy policy (the legal pages are drafts; add the newer stored facts: verification notes, signer identities, first-seen dates, and the audit log of hosts the broker keeps only locally) (`docs/stage-5-owner-checks.md` §4, `docs/stage-6-owner-checks.md` §5).
 - **OAuth apps** for the vendor login flows (no client ids are registered) (`docs/stage-4-owner-checks.md` §6.7).
 - **Abuse handling:** who reads reports, how fast, what you escalate (`docs/stage-5-owner-checks.md` §5).
