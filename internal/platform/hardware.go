@@ -136,7 +136,7 @@ func RealProbe(goos, goarch, cachePath string) HWProbe {
 	return HWProbe{
 		GOOS: goos, GOARCH: goarch, Path: cachePath,
 		Run: func(name string, args ...string) (string, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second) // a cold PowerShell start on a CI runner exceeded 10 s
 			defer cancel()
 			out, err := exec.CommandContext(ctx, name, args...).Output()
 			return string(out), err

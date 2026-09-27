@@ -1,0 +1,6 @@
+{
+  "servers": {
+    "alpaca": {"args":["exec","--secret","ALPACA_API_KEY=alpaca/api_key","--env","ALPACA_PAPER=true","--","npx","-y","alpaca-mcp@1.4.2"],"command":"rigfile","type":"stdio"},
+    "docs": {"type":"http","url":"https://mcp.example.test/mcp"}
+  }
+}

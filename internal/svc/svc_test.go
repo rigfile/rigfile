@@ -30,12 +30,12 @@ func TestUnitsCarryArgumentsAndEnvironment(t *testing.T) {
 			t.Errorf("plist missing %q:\n%s", want, got)
 		}
 	}
-	if !strings.HasSuffix(u.Path, "Library/LaunchAgents/com.rigfile.model-local-coder.plist") {
+	if !strings.HasSuffix(filepath.ToSlash(u.Path), "Library/LaunchAgents/com.rigfile.model-local-coder.plist") {
 		t.Fatal(u.Path)
 	}
 	u, _ = UnitFor(spec("linux"))
 	got = string(u.Content)
-	if !strings.Contains(got, `ExecStart="/usr/local/bin/ollama" serve`) || !strings.Contains(got, `Environment="AAA=1"`) || !strings.Contains(got, `Environment="OLLAMA_HOST=127.0.0.1:11434"`) || !strings.HasSuffix(u.Path, "rigfile-model-local-coder.service") {
+	if !strings.Contains(got, `ExecStart="/usr/local/bin/ollama" serve`) || !strings.Contains(got, `Environment="AAA=1"`) || !strings.Contains(got, `Environment="OLLAMA_HOST=127.0.0.1:11434"`) || !strings.HasSuffix(filepath.ToSlash(u.Path), "rigfile-model-local-coder.service") {
 		t.Fatalf("%s", got)
 	}
 	// environment is written in a stable order
