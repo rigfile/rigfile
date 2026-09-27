@@ -29,6 +29,7 @@ import (
 	"github.com/rigfile/rigfile/internal/models"
 	"github.com/rigfile/rigfile/internal/platform"
 	"github.com/rigfile/rigfile/internal/rigd"
+	"github.com/rigfile/rigfile/internal/sandbox"
 	"github.com/rigfile/rigfile/internal/sigverify"
 	"github.com/rigfile/rigfile/internal/source"
 	"github.com/rigfile/rigfile/internal/tools"
@@ -136,6 +137,8 @@ func run(args []string, e env) int {
 		return cmdSecrets(rest, e)
 	case "exec":
 		return cmdExec(rest, e)
+	case sandbox.LandlockExecSubcommand: // hidden: internal/sandbox re-execs this binary through itself (Linux Level 2 confinement)
+		return sandbox.LandlockExecMain(rest)
 	case "hook":
 		return cmdHook(rest, e)
 	case "help", "-h", "--help":

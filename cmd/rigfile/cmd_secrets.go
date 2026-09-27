@@ -6,14 +6,17 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
 
 	"github.com/rigfile/rigfile/internal/execshim"
 	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/sandbox"
 	"github.com/rigfile/rigfile/internal/secrets"
 	"github.com/rigfile/rigfile/internal/session"
 	"github.com/rigfile/rigfile/internal/state"
@@ -238,16 +241,32 @@ type kvFlags []string
 func (k *kvFlags) String() string     { return strings.Join(*k, ",") }
 func (k *kvFlags) Set(s string) error { *k = append(*k, s); return nil }
 
+// proxyPort extracts the numeric port from a broker session's proxy URL (http://user:pass@127.0.0.1:PORT), the
+// one loopback destination a confined child under Level 2 is allowed to reach.
+func proxyPort(proxyURL string) (int, error) {
+	u, err := url.Parse(proxyURL)
+	if err != nil {
+		return 0, fmt.Errorf("could not read the broker's proxy address: %w", err)
+	}
+	p, err := strconv.Atoi(u.Port())
+	if err != nil {
+		return 0, fmt.Errorf("the broker's proxy address %q has no port", proxyURL)
+	}
+	return p, nil
+}
+
 func cmdExec(args []string, e env) int {
 	fs := flag.NewFlagSet("exec", flag.ContinueOnError)
 	fs.SetOutput(e.err)
 	var secretFlags, envFlags, allowFlags, bindFlags kvFlags
 	var server string
+	var confine bool
 	fs.Var(&secretFlags, "secret", "ENV=ref: set ENV from a stored secret (repeatable)")
 	fs.Var(&envFlags, "env", "K=V: set a literal, non-secret variable (repeatable)")
 	fs.Var(&allowFlags, "allow", "host[,host]: the server's network.allow (Level 2, repeatable)")
 	fs.Var(&bindFlags, "bind", "ref=host[,host]: where a secret may be sent (informational: the broker uses the policy approved by `rigfile apply`)")
 	fs.StringVar(&server, "server", "", "the server's name (Level 2: audit log and broker exclusions)")
+	fs.BoolVar(&confine, "confine", false, "Level 2 only: confine the server's process so it can reach only the broker's proxy, not its control API (docs/rigd.md §8); fails closed if unavailable")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -294,6 +313,7 @@ func cmdExec(args []string, e env) int {
 	if server == "" {
 		server = filepath.Base(cmd[0])
 	}
+	var confinePolicy *sandbox.Policy
 	if rd, derr := rigdDir(e); derr == nil {
 		l2, notice, lerr := startLevel2(rd, server, allow, sec)
 		if lerr != nil {
@@ -309,7 +329,20 @@ func cmdExec(args []string, e env) int {
 				lit[k] = v
 			}
 			sec = map[string]string{} // the real values never reach this process
+			if confine {
+				port, perr := proxyPort(l2.reply.ProxyURL)
+				if perr != nil {
+					fmt.Fprintln(e.err, "rigfile:", perr)
+					return 1
+				}
+				confinePolicy = &sandbox.Policy{AllowLoopbackPorts: []int{port}}
+			}
 		}
+	}
+	if confine && confinePolicy == nil {
+		// no Level 2 session for this launch (broker disabled, excluded, or nothing to protect): confine still
+		// applies, just with no network destination at all, since there is no proxy port to allow through.
+		confinePolicy = &sandbox.Policy{}
 	}
 	var st secrets.Store
 	if len(sec) > 0 {
@@ -320,7 +353,7 @@ func cmdExec(args []string, e env) int {
 	}
 	code, err := execshim.Run(context.Background(), execshim.Spec{
 		Command: cmd, Secrets: sec, Literal: lit, Store: st, Plat: pi,
-		Getenv: e.getenv, Stdin: e.in, Stdout: e.out, Stderr: e.err,
+		Getenv: e.getenv, Stdin: e.in, Stdout: e.out, Stderr: e.err, Confine: confinePolicy,
 	})
 	if err != nil {
 		fmt.Fprintln(e.err, "rigfile:", err)

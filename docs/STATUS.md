@@ -165,6 +165,8 @@ Not proven: real browsers, a real registry deployment, real teams, the editors' 
 
 **Broker-token gap (branch `stage-8b`):** closed as far as software on one account can: session requests carry no hosts, and the broker builds sessions from the policy `rigfile apply` writes into `state.json` (`docs/rigd.md` §3a). The red team is now 32 attempts with no "evades" row; the residue is "borrow another approved server's session" (spend its key at its own host), documented as not stopped.
 
+**Broker session isolation (`main`, 2026-09-27, owner decision):** `rigfile exec --confine` narrows the residue above: a server launched with `--confine` under Level 2 is network-sandboxed (macOS `sandbox-exec`, Linux Landlock via a hidden re-exec helper) so it can reach the broker's proxy but not its control API — closing the case where the borrowing process is a server Rigfile itself launched, which is the broker's actual threat model (`docs/rigd.md` §1). Verified live on macOS (`TestExecConfineBlocksTheBrokerControlAPI`); **UNVERIFIED on Linux** (needs Landlock ABI 4 / kernel 6.7+, absent on this project's own dev/CI machines, so only the fail-closed path is exercised there). Opt-in per launch; not wired into the manifest yet. A wholly separate process that never went through `rigfile exec` is still not covered (`docs/rigd.md` §8).
+
 **Private sync (branch `stage-8c`, from `stage-8b`):** built (`docs/private-sync.md` §7): `internal/vault` and `rigfile sync`, end-to-end encrypted, signed roster chain, rollback protection, directory or git transport, red-teamed against a hostile storage. Also: a `private:` path that the rig ships is now a manifest error.
 ## Stage 3b: local models, built, awaiting owner steps
 

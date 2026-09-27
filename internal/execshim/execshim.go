@@ -27,8 +27,13 @@ import (
 	"syscall"
 
 	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/sandbox"
 	"github.com/rigfile/rigfile/internal/secrets"
 )
+
+// wrapSandbox is sandbox.Wrap, overridable in tests so they do not depend on a real confinement backend being
+// present on the machine running them.
+var wrapSandbox = sandbox.Wrap
 
 var envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
@@ -43,6 +48,10 @@ type Spec struct {
 	Stdin   io.Reader
 	Stdout  io.Writer
 	Stderr  io.Writer
+	// Confine, when non-nil, runs the command under internal/sandbox instead of directly: opt-in Level 2 process
+	// confinement (docs/rigd.md §8, owner decision 2026-09-27). If the platform or kernel cannot honour it, Run
+	// fails closed (the command is never started unconfined).
+	Confine *sandbox.Policy
 }
 
 // BuildEnv returns the child's environment as KEY=VALUE strings, sorted by key for determinism.
@@ -106,7 +115,16 @@ func Run(ctx context.Context, s Spec) (int, error) {
 	if err != nil {
 		return 127, fmt.Errorf("%s was not found on PATH (install it, or fix the server's command): %w", s.Command[0], err)
 	}
-	cmd := exec.CommandContext(ctx, prog, s.Command[1:]...)
+	runPath, runArgs := prog, s.Command[1:]
+	if s.Confine != nil {
+		w, err := wrapSandbox(prog, s.Command[1:], *s.Confine)
+		if err != nil {
+			return 1, fmt.Errorf("confinement was requested for %s but is not available: %w", s.Command[0], err)
+		}
+		defer w.Cleanup()
+		runPath, runArgs = w.Path, w.Args
+	}
+	cmd := exec.CommandContext(ctx, runPath, runArgs...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = s.Stdin, s.Stdout, s.Stderr
 

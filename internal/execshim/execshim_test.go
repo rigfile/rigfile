@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/zalando/go-keyring"
 
 	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/sandbox"
 	"github.com/rigfile/rigfile/internal/secrets"
 )
 
@@ -110,6 +112,57 @@ func TestExitCodeIsPropagated(t *testing.T) {
 	_, code, err := run(t, Spec{Literal: map[string]string{"RIGFILE_TEST_HELPER": "1", "RIGFILE_TEST_EXIT": "7"}})
 	if err != nil || code != 7 {
 		t.Fatalf("code=%d err=%v, want 7", code, err)
+	}
+}
+
+// TestConfineWrapsTheCommand proves Run hands the resolved program and args to the sandbox backend, runs what it
+// returns instead of the original command, and always calls Cleanup (owner decision 2026-09-27, docs/rigd.md §8).
+func TestConfineWrapsTheCommand(t *testing.T) {
+	var gotProg string
+	var gotArgs []string
+	var gotPolicy sandbox.Policy
+	cleaned := false
+	orig := wrapSandbox
+	defer func() { wrapSandbox = orig }()
+	wrapSandbox = func(prog string, args []string, policy sandbox.Policy) (*sandbox.Wrapped, error) {
+		gotProg, gotArgs, gotPolicy = prog, args, policy
+		// route through the same real test helper, proving Run truly launches what Wrap returned
+		return &sandbox.Wrapped{Path: os.Args[0], Args: []string{"-test.run=^TestHelperProcess$"}, Cleanup: func() { cleaned = true }}, nil
+	}
+	policy := sandbox.Policy{AllowLoopbackPorts: []int{4321}}
+	env, code, err := run(t, Spec{Literal: map[string]string{"RIGFILE_TEST_HELPER": "1"}, Confine: &policy})
+	if err != nil || code != 0 {
+		t.Fatalf("code=%d err=%v", code, err)
+	}
+	if env["RIGFILE_TEST_HELPER"] != "1" {
+		t.Fatalf("the confined process must still be the real command: %v", env)
+	}
+	if gotProg == "" || len(gotArgs) == 0 {
+		t.Fatalf("Wrap must receive the resolved program and its args: prog=%q args=%v", gotProg, gotArgs)
+	}
+	if len(gotPolicy.AllowLoopbackPorts) != 1 || gotPolicy.AllowLoopbackPorts[0] != 4321 {
+		t.Fatalf("Wrap must receive the policy unchanged: %+v", gotPolicy)
+	}
+	if !cleaned {
+		t.Fatal("Cleanup must run")
+	}
+}
+
+// TestConfineFailsClosed proves that when confinement cannot be honoured, Run refuses rather than falling back to
+// an unconfined launch.
+func TestConfineFailsClosed(t *testing.T) {
+	orig := wrapSandbox
+	defer func() { wrapSandbox = orig }()
+	wrapSandbox = func(prog string, args []string, policy sandbox.Policy) (*sandbox.Wrapped, error) {
+		return nil, sandbox.ErrUnsupported
+	}
+	policy := sandbox.Policy{}
+	env, code, err := run(t, Spec{Literal: map[string]string{"RIGFILE_TEST_HELPER": "1"}, Confine: &policy})
+	if err == nil || !errors.Is(err, sandbox.ErrUnsupported) {
+		t.Fatalf("must fail closed, got code=%d err=%v", code, err)
+	}
+	if len(env) != 0 {
+		t.Fatal("the command must never start when confinement is unavailable")
 	}
 }
 
