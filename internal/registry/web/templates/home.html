@@ -1,7 +1,7 @@
 {{template "head" .}}
 <h1>Share how you set up your AI tools</h1>
-<p>Rigfile rigs bundle instructions, skills, MCP servers, hooks and permissions for Claude Code, Codex, Gemini CLI and Cursor. Pull one with a single command; secrets never travel with a rig.</p>
-<pre><code>rigfile pull owner/name --registry {{.Data.RegistryURL}}</code></pre>
+<p class="muted">Rigfile rigs bundle instructions, skills, MCP servers, hooks and permissions for Claude Code, Codex, Gemini CLI and Cursor. Pull one with a single command; secrets never travel with a rig.</p>
+<div class="hero-cmd"><pre><code>rigfile pull owner/name --registry {{.Data.RegistryURL}}</code></pre></div>
 <h2>Popular rigs</h2>
 {{template "rigs" .Data}}
 {{template "foot" .}}

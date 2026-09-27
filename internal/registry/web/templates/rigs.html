@@ -1,2 +1,5 @@
-{{define "rigs"}}{{range .Rigs}}<div class="card"><h3><a href="/r/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a> {{if .Latest}}<span class="tag">{{.Latest}}</span>{{end}}{{if eq .Visibility "private"}}<span class="tag">private</span>{{end}}</h3>
-<div>{{.Description}}</div><div class="muted">★ {{.Stars}}</div></div>{{else}}<p class="muted">{{.Empty}}</p>{{end}}{{end}}
+{{define "rigs"}}{{if .Rigs}}<div class="rig-list">{{range .Rigs}}<div class="rig-row">
+<div><h3><a href="/r/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a> {{if .Latest}}<span class="tag">{{.Latest}}</span>{{end}}{{if eq .Visibility "private"}}<span class="tag">private</span>{{end}}</h3>
+{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</div>
+<div class="meta">★ {{.Stars}}</div></div>{{end}}</div>
+{{else}}<div class="empty">{{.Empty}}</div>{{end}}{{end}}

@@ -1,7 +1,7 @@
 {{template "head" .}}
 <h1>Sign in the Rigfile CLI</h1>
 <p>A <code>rigfile login</code> on another machine asked to sign in as <strong>{{.User.Login}}</strong>. Confirm only if the code below is the one your terminal shows.</p>
-<p style="font-size:2em;letter-spacing:.1em"><code>{{.Code}}</code></p>
+<p><code class="otp">{{.Code}}</code></p>
 <form action="/device" method="post">
 <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="user_code" value="{{.Code}}">
 <button type="submit" name="decision" value="approve">Approve</button>

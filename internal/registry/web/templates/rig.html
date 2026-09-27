@@ -1,7 +1,14 @@
 {{template "head" .}}
 {{with .Data}}
-<h1>{{.Rig.Owner}}/{{.Rig.Name}}{{if eq .Rig.Visibility "private"}} <span class="tag">private</span>{{end}}</h1>
-<p>{{.Rig.Description}}</p>
+<div class="repo-head"><div class="row">
+<div><h1>{{.Rig.Owner}}<span class="sep">/</span>{{.Rig.Name}}{{if eq .Rig.Visibility "private"}} <span class="tag">private</span>{{end}}</h1>
+{{if .Rig.Description}}<p class="desc">{{.Rig.Description}}</p>{{end}}</div>
+<div class="actions">
+{{if $.User}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/star" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button name="action" value="{{if .Rig.Starred}}unstar{{else}}star{{end}}" type="submit">{{if .Rig.Starred}}★ Unstar{{else}}☆ Star{{end}} ({{.Rig.Stars}})</button></form>{{else}}<span class="muted">★ {{.Rig.Stars}}</span>{{end}}
+{{if .IsOwner}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/visibility" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{if eq .Rig.Visibility "private"}}<button name="visibility" value="public" type="submit">Make public</button>{{else}}<button name="visibility" value="private" type="submit">Make private</button>{{end}}</form>{{end}}
+</div>
+</div></div>
 {{if .Version}}
 {{if eq .Version.Status "yanked"}}<div class="banner warn">This version was <strong>yanked</strong> by its publisher: {{.Version.YankReason}}</div>{{end}}
 {{if eq .Version.Status "pending"}}<div class="banner">This version is still being scanned. Only you can see it.</div>{{end}}
@@ -22,7 +29,7 @@
 <div class="card"><strong>Install</strong><pre><code>{{.Install}}</code></pre>
 <div class="muted">Review the plan before you approve: a rig can run hooks and MCP servers.</div></div>
 <div class="card"><strong>Version {{.Version.Version}}</strong>
-<div class="muted">sha256 {{slice .Version.TarballSHA256 0 12}}…</div>
+<div class="muted mono">sha256 {{slice .Version.TarballSHA256 0 12}}…</div>
 {{if .Version.Targets}}<div>Targets: {{range .Version.Targets}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .Layers}}<div>Builds on: {{range .Layers}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .Version.NeedsSecrets}}<div>Secrets you will be asked for: {{range .Version.NeedsSecrets}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
@@ -31,16 +38,13 @@
 <div class="muted">Add this to your own <code>rigfile.yaml</code> to layer on top of this rig, or run <code>rigfile fork {{.Rig.Owner}}/{{.Rig.Name}} --name you/your-rig</code> to start from a copy.</div></div>
 {{if .DerivedN}}<div class="card"><strong>Built on this rig ({{.DerivedN}})</strong><ul>{{range .Derived}}<li><a href="/r/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a> <span class="muted">{{.Stars}} ★</span></li>{{end}}</ul></div>{{end}}
 {{if .Trust}}<div class="card"><strong>Trust</strong>
-<div>Publisher <a href="/u/{{.Trust.Publisher.Login}}">{{.Trust.Publisher.Login}}</a>{{if .Trust.Publisher.Verified}} <span class="tag ok">verified {{.Trust.Publisher.VerifiedKind}}</span>{{end}}</div>
+<div class="trust-pub"><span class="identicon">{{slice .Trust.Publisher.Login 0 1}}</span><div>Publisher <a href="/u/{{.Trust.Publisher.Login}}">{{.Trust.Publisher.Login}}</a>{{if .Trust.Publisher.Verified}} <span class="tag ok">verified {{.Trust.Publisher.VerifiedKind}}</span>{{end}}</div></div>
 <div class="muted">first seen {{.Trust.Publisher.FirstSeen.Format "2006-01-02"}} · {{.Trust.Publisher.PublicRigs}} public rig(s)</div>
 <div>{{if .Trust.Signature.Signed}}{{if .Trust.Signature.ByPublisher}}<span class="ok">Signed by the publisher</span>{{else}}<span class="warn">Signed, but not by the publisher's identity</span>{{end}}<div class="muted">{{.Trust.Signature.Subject}}</div>{{else}}<span class="muted">Not signed</span>{{end}}</div>
 <div class="muted">{{.Trust.Versions}} version(s) · created {{.Trust.RigCreatedAt.Format "2006-01-02"}}</div>
 <div class="muted">analysis: {{index .Trust.Analysis "danger"}} danger, {{index .Trust.Analysis "caution"}} caution</div>
 {{if or .Trust.History.YankedVersions .Trust.History.RemovedVersionsPublisher}}<div class="warn">{{.Trust.History.YankedVersions}} yanked version(s); {{.Trust.History.RemovedVersionsPublisher}} removed by moderators across this publisher's rigs</div>{{end}}</div>{{end}}
 <div class="card"><strong>Versions</strong><ul>{{range .Versions}}<li><a href="/r/{{$r.Owner}}/{{$r.Name}}/v/{{.Version}}">{{.Version}}</a> <span class="muted">{{.Status}}</span> · <a href="/r/{{$r.Owner}}/{{$r.Name}}/diff?to={{.Version}}">changes</a></li>{{end}}</ul></div>
-{{if $.User}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/star" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button name="action" value="{{if .Rig.Starred}}unstar{{else}}star{{end}}" type="submit">{{if .Rig.Starred}}★ Unstar{{else}}☆ Star{{end}} ({{.Rig.Stars}})</button></form>{{else}}<div class="muted">★ {{.Rig.Stars}}</div>{{end}}
-{{if .IsOwner}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/visibility" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}">
-{{if eq .Rig.Visibility "private"}}<button name="visibility" value="public" type="submit">Make public</button>{{else}}<button name="visibility" value="private" type="submit">Make private</button>{{end}}</form>{{end}}
 <p><a href="/report?rig={{.Rig.Owner}}/{{.Rig.Name}}&amp;version={{.Version.Version}}">Report this rig</a></p>
 </aside></div>
 {{else}}<p class="muted">No published version yet.</p>{{end}}

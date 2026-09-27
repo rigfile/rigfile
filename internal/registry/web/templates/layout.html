@@ -2,11 +2,13 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{if .Title}}{{.Title}} · {{end}}Rigfile registry</title>
 <link rel="stylesheet" href="/static/style.css"></head><body>
-<header class="top"><div class="in">
-<a class="brand" href="/">Rigfile</a>
+<header class="top"><div class="wrap">
+<a class="brand" href="/"><span class="mark">R</span>Rigfile</a>
 <form class="search" action="/search" method="get"><input type="search" name="q" placeholder="Search rigs" value="{{.Query}}" aria-label="Search rigs"><button type="submit">Search</button></form>
-{{if .User}}<a href="/u/{{.User.Login}}">{{.User.Login}}</a>
+<div class="navlinks">
+{{if .User}}<span class="who">{{if .User.AvatarURL}}<img class="avatar" src="{{.User.AvatarURL}}" alt="">{{end}}<a href="/u/{{.User.Login}}">{{.User.Login}}</a></span>
 <form action="/logout" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link" type="submit">Sign out</button></form>
-{{else}}<a href="/login?next={{.Path}}">Sign in with GitHub</a>{{end}}
-</div></header><main>{{end}}
-{{define "foot"}}</main><footer><div class="in"><a href="/legal/terms">Terms</a> · <a href="/legal/acceptable-use">Acceptable use</a> · <a href="/legal/takedown">Takedown and abuse</a> · <a href="/report">Report a rig</a></div></footer></body></html>{{end}}
+{{else}}<a class="btn primary" href="/login?next={{.Path}}">Sign in with GitHub</a>{{end}}
+</div>
+</div></header><main class="wrap">{{end}}
+{{define "foot"}}</main><footer><div class="wrap"><a href="/legal/terms">Terms</a> · <a href="/legal/acceptable-use">Acceptable use</a> · <a href="/legal/takedown">Takedown and abuse</a> · <a href="/report">Report a rig</a></div></footer></body></html>{{end}}
