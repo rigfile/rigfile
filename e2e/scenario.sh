@@ -62,16 +62,19 @@ rigfile doctor > $out || { cat $out >&2; fail "doctor is not green with base-sec
 has "base-secure git" $out
 rigfile rollback --force > $out;                                    has "rolled back" $out
 [ -z "$(git config --global --get core.hooksPath)" ] || fail "core.hooksPath should be gone after rollback"
-echo "== other targets (Codex, Gemini CLI, Cursor)"
-mkdir -p "$HOME/.codex" "$HOME/.gemini" "$HOME/.cursor"
-rigfile plan /rig --no-git > $out;                                              has "Targets: claude-code, codex" $out; has "gemini-cli" $out; has "cursor" $out
+echo "== other targets (Codex, Gemini CLI, Cursor, Devin, Zed)"
+mkdir -p "$HOME/.codex" "$HOME/.gemini" "$HOME/.cursor" "$HOME/.config/devin" "$HOME/.config/zed"
+echo '{}' > "$HOME/.config/zed/settings.json"  # Zed's own Detect requires the real file, not just the directory (a real Zed install always has one)
+rigfile plan /rig --no-git > $out;                                              has "Targets: claude-code, codex" $out; has "gemini-cli" $out; has "cursor" $out; has "devin" $out; has "zed" $out
 rigfile apply /rig --yes --overwrite --no-git > $out 2>&1 || { cat $out >&2; fail "multi-target apply failed"; }
 [ -f "$HOME/.codex/config.toml" ] && [ -f "$HOME/.codex/AGENTS.md" ] && [ -d "$HOME/.agents/skills/pdf" ] || fail "Codex was not configured"
 grep -q '\[mcp_servers.demo\]' "$HOME/.codex/config.toml" || fail "Codex MCP server missing"
 grep -q 'approval_policy' "$HOME/.codex/config.toml" || fail "Codex base-secure defaults missing"
 [ -f "$HOME/.gemini/settings.json" ] && [ -f "$HOME/.gemini/GEMINI.md" ] || fail "Gemini CLI was not configured"
 [ -f "$HOME/.cursor/mcp.json" ] || fail "Cursor was not configured"
-for f in "$HOME/.codex/config.toml" "$HOME/.gemini/settings.json" "$HOME/.cursor/mcp.json"; do
+[ -f "$HOME/.config/devin/mcp_config.json" ] || fail "Devin was not configured"
+[ -f "$HOME/.config/zed/settings.json" ] || fail "Zed was not configured"
+for f in "$HOME/.codex/config.toml" "$HOME/.gemini/settings.json" "$HOME/.cursor/mcp.json" "$HOME/.config/devin/mcp_config.json" "$HOME/.config/zed/settings.json"; do
   grep -q 'FAKE-SECRET\|secret://' "$f" && fail "secret or unresolved reference in $f"
   grep -q 'rigfile' "$f" || fail "MCP server in $f is not wrapped with rigfile exec"
 done
