@@ -76,6 +76,32 @@ func TestUnterminatedCommentsAndStringsAreInvalid(t *testing.T) {
 	}
 }
 
+// TestMask covers the exported wrapper (internal/adapters/zed capture uses this to read a real, commented
+// settings.json with encoding/json.Unmarshal directly).
+func TestMask(t *testing.T) {
+	doc := []byte("{\n  // a comment\n  \"a\": 1,\n  \"b\": [1, 2,],\n}\n")
+	got, err := Mask(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(got) {
+		t.Fatalf("masked output must be plain valid JSON: %q", got)
+	}
+	var v struct {
+		A int   `json:"a"`
+		B []int `json:"b"`
+	}
+	if err := json.Unmarshal(got, &v); err != nil || v.A != 1 || len(v.B) != 2 {
+		t.Fatalf("%v %+v", err, v)
+	}
+	if len(got) != len(doc) {
+		t.Fatal("masking must keep every byte offset (comments/commas become spaces, nothing is removed)")
+	}
+	if _, err := Mask([]byte("{ /* never closed")); err == nil {
+		t.Fatal("an unterminated comment must be refused, not silently ignored")
+	}
+}
+
 func TestMaskKeepsOffsets(t *testing.T) {
 	doc := []byte("{\n // c\n \"a\": [1,2,], /* x */\n}\n")
 	sh, masked, ok := mask(doc)

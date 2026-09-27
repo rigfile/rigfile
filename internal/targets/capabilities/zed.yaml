@@ -1,0 +1,16 @@
+target: zed
+title: Zed
+os: [macos, linux, windows]
+config_paths:
+  macos: "~/.config/zed/settings.json (confirmed 2026-09-27)"
+  linux: "~/.config/zed/settings.json (same vendor doc as macOS)"
+  windows: "%APPDATA%\\Zed\\settings.json (from vendor docs, not run)"
+categories:
+  instructions: {support: no, note: "https://zed.dev/docs/ai/rules returned 404 when checked; no rules/instructions location is verified"}
+  skills: {support: no, note: "not covered by the documentation read"}
+  agents: {support: no, note: "not covered by the documentation read"}
+  commands: {support: no, note: "not covered by the documentation read"}
+  mcp_servers: {support: yes, note: "context_servers in settings.json (JSONC: comments and trailing commas preserved); stdio through rigfile exec, remote as url/headers"}
+  hooks: {support: no, note: "not covered by the documentation read"}
+  permissions: {support: no, note: "no documented permission rules"}
+base_secure: instructions_only

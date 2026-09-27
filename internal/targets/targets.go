@@ -21,6 +21,7 @@ import (
 	"github.com/rigfile/rigfile/internal/adapters/devin"
 	"github.com/rigfile/rigfile/internal/adapters/gemini"
 	"github.com/rigfile/rigfile/internal/adapters/vscodecopilot"
+	"github.com/rigfile/rigfile/internal/adapters/zed"
 	"github.com/rigfile/rigfile/internal/capture"
 	"github.com/rigfile/rigfile/internal/engine"
 	"github.com/rigfile/rigfile/internal/merge"
@@ -64,7 +65,7 @@ type Target struct {
 	Always bool
 }
 
-var registry = []Target{claudeCode(), codexTarget(), geminiTarget(), cursorTarget(), claudeDesktopTarget(), vscodeCopilotTarget(), devinTarget()}
+var registry = []Target{claudeCode(), codexTarget(), geminiTarget(), cursorTarget(), claudeDesktopTarget(), vscodeCopilotTarget(), devinTarget(), zedTarget()}
 
 // Register adds a target (adapters call it from init in their own packages; tests add fakes).
 func Register(t Target) { registry = append(registry, t) }
@@ -362,6 +363,43 @@ func devinTarget() Target {
 				return nil, err
 			}
 			return devin.Build(devin.Env{Plat: c.Plat, ConfigDir: d, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
+		},
+	}
+}
+
+func zedTarget() Target {
+	dir := func(c Ctx) (string, error) {
+		if c.Dir != "" {
+			return c.Dir, nil
+		}
+		return zed.ConfigDirFor(c.Plat)
+	}
+	return Target{
+		Name: "zed", Title: "Zed",
+		Available: func(*platform.Info) (bool, string) { return true, "" },
+		Detect: func(c Ctx) Detection {
+			if d, err := dir(c); err == nil && exists(filepath.Join(d, "settings.json")) {
+				return Detection{true, d + "/settings.json exists"}
+			}
+			if have(c, "zed") {
+				return Detection{true, "`zed` is on PATH"}
+			}
+			return Detection{false, "no settings.json and no `zed` on PATH"}
+		},
+		Capture: func(c Ctx, o capture.Options) (*capture.Result, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			o.Dir = d
+			return zed.Capture(o)
+		},
+		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			return zed.Build(zed.Env{Plat: c.Plat, ConfigDir: d, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
 		},
 	}
 }

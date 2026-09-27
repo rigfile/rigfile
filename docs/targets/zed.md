@@ -1,4 +1,4 @@
-# Target: Zed (S8-M6) — settings path CONFIRMED on macOS 2026-09-27 (owner's machine); NOT BUILT
+# Target: Zed (S8-M6) — settings path CONFIRMED on macOS 2026-09-27 (owner's machine); BUILT
 
 **Date checked:** 2026-09-26, through a summarising fetcher and search.
 
@@ -12,8 +12,14 @@
 
 ## Decision
 
-No adapter yet, though the macOS path is now confirmed. Still open: the Windows path (run `zed: open settings file` there and note the path), and the rules/instructions format.
+**Built 2026-09-27**: `internal/adapters/zed`. What it does:
 
-## What settles the rest (owner)
+- **MCP servers**, both stdio and remote (unlike Devin, Zed's docs are unambiguous about the remote shape): written into `settings.json` under `context_servers`, through `internal/jsonedit` (comment-preserving — a real Zed `settings.json` ships with extensive comments by default, and the edit only touches the member it owns, splicing the change onto the original bytes so everything else survives byte-for-byte). Stdio servers wrapped through `rigfile exec`, so no secret value is ever written to the file.
+- **Capture** (`rigfile init --from zed`) masks out comments/trailing commas (`jsonedit.Mask`, added for this) before parsing, so it reads a real, commented file correctly rather than failing on it.
+- **Instructions, skills, subagents, commands, hooks, permissions**: none written; each produces a note (`https://zed.dev/docs/ai/rules` returned 404 when checked, so there is still no verified rules location).
 
-Run `zed: open settings file` on Windows and note the path. With the paths known, the adapter is: a `context_servers` member set in that file through `jsonedit` (comment-preserving), `rigfile exec` wrapping for stdio servers, remote servers without secrets written as `url`/`headers`, instructions skipped with a note until the rules format is verified.
+Registered as target `zed`; tests: goldens for macOS/Linux/Windows, a comment-preservation test, a remote-server test, a round-trip capture test (including one with comments and trailing commas), plus `jsonedit.Mask`'s own tests.
+
+## What would extend it (owner)
+
+Run `zed: open settings file` on Windows and note the path (the `%APPDATA%\Zed\settings.json` guess is from the vendor docs only, never run). Find where Zed keeps project or global instructions, if anywhere, and send the location.

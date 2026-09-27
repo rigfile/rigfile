@@ -3,6 +3,7 @@ package jsonedit
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 )
 
 // JSON with comments (VS Code's mcp.json, Zed's settings.json, many others) is edited by MASKING: comments and trailing commas
@@ -216,3 +217,18 @@ func Valid(doc []byte) bool {
 	s, _, ok := mask(doc)
 	return ok && json.Valid(s)
 }
+
+// Mask returns doc with comments and trailing commas replaced by spaces: valid JSON of the same length and byte
+// offsets, safe to encoding/json.Unmarshal directly. For reading a JSONC file (capture, not editing it — an edit
+// must go through the Set/Replace/Remove functions, which splice the change back onto the original bytes so
+// comments outside it survive). An error means doc could not be masked safely (an unterminated string or block
+// comment).
+func Mask(doc []byte) ([]byte, error) {
+	s, _, ok := mask(doc)
+	if !ok {
+		return nil, errUnterminated
+	}
+	return s, nil
+}
+
+var errUnterminated = errors.New("jsonedit: an unterminated string or block comment")
