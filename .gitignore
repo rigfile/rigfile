@@ -76,3 +76,9 @@ dist/
 e2e/build/
 e2e/build-install/
 dist/
+
+# Scratch rig directories a developer captures at the repo root while testing the CLI (rigfile init's default
+# --out is "rig"; "my-rig" is the name used in the quickstart doc). Real capture output, never meant to be
+# committed by accident.
+/rig/
+/my-rig/
