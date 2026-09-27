@@ -18,6 +18,7 @@ import (
 	"github.com/rigfile/rigfile/internal/adapters/claudedesktop"
 	"github.com/rigfile/rigfile/internal/adapters/codex"
 	"github.com/rigfile/rigfile/internal/adapters/cursor"
+	"github.com/rigfile/rigfile/internal/adapters/devin"
 	"github.com/rigfile/rigfile/internal/adapters/gemini"
 	"github.com/rigfile/rigfile/internal/adapters/vscodecopilot"
 	"github.com/rigfile/rigfile/internal/capture"
@@ -63,7 +64,7 @@ type Target struct {
 	Always bool
 }
 
-var registry = []Target{claudeCode(), codexTarget(), geminiTarget(), cursorTarget(), claudeDesktopTarget(), vscodeCopilotTarget()}
+var registry = []Target{claudeCode(), codexTarget(), geminiTarget(), cursorTarget(), claudeDesktopTarget(), vscodeCopilotTarget(), devinTarget()}
 
 // Register adds a target (adapters call it from init in their own packages; tests add fakes).
 func Register(t Target) { registry = append(registry, t) }
@@ -327,6 +328,40 @@ func geminiTarget() Target {
 				return nil, err
 			}
 			return gemini.Build(gemini.Env{Plat: c.Plat, GeminiDir: d, ProjectDir: c.ProjectDir, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
+		},
+	}
+}
+
+func devinTarget() Target {
+	dir := func(c Ctx) (string, error) {
+		if c.Dir != "" {
+			return c.Dir, nil
+		}
+		return devin.ConfigDirFor(c.Plat)
+	}
+	return Target{
+		Name: "devin", Title: "Devin",
+		Available: func(*platform.Info) (bool, string) { return true, "" },
+		Detect: func(c Ctx) Detection {
+			if d, err := dir(c); err == nil && exists(d) {
+				return Detection{true, d + " exists"}
+			}
+			return Detection{false, "no devin config directory (no binary is documented to check on PATH: docs/targets/devin.md)"}
+		},
+		Capture: func(c Ctx, o capture.Options) (*capture.Result, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			o.Dir = d
+			return devin.Capture(o)
+		},
+		Plan: func(c Ctx, proj *merge.Projection) (*engine.Plan, error) {
+			d, err := dir(c)
+			if err != nil {
+				return nil, err
+			}
+			return devin.Build(devin.Env{Plat: c.Plat, ConfigDir: d, State: c.State, Overwrite: c.Overwrite, RigfileCmd: c.Rigfile}, proj)
 		},
 	}
 }

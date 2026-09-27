@@ -31,7 +31,7 @@ Migrations `0003_collections.sql` and `0004_orgs.sql` run automatically at start
 | 1 | `rigfile ui` in a real browser on macOS, Linux and Windows: cookie landing, storing a secret into the real OS keychain, Apply | `rigfile ui <a rig> ` on each OS; use a throwaway secret; **check that the keychain prompt (macOS) names rigfile**, and that the address bar shows no token after landing |
 | 2 | Diff and organisation pages in a real browser (layout, escaping of a hostile file) | a staging registry; publish a version whose instruction file contains `<script>` and confirm it appears as text |
 | 3 | `rigfile update` against a real registry shows what changed | publish `1.0.0` then `1.1.0` with an added MCP server; `rigfile pull`, then `rigfile update --plan-only` |
-| 4 | Editors' settings paths | the "what settles it" section of `docs/targets/windsurf.md`, `zed.md`, `vscode-copilot.md` |
+| 4 | Editors' settings paths | the "what settles it" section of `docs/targets/devin.md (formerly windsurf.md)`, `zed.md`, `vscode-copilot.md` |
 | 5 | Nothing in this slice is exercised by more than a handful of real users. Organisations and collections need real teams before their limits (50 collections, 100 items, 200 members) can be judged | watch after launch |
 
 ## 5. Not built, and what each would need

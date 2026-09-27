@@ -16,7 +16,7 @@ func TestCapabilitiesAreCompleteAndTheMatrixDocIsCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"claude-code", "codex", "gemini-cli", "cursor", "claude-desktop", "vscode-copilot"} {
+	for _, want := range []string{"claude-code", "codex", "gemini-cli", "cursor", "claude-desktop", "vscode-copilot", "devin"} {
 		c, ok := caps[want]
 		if !ok {
 			t.Fatalf("missing capabilities for %s", want)

@@ -1,0 +1,16 @@
+target: devin
+title: Devin
+os: [macos, linux, windows]
+config_paths:
+  macos: "~/.config/devin/mcp_config.json (confirmed 2026-09-27)"
+  linux: "~/.config/devin/mcp_config.json ($XDG_CONFIG_HOME/devin if set)"
+  windows: "%APPDATA%\\devin\\mcp_config.json (from vendor docs, not run)"
+categories:
+  instructions: {support: no, note: "no rules/instructions location covered by the documentation read (UNVERIFIED)"}
+  skills: {support: no, note: "not covered by the documentation read"}
+  agents: {support: no, note: "not covered by the documentation read"}
+  commands: {support: no, note: "not covered by the documentation read"}
+  mcp_servers: {support: partial, note: "stdio only, ~/.config/devin/mcp_config.json under mcpServers; remote skipped (docs disagree on the field name: serverUrl vs url)"}
+  hooks: {support: no, note: "not covered by the documentation read"}
+  permissions: {support: no, note: "no documented permission rules"}
+base_secure: instructions_only
