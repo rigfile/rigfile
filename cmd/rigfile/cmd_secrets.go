@@ -246,7 +246,7 @@ func cmdExec(args []string, e env) int {
 	fs.Var(&secretFlags, "secret", "ENV=ref: set ENV from a stored secret (repeatable)")
 	fs.Var(&envFlags, "env", "K=V: set a literal, non-secret variable (repeatable)")
 	fs.Var(&allowFlags, "allow", "host[,host]: the server's network.allow (Level 2, repeatable)")
-	fs.Var(&bindFlags, "bind", "ref=host[,host]: where a secret may be sent (Level 2, repeatable)")
+	fs.Var(&bindFlags, "bind", "ref=host[,host]: where a secret may be sent (informational: the broker uses the policy approved by `rigfile apply`)")
 	fs.StringVar(&server, "server", "", "the server's name (Level 2: audit log and broker exclusions)")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -295,7 +295,7 @@ func cmdExec(args []string, e env) int {
 		server = filepath.Base(cmd[0])
 	}
 	if rd, derr := rigdDir(e); derr == nil {
-		l2, notice, lerr := startLevel2(rd, server, cmd, allow, binds, sec)
+		l2, notice, lerr := startLevel2(rd, server, allow, sec)
 		if lerr != nil {
 			fmt.Fprintln(e.err, "rigfile:", lerr)
 			return 1

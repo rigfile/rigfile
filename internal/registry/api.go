@@ -16,6 +16,8 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/search", s.apiSearch)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}", s.apiRig)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/resolve", s.apiResolve)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/diff", s.apiDiff)
+	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/derived", s.apiDerived)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}", s.apiVersion)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/manifest", s.apiManifest)
 	mux.HandleFunc("GET /v1/rigs/{owner}/{name}/versions/{version}/tarball", s.apiTarball)
@@ -103,7 +105,8 @@ func (s *Server) apiRig(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusInternalServerError, "could not list versions")
 		return
 	}
-	isOwner := u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)
+	isOwner := s.Store.CanManage(r.Context(), u, rig)
+	_, derivedCount, _ := s.Store.Derived(r.Context(), rig.Owner, rig.Name, v, 1)
 	list := make([]versionJSON, 0, len(vs))
 	latest := ""
 	for _, x := range vs {
@@ -113,7 +116,37 @@ func (s *Server) apiRig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"owner": rig.Owner, "name": rig.Name, "description": rig.Description, "visibility": rig.Visibility,
-		"stars": rig.Stars, "latest": latest, "versions": list})
+		"stars": rig.Stars, "latest": latest, "versions": list, "derived": derivedCount})
+}
+
+// apiDerived lists the public rigs built on this one. The rig itself must be visible to the viewer.
+func (s *Server) apiDerived(w http.ResponseWriter, r *http.Request) {
+	v, _, ok := s.viewer(w, r)
+	if !ok {
+		return
+	}
+	rig, err := s.Store.GetRig(r.Context(), r.PathValue("owner"), r.PathValue("name"), v)
+	if err != nil {
+		apiError(w, http.StatusNotFound, "no such rig")
+		return
+	}
+	list, total, err := s.Store.Derived(r.Context(), rig.Owner, rig.Name, v, 50)
+	if err != nil {
+		apiError(w, http.StatusInternalServerError, "could not list derived rigs")
+		return
+	}
+	type item struct {
+		Owner       string `json:"owner"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Stars       int    `json:"stars"`
+		Latest      string `json:"latest"`
+	}
+	out := make([]item, 0, len(list))
+	for _, x := range list {
+		out = append(out, item{x.Owner, x.Name, x.Description, x.Stars, x.Latest})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"total": total, "rigs": out})
 }
 
 func (s *Server) apiResolve(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +185,7 @@ func (s *Server) apiVersion(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusNotFound, "no such version")
 		return
 	}
-	writeJSON(w, http.StatusOK, versionToJSON(*ver, u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)))
+	writeJSON(w, http.StatusOK, versionToJSON(*ver, s.Store.CanManage(r.Context(), u, rig)))
 }
 
 // pullable finds a version the viewer may download: published or yanked (or, for the owner, any they can see).
@@ -166,7 +199,7 @@ func (s *Server) pullable(w http.ResponseWriter, r *http.Request) (*Rig, *Versio
 		apiError(w, http.StatusNotFound, "no such version")
 		return nil, nil, false
 	}
-	if ver.Status != "published" && ver.Status != "yanked" && !(u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)) {
+	if ver.Status != "published" && ver.Status != "yanked" && !s.Store.CanManage(r.Context(), u, rig) {
 		apiError(w, http.StatusNotFound, "no such version")
 		return nil, nil, false
 	}
@@ -252,8 +285,11 @@ func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if owner != u.Login && !u.IsAdmin {
-		apiError(w, http.StatusForbidden, "you can publish only under your own name ("+u.Login+"/...)")
-		return
+		// an organisation's namespace is open to its members; anyone else is told the same thing as for another person's name
+		if org, err := s.Store.OrgByLogin(r.Context(), owner); err != nil || s.Store.OrgRole(r.Context(), u, org.ID) == "" {
+			apiError(w, http.StatusForbidden, "you can publish only under your own name ("+u.Login+"/...) or an organisation you belong to")
+			return
+		}
 	}
 	if IsReservedOwner(owner) && !u.IsAdmin {
 		apiError(w, http.StatusForbidden, "the "+owner+"/ namespace is reserved")

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
 func TestBrokerCommandsKeepTheChoiceAndReportStatus(t *testing.T) {
@@ -105,6 +107,13 @@ func TestBrokerBackgroundStartServesLevel2(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	m.run("", "broker", "enable")
+	// what an apply approved: the background broker reads it from state.json
+	st := state.New()
+	st.Broker = map[string]state.ServerPolicy{"alpaca": {Command: "node", Allow: []string{"api.alpaca.markets"}, Secrets: map[string]state.SecretBinding{"ALPACA_API_KEY": {Ref: "alpaca/api_key", Hosts: []string{"api.alpaca.markets"}}}}}
+	sb, _ := st.Marshal()
+	if err := os.WriteFile(filepath.Join(m.stateDir(), state.FileName), sb, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	var out, errb bytes.Buffer
 	start := func() int {
 		out.Reset()
@@ -137,4 +146,23 @@ func TestBrokerBackgroundStartServesLevel2(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatal("the broker did not stop")
+}
+
+func TestApplyApprovesTheBrokerPolicyFromTheRig(t *testing.T) {
+	m := newMachine(t)
+	rig := plainRig(t, "mcp_servers:\n  alpaca:\n    command: npx\n    args: [\"-y\", \"alpaca-mcp@1.4.2\"]\n    env: {ALPACA_API_KEY: \"secret://alpaca/api_key\", MODE: paper}\n    network: {allow: [api.alpaca.markets]}\n  nopolicy:\n    command: npx\n    args: [\"-y\", \"other-mcp@1.0.0\"]\nsecrets:\n  alpaca/api_key: {description: key, hosts: [api.alpaca.markets]}\n")
+	if r := m.run("", "apply", rig, "--yes", "--no-git"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	st, err := state.Load(m.stateDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pol, ok := st.Broker["alpaca"]
+	if !ok || pol.Command != "npx" || len(pol.Allow) != 1 || pol.Allow[0] != "api.alpaca.markets" || pol.Secrets["ALPACA_API_KEY"].Ref != "alpaca/api_key" || pol.Secrets["ALPACA_API_KEY"].Hosts[0] != "api.alpaca.markets" || len(pol.Secrets) != 1 {
+		t.Fatalf("%+v", st.Broker)
+	}
+	if _, ok := st.Broker["nopolicy"]; ok {
+		t.Fatal("a server that declares no network.allow has nothing to enforce, so no policy")
+	}
 }

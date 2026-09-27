@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/digitaldreamer3462/rigfile/internal/rigd"
 )
@@ -29,28 +28,9 @@ func (l *level2) end() {
 	_ = os.RemoveAll(l.caDir)
 }
 
-// launcherHosts are the package registries a launcher such as npx must reach before the server itself starts. They carry
-// no secret (no surrogate is bound to them), so allowing them does not widen where a key can go.
-func launcherHosts(argv0 string) []string {
-	if i := strings.LastIndexAny(argv0, `/\`); i >= 0 {
-		argv0 = argv0[i+1:] // either separator: a manifest written on Windows may be read anywhere
-	}
-	base := strings.ToLower(argv0)
-	for _, ext := range []string{".exe", ".cmd", ".bat"} {
-		base = strings.TrimSuffix(base, ext)
-	}
-	switch base {
-	case "npx", "npm", "bunx", "bun", "pnpm", "pnpx", "yarn":
-		return []string{"registry.npmjs.org"}
-	case "uvx", "uv", "pipx", "pip":
-		return []string{"pypi.org", "files.pythonhosted.org"}
-	}
-	return nil
-}
-
 // startLevel2 decides the level for a launch (docs/rigd.md §7). It returns (nil, "", nil) for Level 1 with an optional
 // notice for the person, or a live session for Level 2. An error means "do not start the server".
-func startLevel2(dir, server string, argv []string, allow []string, binds map[string][]string, sec map[string]string) (*level2, string, error) {
+func startLevel2(dir, server string, allow []string, sec map[string]string) (*level2, string, error) {
 	if len(sec) == 0 {
 		return nil, "", nil
 	}
@@ -79,15 +59,13 @@ func startLevel2(dir, server string, argv []string, allow []string, binds map[st
 		envs = append(envs, k)
 	}
 	sort.Strings(envs)
-	spec := rigd.SessionSpec{Server: server, Allow: append(append([]string(nil), allow...), launcherHosts(argv[0])...)}
+	// the request names the server and its secrets; the broker takes hosts and the allowlist from what `rigfile apply`
+	// approved, so nothing here (or in an attacker's request) can widen them
+	req := rigd.SessionRequest{Server: server}
 	for _, k := range envs {
-		hosts := binds[sec[k]]
-		if len(hosts) == 0 {
-			return nil, "", fmt.Errorf("secret %s (for %s) has no hosts: add secrets.%s.hosts to the rig so the broker knows where it may be sent, or `rigfile broker exclude %s`", sec[k], k, sec[k], server)
-		}
-		spec.Secrets = append(spec.Secrets, rigd.SecretSpec{Env: k, Ref: sec[k], Hosts: hosts})
+		req.Secrets = append(req.Secrets, rigd.RequestedSecret{Env: k, Ref: sec[k]})
 	}
-	reply, err := c.Open(spec)
+	reply, err := c.Open(req)
 	if err != nil {
 		var ae *rigd.APIError
 		if errors.As(err, &ae) || errors.Is(err, rigd.ErrNotRunning) {

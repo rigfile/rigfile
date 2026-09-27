@@ -27,6 +27,9 @@
 {{if .Layers}}<div>Builds on: {{range .Layers}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .Version.NeedsSecrets}}<div>Secrets you will be asked for: {{range .Version.NeedsSecrets}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .Version.NeedsLogins}}<div>Logins: {{range .Version.NeedsLogins}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}</div>
+<div class="card"><strong>Use as a base</strong><pre><code>{{.BaseSnippet}}</code></pre>
+<div class="muted">Add this to your own <code>rigfile.yaml</code> to layer on top of this rig, or run <code>rigfile fork {{.Rig.Owner}}/{{.Rig.Name}} --name you/your-rig</code> to start from a copy.</div></div>
+{{if .DerivedN}}<div class="card"><strong>Built on this rig ({{.DerivedN}})</strong><ul>{{range .Derived}}<li><a href="/r/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a> <span class="muted">{{.Stars}} ★</span></li>{{end}}</ul></div>{{end}}
 {{if .Trust}}<div class="card"><strong>Trust</strong>
 <div>Publisher <a href="/u/{{.Trust.Publisher.Login}}">{{.Trust.Publisher.Login}}</a>{{if .Trust.Publisher.Verified}} <span class="tag ok">verified {{.Trust.Publisher.VerifiedKind}}</span>{{end}}</div>
 <div class="muted">first seen {{.Trust.Publisher.FirstSeen.Format "2006-01-02"}} · {{.Trust.Publisher.PublicRigs}} public rig(s)</div>
@@ -34,7 +37,7 @@
 <div class="muted">{{.Trust.Versions}} version(s) · created {{.Trust.RigCreatedAt.Format "2006-01-02"}}</div>
 <div class="muted">analysis: {{index .Trust.Analysis "danger"}} danger, {{index .Trust.Analysis "caution"}} caution</div>
 {{if or .Trust.History.YankedVersions .Trust.History.RemovedVersionsPublisher}}<div class="warn">{{.Trust.History.YankedVersions}} yanked version(s); {{.Trust.History.RemovedVersionsPublisher}} removed by moderators across this publisher's rigs</div>{{end}}</div>{{end}}
-<div class="card"><strong>Versions</strong><ul>{{range .Versions}}<li><a href="/r/{{$r.Owner}}/{{$r.Name}}/v/{{.Version}}">{{.Version}}</a> <span class="muted">{{.Status}}</span></li>{{end}}</ul></div>
+<div class="card"><strong>Versions</strong><ul>{{range .Versions}}<li><a href="/r/{{$r.Owner}}/{{$r.Name}}/v/{{.Version}}">{{.Version}}</a> <span class="muted">{{.Status}}</span> · <a href="/r/{{$r.Owner}}/{{$r.Name}}/diff?to={{.Version}}">changes</a></li>{{end}}</ul></div>
 {{if $.User}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/star" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button name="action" value="{{if .Rig.Starred}}unstar{{else}}star{{end}}" type="submit">{{if .Rig.Starred}}★ Unstar{{else}}☆ Star{{end}} ({{.Rig.Stars}})</button></form>{{else}}<div class="muted">★ {{.Rig.Stars}}</div>{{end}}
 {{if .IsOwner}}<form action="/r/{{.Rig.Owner}}/{{.Rig.Name}}/visibility" method="post"><input type="hidden" name="csrf" value="{{$.CSRF}}">
 {{if eq .Rig.Visibility "private"}}<button name="visibility" value="public" type="submit">Make public</button>{{else}}<button name="visibility" value="private" type="submit">Make private</button>{{end}}</form>{{end}}

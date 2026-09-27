@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -23,6 +25,7 @@ import (
 	"github.com/digitaldreamer3462/rigfile/internal/lock"
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
+	"github.com/digitaldreamer3462/rigfile/internal/models"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/source"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
@@ -67,6 +70,10 @@ type Options struct {
 	// Sources fetches `from:` layers written as git sources (nil = the real services, cached under the state
 	// directory). Tests inject a client that talks to local fakes.
 	Sources *source.Client
+	// Hardware overrides hardware detection (tests). nil = read this machine, only when the rig has `models:`.
+	Hardware *platform.Hardware
+	// SkipModels leaves the rig's `models:` out: no plan section, no engine install (--models skip).
+	SkipModels bool
 	// Registry is the origin of the Rigfile registry to resolve owner/name layers from ("" = none); RegistryToken returns
 	// the stored sign-in token for it (private layers), or "".
 	Registry      string
@@ -87,17 +94,20 @@ type Prepared struct {
 	UnsafeBase bool
 	// Targets is one entry per selected target, in registry order. Merged, Proj, Plan and MergedSHA below are
 	// the PRIMARY target's (the first one) and exist for callers that only care about one.
-	Targets  []*TargetPlan
-	Skipped  []string // targets left out, with the reason ("cursor: not detected")
-	Merged   *merge.Merged
-	Proj     *merge.Projection
-	Problems []manifest.Problem
-	State    *state.State
-	Plan     *engine.Plan // nil if the rig has errors
-	Tools    tools.Plan   // what apply would install (planned, never run here)
-	GitPlan  *engine.Plan // the git module (base-secure); nil with --no-git
-	cleanup  func()       // removes the extracted base-secure files
-	Sandbox  bool         // effective sandbox opt-in for this run
+	Targets    []*TargetPlan
+	Skipped    []string // targets left out, with the reason ("cursor: not detected")
+	Merged     *merge.Merged
+	Proj       *merge.Projection
+	Problems   []manifest.Problem
+	State      *state.State
+	Plan       *engine.Plan   // nil if the rig has errors
+	Tools      tools.Plan     // what apply would install (planned, never run here)
+	Models     []*models.Plan // the rig's local models, resolved for this machine (planned, never downloaded here)
+	ModelNotes []string       // things the rig asks for that Rigfile does not apply (gateways, routing)
+	Hardware   platform.Hardware
+	GitPlan    *engine.Plan // the git module (base-secure); nil with --no-git
+	cleanup    func()       // removes the extracted base-secure files
+	Sandbox    bool         // effective sandbox opt-in for this run
 
 	Lock      *lock.Lock
 	LockPath  string
@@ -301,6 +311,23 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 			return nil, err
 		}
 	}
+	if len(p.Merged.Models) > 0 && !o.SkipModels {
+		mcat, err := models.LoadCatalog()
+		if err != nil {
+			return nil, err
+		}
+		if o.Hardware != nil {
+			p.Hardware = *o.Hardware
+		} else {
+			home, _ := pi.Home()
+			p.Hardware = platform.DetectHardware(platform.RealProbe(runtime.GOOS, runtime.GOARCH, filepath.Join(home, ".cache")))
+		}
+		ms := map[string]manifest.Model{}
+		for k, v := range p.Merged.Models {
+			ms[k] = v.V
+		}
+		p.Models = models.ResolveAll(ms, mcat, p.Hardware)
+	}
 	cat, err := tools.LoadCatalog()
 	if err != nil {
 		return nil, err
@@ -315,7 +342,25 @@ func prepare(o Options, cleanupOut *func()) (*Prepared, error) {
 			in[k] = append(in[k], e.V)
 		}
 	}
+	// the engines the chosen models need are ordinary tools: planned, shown, and run only after approval
+	for _, m := range p.Models {
+		if m.Chosen == nil {
+			continue
+		}
+		switch m.Chosen.Engine {
+		case "ollama":
+			in["common"] = append(in["common"], "ollama")
+		case "mlx-lm":
+			in["uv"] = append(in["uv"], "mlx-lm=="+m.Chosen.EngineVersion)
+		}
+	}
 	p.Tools = tools.Build(cat, in, string(pi.OS), th)
+	if len(p.Merged.Gateways) > 0 {
+		p.ModelNotes = append(p.ModelNotes, "gateways: are NOT applied. A local protocol bridge to Claude Code is unsupported by Anthropic and none was verified for Codex; use `rigfile models run` for the documented routes (docs/models.md §4)")
+	}
+	if r := p.Merged.Routing; r.Default != "" || len(r.LocalFor) > 0 || r.FallbackOnLimit != "" {
+		p.ModelNotes = append(p.ModelNotes, "routing: is NOT translated into any tool's configuration; switch models by hand or with `rigfile models run`")
+	}
 	return p, nil
 }
 
@@ -503,6 +548,7 @@ func (p *Prepared) Execute(x ExecOptions) (*Result, error) {
 		}
 	}
 	p.State.Prefs.Sandbox = p.Sandbox
+	p.State.Broker = brokerPolicy(p)
 	switch {
 	case p.UnsafeBase && p.State.UnsafeBase == nil:
 		p.State.UnsafeBase = &state.UnsafeBase{Since: now().UTC().Format(time.RFC3339)}
@@ -597,4 +643,47 @@ func selectTargets(m *manifest.Manifest, o Options, ctxFor func(string) targets.
 		}
 	}
 	return sel, skipped, nil
+}
+
+// brokerPolicy is what this apply approves for the secret broker: every stdio MCP server that declares `network.allow`, with
+// its secrets and their bound hosts, taken from the rig itself. A server that two targets define differently is left out
+// (fail closed: the broker then refuses it), as is one whose secret has no bound hosts.
+func brokerPolicy(p *Prepared) map[string]state.ServerPolicy {
+	out := map[string]state.ServerPolicy{}
+	conflict := map[string]bool{}
+	for _, tp := range p.Targets {
+		for _, s := range tp.Proj.MCPServers {
+			v := s.P.V
+			if v.IsRemote() || len(v.Network.Allow) == 0 {
+				continue
+			}
+			pol := state.ServerPolicy{Command: v.Command, Allow: append([]string(nil), v.Network.Allow...), Secrets: map[string]state.SecretBinding{}}
+			complete := true
+			for env, val := range v.Env {
+				if ref, ok := manifest.SecretRef(val); ok {
+					hosts := tp.Proj.SecretHosts[ref]
+					if len(hosts) == 0 {
+						complete = false
+						continue
+					}
+					pol.Secrets[env] = state.SecretBinding{Ref: ref, Hosts: append([]string(nil), hosts...)}
+				}
+			}
+			if !complete {
+				conflict[s.Name] = true
+				continue
+			}
+			if old, ok := out[s.Name]; ok && !reflect.DeepEqual(old, pol) {
+				conflict[s.Name] = true
+			}
+			out[s.Name] = pol
+		}
+	}
+	for n := range conflict {
+		delete(out, n)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

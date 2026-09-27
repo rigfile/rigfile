@@ -14,9 +14,9 @@ import (
 // SimilarCandidates lists the public rigs a new name is compared with: published, public, not removed.
 func (s *Store) SimilarCandidates(ctx context.Context) ([]similar.Candidate, error) {
 	rows, err := s.DB.QueryContext(ctx, `
-		SELECT r.owner, r.name, (SELECT count(*) FROM stars st WHERE st.rig_id = r.id), u.verified_at IS NOT NULL
+		SELECT r.owner, r.name, (SELECT count(*) FROM stars st WHERE st.rig_id = r.id), (u.verified_at IS NOT NULL AND r.org_id IS NULL)
 		FROM rigs r JOIN users u ON u.id = r.created_by
-		WHERE r.removed_at IS NULL AND r.visibility = 'public' AND u.disabled_at IS NULL
+		WHERE r.removed_at IS NULL AND r.visibility = 'public' AND (r.org_id IS NOT NULL OR u.disabled_at IS NULL)
 		  AND EXISTS (SELECT 1 FROM versions v WHERE v.rig_id = r.id AND v.status = 'published')`)
 	if err != nil {
 		return nil, err
@@ -277,7 +277,13 @@ type TrustHistory struct {
 func (s *Store) Trust(ctx context.Context, rig *Rig, v *Version) (*Trust, error) {
 	t := &Trust{RigCreatedAt: rig.CreatedAt, VersionCreatedAt: v.CreatedAt, Stars: rig.Stars, Analysis: map[string]int{"danger": 0, "caution": 0, "notice": 0}}
 	var verifiedAt sql.NullTime
-	if err := s.DB.QueryRowContext(ctx, `SELECT u.login, u.created_at, u.verified_at, u.verified_kind FROM users u WHERE u.id = $1`, rig.CreatedBy).
+	var orgLogin sql.NullString
+	var orgSince sql.NullTime
+	_ = s.DB.QueryRowContext(ctx, `SELECT o.login, o.created_at FROM rigs r JOIN orgs o ON o.id = r.org_id WHERE r.id = $1`, rig.ID).Scan(&orgLogin, &orgSince)
+	if orgLogin.Valid {
+		// an organisation's rig: the publisher is the organisation (not whichever member uploaded first), never "verified"
+		t.Publisher.Login, t.Publisher.FirstSeen = orgLogin.String, orgSince.Time
+	} else if err := s.DB.QueryRowContext(ctx, `SELECT u.login, u.created_at, u.verified_at, u.verified_kind FROM users u WHERE u.id = $1`, rig.CreatedBy).
 		Scan(&t.Publisher.Login, &t.Publisher.FirstSeen, &verifiedAt, &t.Publisher.VerifiedKind); err != nil {
 		return nil, err
 	}
@@ -285,10 +291,14 @@ func (s *Store) Trust(ctx context.Context, rig *Rig, v *Version) (*Trust, error)
 	if !verifiedAt.Valid {
 		t.Publisher.VerifiedKind = ""
 	}
-	_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM rigs WHERE created_by = $1 AND visibility = 'public' AND removed_at IS NULL`, rig.CreatedBy).Scan(&t.Publisher.PublicRigs)
+	if orgLogin.Valid {
+		_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM rigs WHERE owner = $1 AND visibility = 'public' AND removed_at IS NULL`, orgLogin.String).Scan(&t.Publisher.PublicRigs)
+	} else {
+		_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM rigs WHERE created_by = $1 AND org_id IS NULL AND visibility = 'public' AND removed_at IS NULL`, rig.CreatedBy).Scan(&t.Publisher.PublicRigs)
+	}
 	_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM versions WHERE rig_id = $1 AND status IN ('published','yanked')`, rig.ID).Scan(&t.Versions)
 	_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM versions WHERE rig_id = $1 AND status = 'yanked'`, rig.ID).Scan(&t.History.YankedVersions)
-	_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM versions v JOIN rigs r ON r.id = v.rig_id WHERE r.created_by = $1 AND v.status = 'removed'`, rig.CreatedBy).Scan(&t.History.RemovedVersionsPublisher)
+	_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM versions v JOIN rigs r ON r.id = v.rig_id WHERE r.created_by = $1 AND r.org_id IS NULL AND v.status = 'removed'`, rig.CreatedBy).Scan(&t.History.RemovedVersionsPublisher)
 	for _, f := range v.Analysis {
 		t.Analysis[f.Level]++
 	}

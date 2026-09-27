@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -103,6 +105,17 @@ func TestUpdateFollowsTheSourceAndSaysWhenNothingChanged(t *testing.T) {
 	if r.code != 0 || !strings.Contains(r.out, "Update: ") || !strings.Contains(r.out, "new") {
 		t.Fatalf("%+v", r)
 	}
+	for _, want := range []string{"What changed since the version you have applied:", "Look at these before you accept", "commands new: adds an item whose text the agent will follow", "+ commands/new.md"} {
+		if !strings.Contains(r.out, want) {
+			t.Fatalf("update must show what changed; missing %q:\n%s", want, r.out)
+		}
+	}
+	if strings.Contains(r.out, "+new command") {
+		t.Fatal("file text is shown only with --diff")
+	}
+	if r := m.run("", "update", "--plan-only", "--no-git", "--diff"); !strings.Contains(r.out, "+new command") {
+		t.Fatalf("--diff shows file text:\n%s", r.out)
+	}
 	if _, err := os.Stat(filepath.Join(m.home, ".claude", "commands", "new.md")); !os.IsNotExist(err) {
 		t.Fatal("--plan-only applied the update")
 	}
@@ -163,6 +176,103 @@ func TestPullOfACleanRigSaysSo(t *testing.T) {
 	m := pullMachine(t, env)
 	url := gitRig(t, plainRig(t, ""), env)
 	if r := m.run("", "pull", url, "--plan-only", "--no-git"); r.code != 0 || !strings.Contains(r.out, "ANALYSIS  no suspicious patterns") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestChangesComparesTwoRigDirectories(t *testing.T) {
+	m := newMachine(t)
+	a := plainRig(t, "")
+	b := plainRig(t, "")
+	put(t, b, "commands/extra.md", "extra command\n", 0o644)
+	put(t, b, "rigfile.yaml", strings.Replace(mustReadStr(t, filepath.Join(b, "rigfile.yaml")), "commands:\n", "commands:\n  - {path: commands/extra.md}\n", 1), 0o644)
+	r := m.run("", "changes", a, b, "--diff")
+	if r.code != 0 || !strings.Contains(r.out, "commands extra") || !strings.Contains(r.out, "+extra command") {
+		t.Fatalf("%+v", r)
+	}
+	if r := m.run("", "changes", a, a); r.code != 0 || !strings.Contains(r.out, "no changes") {
+		t.Fatalf("%+v", r)
+	}
+	for _, args := range [][]string{{"changes"}, {"changes", a}, {"changes", a, "not-a-rig"}} {
+		if r := m.run("", args...); r.code != 2 {
+			t.Fatalf("%v: %+v", args, r)
+		}
+	}
+}
+
+func TestForkCopiesARigAsYourOwn(t *testing.T) {
+	m := newMachine(t)
+	src := plainRig(t, "")
+	put(t, src, ".git/HEAD", "ref: refs/heads/main", 0o644)
+	put(t, src, "rigfile.lock", "lock", 0o644)
+	put(t, src, "scripts/run.sh", "#!/bin/sh\necho hi\n", 0o755)
+	out := filepath.Join(t.TempDir(), "mine")
+	r := m.run("", "fork", src, "--name", "me/mine", "--out", out)
+	if r.code != 0 || !strings.Contains(r.out, "forked from jiaxu/plain@") {
+		t.Fatalf("%+v", r)
+	}
+	doc := mustReadStr(t, filepath.Join(out, "rigfile.yaml"))
+	if !strings.HasPrefix(doc, "# Forked from jiaxu/plain@") || !strings.Contains(doc, "\nname: me/mine\n") || !strings.Contains(doc, "\nversion: 0.1.0\n") || strings.Contains(doc, "name: jiaxu/plain") {
+		t.Fatalf("the manifest must be renamed and credit the original:\n%s", doc)
+	}
+	for _, gone := range []string{".git", "rigfile.lock"} {
+		if _, err := os.Stat(filepath.Join(out, gone)); !os.IsNotExist(err) {
+			t.Errorf("%s must not be copied", gone)
+		}
+	}
+	if runtime.GOOS != "windows" {
+		if st, err := os.Stat(filepath.Join(out, "scripts", "run.sh")); err != nil || st.Mode().Perm()&0o100 == 0 {
+			t.Errorf("scripts stay executable: %v %v", st, err)
+		}
+	}
+	// the fork is a working rig
+	if r := m.run("", "validate", out); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	// it refuses to write over files, bad names, and --extend on a directory
+	if r := m.run("", "fork", src, "--name", "me/mine", "--out", out); r.code != 1 || !strings.Contains(r.err, "already has files") {
+		t.Fatalf("%+v", r)
+	}
+	for _, args := range [][]string{{"fork"}, {"fork", src}, {"fork", src, "--name", "Bad Name"}, {"fork", src, "--name", "noowner"}} {
+		if r := m.run("", args...); r.code != 2 {
+			t.Fatalf("%v: %+v", args, r)
+		}
+	}
+	other := filepath.Join(t.TempDir(), "ext")
+	if r := m.run("", "fork", src, "--name", "me/ext", "--out", other, "--extend"); r.code != 1 || !strings.Contains(r.err, "registry or git source") {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(other); !os.IsNotExist(err) {
+		t.Fatal("a failed fork must not leave a directory behind")
+	}
+}
+
+// fakeRegistry serves one rig directory for any registry request.
+type fakeRegistry struct{ rig string }
+
+func (f fakeRegistry) Resolve(_ context.Context, _ source.Spec) (string, error) {
+	return strings.Repeat("a", 40), nil
+}
+
+func (f fakeRegistry) Fetch(_ context.Context, _ source.Spec, _, dest string) error {
+	return copyRig(f.rig, dest)
+}
+
+func TestForkExtendBuildsOnARegistryRig(t *testing.T) {
+	m := newMachine(t)
+	m.env["RIGFILE_REGISTRY"] = "https://registry.example.test"
+	src := plainRig(t, "")
+	m.src = &source.Client{CacheDir: filepath.Join(t.TempDir(), "sources"), Registry: fakeRegistry{rig: src}}
+	out := filepath.Join(t.TempDir(), "child")
+	r := m.run("", "fork", "jiaxu/plain@1.0.0", "--name", "me/child", "--out", out, "--extend")
+	if r.code != 0 || !strings.Contains(r.out, "builds on jiaxu/plain@") {
+		t.Fatalf("%+v", r)
+	}
+	doc := mustReadStr(t, filepath.Join(out, "rigfile.yaml"))
+	if !strings.Contains(doc, "name: me/child\n") || !strings.Contains(doc, "from:\n  - jiaxu/plain@^") || strings.Contains(doc, "instructions") {
+		t.Fatalf("an extension holds only what it adds, and points at the base:\n%s", doc)
+	}
+	if r := m.run("", "validate", out); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
 }

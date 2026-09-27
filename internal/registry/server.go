@@ -35,6 +35,8 @@ type Server struct {
 	VerifySignature func(bundle, artifact []byte) (*sigverify.Result, error)
 	sigOnce         sync.Once
 	sigErr          error
+
+	diff diffState
 }
 
 func (s *Server) trustedRoot() (root.TrustedMaterial, error) {
@@ -65,6 +67,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /static/", staticHandler())
 	s.authRoutes(mux)
 	s.apiRoutes(mux)
+	s.collectionRoutes(mux)
+	s.orgRoutes(mux)
+	s.manageRoutes(mux)
 	s.pageRoutes(mux)
 	return s.recoverer(s.headers(s.logged(mux)))
 }

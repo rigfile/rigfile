@@ -18,6 +18,7 @@ func (s *Server) pageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /u/{login}", s.pageProfile)
 	mux.HandleFunc("GET /r/{owner}/{name}", s.pageRig)
 	mux.HandleFunc("GET /r/{owner}/{name}/v/{version}", s.pageRig)
+	mux.HandleFunc("GET /r/{owner}/{name}/diff", s.pageDiff)
 	mux.HandleFunc("GET /r/{owner}/{name}/v/{version}/files/{path...}", s.pageFile)
 	mux.HandleFunc("GET /r/{owner}/{name}/v/{version}/raw/{path...}", s.rawFile)
 	mux.HandleFunc("POST /r/{owner}/{name}/star", s.pageStar)
@@ -66,8 +67,13 @@ func (s *Server) pageSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 type profileData struct {
-	Login string
-	Rigs  []RigSummary
+	Login       string
+	Rigs        []RigSummary
+	Collections []Collection
+	Org         *Org
+	Members     []Member
+	Own         bool   // the signed-in user's own profile
+	MyRole      string // their role, on an organisation's page
 }
 
 func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
@@ -78,27 +84,44 @@ func (s *Server) pageProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.Store.UserByLogin(r.Context(), login); err != nil {
+		if org, oerr := s.Store.OrgByLogin(r.Context(), login); oerr == nil {
+			rs, _ := s.Store.OrgRigs(r.Context(), org, v)
+			var members []Member
+			if u != nil {
+				members, _ = s.Store.Members(r.Context(), u, org) // only members get the list
+			}
+			role := ""
+			if u != nil {
+				role = s.Store.OrgRole(r.Context(), u, org.ID)
+			}
+			s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs, Org: org, Members: members, MyRole: role}})
+			return
+		}
 		s.notFound(w, r)
 		return
 	}
 	rs, _ := s.Store.OwnedRigs(r.Context(), login, v)
-	s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs}})
+	cs, _ := s.Store.UserCollections(r.Context(), login, v)
+	s.render(w, r, http.StatusOK, "profile.html", Page{Title: login, User: u, CSRF: csrf, Data: profileData{Login: login, Rigs: rs, Collections: cs, Own: u != nil && u.Login == login}})
 }
 
 // RigPage is everything the rig page shows.
 type RigPage struct {
-	Rig        *Rig
-	Version    *Version
-	Versions   []Version
-	Files      []FileEntry
-	Readme     template.HTML
-	Install    string
-	InstallPin string
-	IsOwner    bool
-	Trust      *Trust
-	Registry   string
-	Layers     []string
-	Latest     string
+	Rig         *Rig
+	Version     *Version
+	Versions    []Version
+	Files       []FileEntry
+	Readme      template.HTML
+	Install     string
+	InstallPin  string
+	IsOwner     bool
+	Trust       *Trust
+	Registry    string
+	Layers      []string
+	Latest      string
+	Derived     []RigSummary
+	DerivedN    int
+	BaseSnippet string
 }
 
 func (s *Server) loadRig(w http.ResponseWriter, r *http.Request) (*RigPage, *User, string, bool) {
@@ -114,7 +137,7 @@ func (s *Server) loadRig(w http.ResponseWriter, r *http.Request) (*RigPage, *Use
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return nil, nil, "", false
 	}
-	page := &RigPage{Rig: rig, Versions: vs, Registry: s.Cfg.PublicURL, IsOwner: u != nil && (u.ID == rig.CreatedBy || u.IsAdmin)}
+	page := &RigPage{Rig: rig, Versions: vs, Registry: s.Cfg.PublicURL, IsOwner: s.Store.CanManage(r.Context(), u, rig)}
 	for i := range vs {
 		if vs[i].Status == "published" {
 			page.Latest = vs[i].Version
@@ -151,6 +174,9 @@ func (s *Server) pageRig(w http.ResponseWriter, r *http.Request) {
 		page.Layers = page.Version.Layers
 		page.Install = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + " --registry " + s.Cfg.PublicURL
 		page.Trust, _ = s.Store.Trust(r.Context(), page.Rig, page.Version)
+		page.BaseSnippet = "from:\n  - " + page.Rig.Owner + "/" + page.Rig.Name + "@^" + majorMinor(page.Version.Version)
+		viewer, _, _ := s.pageViewer(r)
+		page.Derived, page.DerivedN, _ = s.Store.Derived(r.Context(), page.Rig.Owner, page.Rig.Name, viewer, 10)
 		page.InstallPin = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + "@" + page.Version.Version + " --registry " + s.Cfg.PublicURL
 	}
 	title := page.Rig.Owner + "/" + page.Rig.Name
@@ -270,4 +296,13 @@ func (s *Server) pageVisibility(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Redirect(w, r, "/r/"+url.PathEscape(r.PathValue("owner"))+"/"+url.PathEscape(r.PathValue("name")), http.StatusSeeOther)
 	}
+}
+
+// majorMinor turns 1.4.2 into 1.4 (the range a "use as base" snippet suggests: compatible with what the page shows).
+func majorMinor(v string) string {
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) < 2 {
+		return v
+	}
+	return parts[0] + "." + parts[1]
 }

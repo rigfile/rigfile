@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -20,6 +19,7 @@ func cmdPull(verb string, args []string, e env) int {
 	fs := rigFlagSet(verb, e, &f, true)
 	planOnly := fs.Bool("plan-only", false, "show the plan for the fetched rig and stop (nothing is applied)")
 	requireSig := fs.Bool("require-signature", false, "refuse a registry rig unless its Sigstore signature verifies here and is the publisher's own GitHub Actions identity")
+	showDiff := fs.Bool("diff", false, "update: also show the text of changed files")
 	acceptSigner := fs.Bool("accept-signer-change", false, "update: accept a version whose signer differs from the one you pulled before")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
@@ -35,10 +35,7 @@ func cmdPull(verb string, args []string, e env) int {
 		fmt.Fprintln(e.err, "rigfile:", err)
 		return 1
 	}
-	client := e.sources
-	if client == nil {
-		client = &source.Client{CacheDir: filepath.Join(sd, "sources"), Getenv: e.getenv, Registry: registryFetcher(e)}
-	}
+	client := sourceClient(e, sd)
 
 	var spec source.Spec
 	var prev *state.RigRef
@@ -129,7 +126,9 @@ func cmdPull(verb string, args []string, e env) int {
 		banner = append(banner, trustLines(e, spec, got)...)
 	}
 	if prev != nil {
-		banner = append([]string{fmt.Sprintf("Update: %s -> %s", short12(prev.Commit), short12(got.Commit))}, banner...)
+		head := []string{fmt.Sprintf("Update: %s -> %s", short12(prev.Commit), short12(got.Commit))}
+		head = append(head, updateChangeLines(prev.Dir, got.Dir, short12(prev.Commit), short12(got.Commit), *showDiff)...)
+		banner = append(head, banner...)
 	}
 	if spec.Ref == "" || !source.IsCommit(spec.Ref) && prev == nil {
 		banner = append(banner, fmt.Sprintf("note: %s was resolved to commit %s now and is pinned to it; `rigfile update` follows the ref later.", refName(spec), got.Commit[:12]))

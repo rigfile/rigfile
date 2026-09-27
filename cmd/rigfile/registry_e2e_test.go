@@ -304,3 +304,126 @@ func TestSignedRigsAreVerifiedOnThePullingMachineAndSignerChangesAreRefused(t *t
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestRegistryCollectionsForksAndChangesFromTheCLI(t *testing.T) {
+	regURL, store := startRegistry(t)
+	if _, err := store.UpsertUser(context.Background(), registry.GitHubUser{ID: 1, Login: "jia"}, false); err != nil {
+		t.Fatal(err)
+	}
+	a := registryMachine(t, regURL)
+	approveWhenAsked(t, store, "jia")
+	if r := a.run("", "login"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "publish", regRig(t, "jia", "shared", "1.0.0", ""), "--to-registry", "--public", "--ack-personal"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	extra := "mcp_servers:\n  search:\n    command: npx\n    args: [\"-y\", \"search-mcp@1.0.0\"]\n"
+	if r := a.run("", "publish", regRig(t, "jia", "shared", "1.1.0", extra), "--to-registry", "--ack-personal"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+
+	// what changed between two registry versions, on the pulling side
+	r := a.run("", "changes", "jia/shared@1.0.0", "jia/shared@1.1.0")
+	if r.code != 0 || !strings.Contains(r.out, "Look at these before you accept") || !strings.Contains(r.out, "adds an MCP server that runs: npx -y search-mcp@1.0.0") {
+		t.Fatalf("%+v", r)
+	}
+
+	// collections
+	if r := a.run("", "collection", "create", "starters", "--title", "Starter rigs", "--description", "where to begin"); r.code != 0 || !strings.Contains(r.out, "Created jia/starters (public)") {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "collection", "add", "starters", "jia/shared", "--note", "a small one"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "collection", "show", "jia/starters"); r.code != 0 || !strings.Contains(r.out, "Starter rigs") || !strings.Contains(r.out, "jia/shared@1.1.0   a small one") {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "collection", "list"); r.code != 0 || !strings.Contains(r.out, "jia/starters") {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "collection", "add", "starters", "jia/nothing"); r.code != 1 || !strings.Contains(r.err, "no such") {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "collection", "rm", "starters", "jia/shared"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "collection", "delete", "starters"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "collection", "show", "jia/starters"); r.code != 1 {
+		t.Fatalf("%+v", r)
+	}
+	for _, args := range [][]string{{"collection"}, {"collection", "create"}, {"collection", "add", "x"}, {"collection", "nope"}} {
+		if r := a.run("", args...); r.code != 2 {
+			t.Fatalf("%v: %+v", args, r)
+		}
+	}
+
+	// fork a registry rig, and extend one
+	out := filepath.Join(t.TempDir(), "mine")
+	if r := a.run("", "fork", "jia/shared@1.0.0", "--name", "me/mine", "--out", out); r.code != 0 || !strings.Contains(r.out, "forked from jia/shared@1.0.0") {
+		t.Fatalf("%+v", r)
+	}
+	ext := filepath.Join(t.TempDir(), "ext")
+	if r := a.run("", "fork", "jia/shared@1.0.0", "--name", "me/ext", "--out", ext, "--extend"); r.code != 0 || !strings.Contains(string(mustRead(t, filepath.Join(ext, "rigfile.yaml"))), "from:\n  - jia/shared@^1.0") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestRegistryOrganisationsFromTheCLI(t *testing.T) {
+	regURL, store := startRegistry(t)
+	ctx := context.Background()
+	for i, l := range []string{"jia", "bob"} {
+		if _, err := store.UpsertUser(ctx, registry.GitHubUser{ID: int64(i + 1), Login: l}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a, b := registryMachine(t, regURL), registryMachine(t, regURL)
+	for _, x := range []struct {
+		m     *machine
+		login string
+	}{{a, "jia"}, {b, "bob"}} {
+		approveWhenAsked(t, store, x.login)
+		if r := x.m.run("", "login"); r.code != 0 {
+			t.Fatalf("%s: %+v", x.login, r)
+		}
+	}
+	if r := a.run("", "org", "create", "acme", "--title", "Acme"); r.code != 0 || !strings.Contains(r.out, "you are its owner") {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "org", "create", "bob"); r.code != 1 || !strings.Contains(r.err, "already") {
+		t.Fatalf("%+v", r)
+	}
+	// bob is outside: cannot publish, cannot list members
+	rig := regRig(t, "acme", "tool", "1.0.0", "")
+	if r := b.run("", "publish", rig, "--to-registry", "--ack-personal"); r.code != 1 || !strings.Contains(r.err, "organisation") {
+		t.Fatalf("%+v", r)
+	}
+	if r := b.run("", "org", "members", "acme"); r.code != 1 {
+		t.Fatalf("%+v", r)
+	}
+	if r := a.run("", "org", "add", "acme", "bob"); r.code != 0 || !strings.Contains(r.out, "bob is now a member of acme") {
+		t.Fatalf("%+v", r)
+	}
+	if r := b.run("", "org", "list"); r.code != 0 || !strings.Contains(r.out, "acme  (member)") {
+		t.Fatalf("%+v", r)
+	}
+	if r := b.run("", "publish", rig, "--to-registry", "--ack-personal"); r.code != 0 || !strings.Contains(r.out, "published acme/tool@1.0.0") {
+		t.Fatalf("a member publishes under the organisation: %+v", r)
+	}
+	if r := a.run("", "org", "members", "acme"); r.code != 0 || !strings.Contains(r.out, "jia  (owner)") || !strings.Contains(r.out, "bob  (member)") {
+		t.Fatalf("%+v", r)
+	}
+	if r := b.run("", "org", "rm", "acme", "bob"); r.code != 0 {
+		t.Fatalf("leaving: %+v", r)
+	}
+	if r := b.run("", "pull", "acme/tool", "--plan-only", "--no-git"); r.code != 1 {
+		t.Fatalf("a former member cannot pull the private rig: %+v", r)
+	}
+	for _, args := range [][]string{{"org"}, {"org", "create"}, {"org", "add", "acme"}, {"org", "nope"}} {
+		if r := a.run("", args...); r.code != 2 {
+			t.Fatalf("%v: %+v", args, r)
+		}
+	}
+}

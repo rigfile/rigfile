@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/digitaldreamer3462/rigfile/internal/rigd"
+	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
 
 // TestHelperLevel2 is the child launched by the Level 2 tests: it reports what its environment holds.
@@ -43,7 +44,12 @@ func newL2(t *testing.T, startBroker bool) *l2rig {
 	m.env["RIGFILE_PASSPHRASE_FILE"] = pass
 	r := &l2rig{m: m, dir: filepath.Join(m.stateDir(), "rigd"), real: "REAL" + "-" + "value" + "-" + "0d4c9b17aa"}
 	if startBroker {
-		r.b = &rigd.Broker{Dir: r.dir, Version: "test", Resolve: func(ref string) ([]byte, error) {
+		r.b = &rigd.Broker{Dir: r.dir, Version: "test", Policy: func() (rigd.Policies, error) {
+			return rigd.Policies{
+				"alpaca":   {Command: "node", Allow: []string{"api.alpaca.markets"}, Secrets: map[string]state.SecretBinding{"ALPACA_API_KEY": {Ref: "alpaca/api_key", Hosts: []string{"api.alpaca.markets"}}}},
+				"readless": {Allow: []string{"api.alpaca.markets"}, Secrets: map[string]state.SecretBinding{"K": {Ref: "other/one", Hosts: []string{"api.alpaca.markets"}}}},
+			}, nil
+		}, Resolve: func(ref string) ([]byte, error) {
 			if ref != "alpaca/api_key" {
 				return nil, errors.New("not set")
 			}
@@ -133,30 +139,33 @@ func TestExecLevel2FallsBackOrFailsClosedAsSpecified(t *testing.T) {
 func TestExecLevel2RefusesWhatItCannotProtect(t *testing.T) {
 	r := newL2(t, true)
 	r.m.run("", "broker", "enable")
-	// a secret with no bound hosts: never falls back silently
-	res := r.exec("--allow", "api.alpaca.markets")
-	if res.code != 1 || !strings.Contains(res.err, "secrets.alpaca/api_key.hosts") || strings.Contains(res.out, "key") {
+	// a server the last apply never approved: the broker has no policy for it, and exec does not fall back
+	res := r.m.run("", "exec", "--server", "unapproved", "--allow", "api.alpaca.markets", "--secret", "ALPACA_API_KEY=alpaca/api_key", "--", os.Args[0], "-test.run=^TestHelperLevel2$")
+	if res.code != 1 || !strings.Contains(res.err, "no approved policy") || !strings.Contains(res.err, "rigfile apply") || !strings.Contains(res.err, "broker exclude unapproved") {
 		t.Fatalf("%+v", res)
 	}
-	// a secret the broker cannot read
-	res = r.m.run("", "exec", "--server", "alpaca", "--allow", "api.alpaca.markets", "--bind", "other/one=api.alpaca.markets", "--secret", "K=other/one", "--", os.Args[0], "-test.run=^TestHelperLevel2$")
-	if res.code != 1 || !strings.Contains(res.err, "could not protect alpaca") || !strings.Contains(res.err, "broker exclude alpaca") {
+	// hosts on the command line are ignored: the policy's hosts win, so an edited config cannot redirect a key
+	res = r.exec("--allow", "attacker.example.test", "--bind", "alpaca/api_key=attacker.example.test")
+	if res.code != 0 || !strings.Contains(res.out, `"key":"rgs_sur_`) {
+		t.Fatalf("%+v", res)
+	}
+	// a secret the policy does not give this variable
+	res = r.m.run("", "exec", "--server", "alpaca", "--allow", "api.alpaca.markets", "--secret", "OTHER_VAR=alpaca/api_key", "--", os.Args[0], "-test.run=^TestHelperLevel2$")
+	if res.code != 1 || !strings.Contains(res.err, "does not give OTHER_VAR a secret") {
+		t.Fatalf("%+v", res)
+	}
+	// an approved secret the broker cannot read
+	res = r.m.run("", "exec", "--server", "readless", "--allow", "api.alpaca.markets", "--secret", "K=other/one", "--", os.Args[0], "-test.run=^TestHelperLevel2$")
+	if res.code != 1 || !strings.Contains(res.err, "could not protect readless") || !strings.Contains(res.err, "broker exclude readless") {
 		t.Fatalf("%+v", res)
 	}
 	// a malformed flag
 	if res := r.m.run("", "exec", "--bind", "nohosts", "--", "x"); res.code != 2 {
 		t.Fatalf("%+v", res)
 	}
-	if r.b.Sessions() != 0 {
-		t.Fatal("a refused launch must leave no session behind")
-	}
-}
-
-func TestLauncherHostsOnlyForPackageLaunchers(t *testing.T) {
-	for cmd, want := range map[string]string{"npx": "registry.npmjs.org", `C:\x\npx.cmd`: "registry.npmjs.org", "uvx": "pypi.org", "/usr/bin/node": "", "python3": ""} {
-		got := strings.Join(launcherHosts(cmd), ",")
-		if want == "" && got != "" || want != "" && !strings.Contains(got, want) {
-			t.Errorf("%s: %q", cmd, got)
+	if r.b.Sessions() != 1 { // only the successful launch above, ended when its child exited
+		if r.b.Sessions() != 0 {
+			t.Fatalf("a refused launch must leave no session behind (%d live)", r.b.Sessions())
 		}
 	}
 }

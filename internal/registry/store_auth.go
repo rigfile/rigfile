@@ -73,6 +73,9 @@ func (s *Store) UpsertUser(ctx context.Context, g GitHubUser, isAdmin bool) (*Us
 		ON CONFLICT (github_id) DO UPDATE SET login = EXCLUDED.login, name = EXCLUDED.name, avatar_url = EXCLUDED.avatar_url, is_admin = EXCLUDED.is_admin
 		RETURNING id, github_id, login, name, avatar_url, is_admin, disabled_at`,
 		g.ID, login, g.Name, g.AvatarURL, isAdmin).Scan(&u.ID, &u.GitHubID, &u.Login, &u.Name, &u.AvatarURL, &u.IsAdmin, &disabled)
+	if isUnique(err) {
+		return nil, fmt.Errorf("%w: %s is already used here by an organisation or another account", ErrNameTaken, login)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("registry: cannot record the account %q: %w", login, err)
 	}

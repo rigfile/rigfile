@@ -103,3 +103,23 @@ New known weak points:
 - **Star counts can be bought or faked**; the popular-rig policy is a soft trigger.
 - **OSV is a third party**: its outage degrades the check to a warning; its content is treated as untrusted text. The `MAL-` convention is unverified against the live API.
 - **No re-scan of stored versions** when rules improve.
+
+## 7. Stage 8 additions (2026-09-26)
+
+New surface: version diffs, forks (derived rigs), collections, organisations, and (client side) `rigfile ui`.
+
+| Claim | Evidence |
+|---|---|
+| A diff never shows a viewer a version they cannot see; a cached result cannot widen that; hostile text is escaped; diffs are rate limited and bounded | `TestDiffBetweenVersions` (pending and private versions, escaping, rate limit), `docs/diffs.md` |
+| Derived-rig lists and collections reveal only what search already shows / what the viewer may see | `TestDerivedRigsAndUseAsBase`, `TestCollections` |
+| **Organisation membership is the access control for its rigs, on every read path**, and a departed member loses access at once | `TestOrganisations` (a stranger, a former member and an anonymous viewer against every route, plus collections, diffs and search) |
+| A person and an organisation cannot hold one name, even racing | `TestNamespaceRaceHasOneWinner`, migration `0004` triggers |
+| Role limits: admins cannot touch owners; the last owner stays | `TestOrganisations` |
+| A disabled organisation's rigs vanish for everyone but site admins | `TestDisabledOrganisationVanishes` |
+
+Attack these first: the two SQL fragments in `store_rigs.go` (`rigVisibleAdm`, `versionVisible`) now embed `rigMember` and the disabled-organisation clause, so a mistake there is a leak across every feature; `CreateVersion` (which now decides organisation membership inside the upload transaction); `store_orgs.go` role checks; the `namespace_free()` trigger; and `internal/registry/diff.go` (two archive extractions per request).
+
+New known weak points:
+- An organisation member is fully trusted with the organisation's namespace: any member can publish (and yank) a version that other members' machines will pull. There is no per-rig role and no approval step.
+- Invitations do not exist: members must have signed in once. Organisation creation is open to any signed-in user (capped at 10 each); squatting is handled by admin `disable-org`, not prevented.
+- Diff notes are a fixed rule list, not analysis: a malicious change in a file the rules do not recognise is shown as a plain text diff without a note.

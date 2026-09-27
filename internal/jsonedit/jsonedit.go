@@ -26,7 +26,7 @@ var (
 // array (and any missing parent objects) if necessary. It returns the new document and the values
 // that were actually added (values already present, and duplicates within vals, are skipped).
 // An empty or whitespace-only doc is treated as {}.
-func AppendStrings(doc []byte, path []string, vals []string) (out []byte, added []string, err error) {
+func appendStrings(doc []byte, path []string, vals []string) (out []byte, added []string, err error) {
 	return appendGeneric(doc, path, vals, genericOps{
 		render: func(_ style, _ int, v string) (string, error) { return quote(v), nil },
 		existingKey: func(e gjson.Result) (string, error) {
@@ -43,7 +43,7 @@ func AppendStrings(doc []byte, path []string, vals []string) (out []byte, added 
 // raws must be valid JSON. Elements are compared by their compacted text, so an element that is already
 // present (byte-for-byte after compaction) is skipped. New elements are indented to match the document.
 // Use it for structured entries such as Claude Code hook definitions.
-func AppendRaw(doc []byte, path []string, raws []string) (out []byte, added []string, err error) {
+func appendRaw(doc []byte, path []string, raws []string) (out []byte, added []string, err error) {
 	return appendGeneric(doc, path, raws, genericOps{
 		render:      func(st style, level int, v string) (string, error) { return formatRaw(st, level, v) },
 		existingKey: func(e gjson.Result) (string, error) { return compact(e.Raw) },
@@ -54,13 +54,13 @@ func AppendRaw(doc []byte, path []string, raws []string) (out []byte, added []st
 // SetMissingString ensures the object member at path exists, giving it the string value if (and only if) it
 // is absent. An existing member is NEVER changed: existing is its current value (raw JSON text for non-strings)
 // and added is false. Missing parent objects are created. Layout of everything else is preserved.
-func SetMissingString(doc []byte, path []string, value string) (out []byte, existing string, added bool, err error) {
-	return SetMissingRaw(doc, path, quote(value))
+func setMissingString(doc []byte, path []string, value string) (out []byte, existing string, added bool, err error) {
+	return setMissingRaw(doc, path, quote(value))
 }
 
 // SetMissingRaw is SetMissingString for any JSON scalar or value: raw is its JSON text (`true`, `"x"`, `3`).
 // existing is the current value's text (unquoted for strings).
-func SetMissingRaw(doc []byte, path []string, raw string) (out []byte, existing string, added bool, err error) {
+func setMissingRaw(doc []byte, path []string, raw string) (out []byte, existing string, added bool, err error) {
 	if !gjson.Valid(raw) {
 		return nil, "", false, fmt.Errorf("jsonedit: %q is not a JSON value", raw)
 	}
@@ -102,7 +102,7 @@ func SetMissingRaw(doc []byte, path []string, raw string) (out []byte, existing 
 }
 
 // ReadValueRaw returns the compacted JSON text of the value at path (ok=false when absent).
-func ReadValueRaw(doc []byte, path []string) (string, bool) {
+func readValueRaw(doc []byte, path []string) (string, bool) {
 	if len(bytes.TrimSpace(doc)) == 0 || !gjson.ValidBytes(doc) {
 		return "", false
 	}
@@ -115,7 +115,7 @@ func ReadValueRaw(doc []byte, path []string) (string, bool) {
 }
 
 // ReadString returns the string value at path (ok=false when absent or not a string).
-func ReadString(doc []byte, path []string) (string, bool) {
+func readString(doc []byte, path []string) (string, bool) {
 	if len(bytes.TrimSpace(doc)) == 0 || !gjson.ValidBytes(doc) {
 		return "", false
 	}
@@ -140,7 +140,7 @@ func buildChain(st style, level int, keys []string, rawLeaf string) string {
 }
 
 // ReadRaw returns the compacted text of every element of the array at path (missing path: nil).
-func ReadRaw(doc []byte, path []string) ([]string, error) {
+func readRaw(doc []byte, path []string) ([]string, error) {
 	if len(bytes.TrimSpace(doc)) == 0 {
 		return nil, nil
 	}
@@ -563,7 +563,7 @@ func insertCompact(doc []byte, st style, open, close int, member string) []byte 
 
 // ReadStrings returns the string elements of the array at path. A missing path yields (nil, nil);
 // a value of the wrong type is an error.
-func ReadStrings(doc []byte, path []string) ([]string, error) {
+func readStrings(doc []byte, path []string) ([]string, error) {
 	if len(bytes.TrimSpace(doc)) == 0 {
 		return nil, nil
 	}
@@ -591,7 +591,7 @@ func ReadStrings(doc []byte, path []string) ([]string, error) {
 // splicing text: the commas and whitespace around a removed element are removed with it and nothing
 // else is touched. It is used only for entries Rigfile itself added (recorded in state.json).
 // A missing path or no match is not an error. If the last element is removed the array becomes [].
-func RemoveRaw(doc []byte, path []string, raws []string) (out []byte, removed int, err error) {
+func removeRaw(doc []byte, path []string, raws []string) (out []byte, removed int, err error) {
 	if len(bytes.TrimSpace(doc)) == 0 {
 		return doc, 0, nil
 	}
@@ -647,12 +647,12 @@ func RemoveRaw(doc []byte, path []string, raws []string) (out []byte, removed in
 }
 
 // RemoveStrings is RemoveRaw for string values.
-func RemoveStrings(doc []byte, path []string, vals []string) ([]byte, int, error) {
+func removeStrings(doc []byte, path []string, vals []string) ([]byte, int, error) {
 	raws := make([]string, len(vals))
 	for i, v := range vals {
 		raws[i] = quote(v)
 	}
-	return RemoveRaw(doc, path, raws)
+	return removeRaw(doc, path, raws)
 }
 
 // elementSpans returns [start,end) offsets (relative to raw, which must be a JSON array) of each
@@ -719,7 +719,7 @@ func trimEnd(raw string, start, end int) int {
 
 // ReplaceRaw replaces the value of an EXISTING member at path with raw (JSON text), keeping everything else
 // byte-for-byte. replaced is false when the member does not exist. Use it only for members Rigfile owns.
-func ReplaceRaw(doc []byte, path []string, raw string) (out []byte, replaced bool, err error) {
+func replaceRaw(doc []byte, path []string, raw string) (out []byte, replaced bool, err error) {
 	if !gjson.Valid(raw) {
 		return nil, false, fmt.Errorf("jsonedit: %q is not a JSON value", raw)
 	}
@@ -749,7 +749,7 @@ func ReplaceRaw(doc []byte, path []string, raw string) (out []byte, replaced boo
 // RemoveMember deletes the object member at path (its key, value and the comma that joined it to its
 // neighbours), keeping the rest of the document byte-for-byte, including the layout of the other members.
 // removed is false when the member does not exist.
-func RemoveMember(doc []byte, path []string) (out []byte, removed bool, err error) {
+func removeMember(doc []byte, path []string) (out []byte, removed bool, err error) {
 	if len(path) == 0 || !gjson.ValidBytes(doc) {
 		return nil, false, ErrInvalidJSON
 	}

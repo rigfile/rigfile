@@ -1,0 +1,18 @@
+{{template "head" .}}
+{{with .Data}}
+<h1>{{.C.Title}}{{if eq .C.Visibility "private"}} <span class="tag">private</span>{{end}}</h1>
+<p class="muted">A collection by <a href="/u/{{.C.Owner}}">{{.C.Owner}}</a></p>
+{{if .C.Description}}<p>{{.C.Description}}</p>{{end}}
+{{if .Items}}{{range .Items}}<div class="card"><h3><a href="/r/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a>{{if .Latest}} <span class="muted">{{.Latest}}</span>{{end}}</h3>
+<div>{{.Description}}</div>{{if .Note}}<div class="muted">{{.Note}}</div>{{end}}<div class="muted">{{.Stars}} ★</div>
+{{if $.Data.Mine}}<form class="inline" method="post" action="/manage/collections/{{$.Data.C.Slug}}/remove"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="rig" value="{{.Owner}}/{{.Name}}"><button class="link" type="submit">remove</button></form>{{end}}</div>{{end}}
+{{else}}<p class="muted">Nothing here yet.</p>{{end}}
+{{if .Mine}}<div class="card"><strong>Add a rig</strong>
+<form method="post" action="/manage/collections/{{.C.Slug}}/add"><input type="hidden" name="csrf" value="{{$.CSRF}}">
+<div><label>Rig <input type="text" name="rig" placeholder="owner/name" required></label></div>
+<div><label>Note <input type="text" name="note" maxlength="200"></label></div>
+<button type="submit">Add</button></form></div>
+<form class="card" method="post" action="/manage/collections/{{.C.Slug}}/delete"><input type="hidden" name="csrf" value="{{$.CSRF}}">
+<label><input type="checkbox" name="confirm" value="yes" required> Delete this collection</label> <button type="submit">Delete</button></form>{{end}}
+{{end}}
+{{template "foot" .}}

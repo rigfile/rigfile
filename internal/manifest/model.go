@@ -302,6 +302,7 @@ type ModelVariant struct {
 	EngineVersion string         `yaml:"engine_version"`
 	Model         string         `yaml:"model"`
 	Revision      string         `yaml:"revision"`
+	Digest        string         `yaml:"digest"`
 	WeightsFormat string         `yaml:"weights_format"`
 	Args          map[string]any `yaml:"args"`
 }

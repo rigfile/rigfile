@@ -24,3 +24,7 @@ table { border-collapse:collapse; width:100%; } th,td { text-align:left; padding
 .banner { border:1px solid var(--warn); border-radius:8px; padding:8px 12px; margin:12px 0; }
 footer { border-top:1px solid var(--line); color:var(--muted); font-size:14px; margin-top:32px; }
 .readme img { max-width:100%; }
+table.diff { width:100%; border-collapse:collapse; margin-top:8px; } table.diff td { padding:3px 8px; border-top:1px solid var(--line); vertical-align:top; } table.diff td.mark { width:1.5em; font-weight:700; }
+tr.added td.mark { color:var(--ok); } tr.removed td.mark { color:var(--bad); } tr.changed td.mark { color:var(--warn); }
+pre.udiff { padding:0; } pre.udiff span { display:block; padding:0 12px; white-space:pre; } pre.udiff .add { color:var(--ok); } pre.udiff .del { color:var(--bad); } pre.udiff .hunk { color:var(--accent); } pre.udiff .file { color:var(--muted); }
+form.inline { display:inline; margin-left:8px; } button.link { background:none; border:0; color:var(--accent); cursor:pointer; padding:0; font:inherit; }

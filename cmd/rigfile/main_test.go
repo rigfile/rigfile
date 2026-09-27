@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/digitaldreamer3462/rigfile/internal/models"
 	"io"
 	"os"
 	"os/exec"
@@ -104,7 +105,8 @@ func runWith(m *machine, out, errb io.Writer, tweak func(*env), args ...string) 
 
 func (m *machine) runIO(in io.Reader, out, errb io.Writer, tweak func(*env), args ...string) int {
 	e := env{
-		in: in, out: out, err: errb,
+		detectModels: func() []models.Detected { return nil }, // never probe the developer's real Ollama
+		in:           in, out: out, err: errb,
 		getenv: func(k string) string { return m.env[k] }, mcp: m.mcp, sources: m.src, interactive: m.tty, pollEvery: m.pollEvery, verifySig: m.verify,
 		runCmd: func(_ context.Context, argv []string) error { m.ran = append(m.ran, argv); return nil },
 		hidden: func(string) ([]byte, error) { return []byte(m.key), nil }, keyringOff: true, tools: m.tools,

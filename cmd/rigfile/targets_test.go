@@ -269,3 +269,36 @@ func TestInitFromCodexCapturesHandWrittenSetupAndSkipsSecrets(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestVSCodeCopilotIsProjectScopedAndNeverAutoSelectedWithoutAProject(t *testing.T) {
+	m := newMachine(t)
+	rig := plainRig(t, "instructions:\n  - {id: team, file: instructions/style.md, scope: project}\nmcp_servers:\n  docs:\n    transport: http\n    url: https://mcp.example.test/mcp\n")
+	put(t, rig, "instructions/style.md", "be terse\n", 0o644)
+	// no project: not selected, and the reason says how to select it
+	r := m.run("", "plan", rig, "--no-git")
+	if r.code != 0 || !strings.Contains(r.out, "vscode-copilot: not detected (project-scoped: pass --project <dir>") {
+		t.Fatalf("%+v", r)
+	}
+	// forced without a project: only notes, nothing to write
+	if r := m.run("", "plan", rig, "--no-git", "--target", "vscode-copilot"); r.code != 0 || !strings.Contains(r.out, "configured per PROJECT") {
+		t.Fatalf("%+v", r)
+	}
+	// with a project it writes the two committed files there, and nothing under the home directory
+	proj := t.TempDir()
+	if r := m.run("", "apply", rig, "--yes", "--no-git", "--target", "vscode-copilot", "--project", proj); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	mcp := string(mustRead(t, filepath.Join(proj, ".vscode", "mcp.json")))
+	ins := string(mustRead(t, filepath.Join(proj, ".github", "copilot-instructions.md")))
+	if !strings.Contains(mcp, `"servers"`) || !strings.Contains(mcp, "mcp.example.test") || !strings.Contains(ins, "be terse") {
+		t.Fatalf("%s\n%s", mcp, ins)
+	}
+	if _, err := os.Stat(filepath.Join(m.home, ".vscode")); !os.IsNotExist(err) {
+		t.Fatal("nothing may be written outside the project")
+	}
+	// a project that already has .vscode selects the target by itself
+	r = m.run("", "plan", rig, "--no-git", "--project", proj)
+	if !strings.Contains(r.out, "GitHub Copilot in VS Code") {
+		t.Fatalf("%s", r.out)
+	}
+}

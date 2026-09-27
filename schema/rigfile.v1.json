@@ -633,7 +633,12 @@
           "description": "Hugging Face repo id (org/name) or an Ollama tag (name:tag). Publisher org is shown on the plan screen (typosquat defense).",
           "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*|[a-z0-9][a-z0-9._-]*:[A-Za-z0-9._-]+)$"
         },
-        "revision": {
+        "digest": {
+        "type": "string",
+        "description": "Ollama: the model id (first 12 to 64 hex digits of its digest, as `ollama list` shows it) that a pull must match. A pull whose id differs is refused.",
+        "pattern": "^[0-9a-f]{12,64}$"
+      },
+      "revision": {
           "type": "string",
           "description": "Source revision: 40-hex commit SHA for Hugging Face repos. Downloads are pinned and hash-verified. The validator requires it for HF-hosted models on public rigs.",
           "pattern": "^[0-9a-f]{40}$"

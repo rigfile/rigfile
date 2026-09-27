@@ -173,3 +173,20 @@ repo_setups:
     source: https://github.com/cli/cli/blob/trunk/docs/install_linux.md
     steps_summary: "download keyring from cli.github.com/packages/githubcli-archive-keyring.gpg to /etc/apt/keyrings, add a sources.list.d entry, apt update, apt install gh"
     status: verified   # keyring URL and location confirmed in the upstream install doc on 2026-09-25; exact steps must be copied from the doc at implementation time, not from this summary
+
+  # ------------------------------------------------------------------ ollama
+  ollama:
+    description: Local LLM runtime (also the engine Rigfile prefers for local models, docs/models.md)
+    homepage: https://ollama.com/
+    license: MIT
+    detect: { command: ollama, args: [--version] }
+    observed: { brew: "0.34.4", arch: "0.34.4", winget-newest-listed: "0.23.2" }
+    install:
+      macos:
+        - { manager: brew, package: ollama, status: verified }
+      linux:
+        - { manager: pacman, package: ollama, status: verified }
+      windows:
+        - { manager: winget, package: Ollama.Ollama, status: verified,
+            notes: "The newest version directory listed in winget-pkgs on 2026-09-26 was 0.23.2 while brew and Arch ship 0.34.4: the winget package lags." }
+    notes: "checked 2026-09-26: brew formula `ollama` (formulae.brew.sh), winget id Ollama.Ollama (winget-pkgs manifests/o/Ollama/Ollama), Arch extra/ollama. Debian, Ubuntu and Fedora packages were NOT checked (unverified, so not listed); Ollama's own Linux installer is a curl|sh script, deliberately not listed (pipe_to_shell policy)."

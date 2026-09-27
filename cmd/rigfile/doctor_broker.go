@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/digitaldreamer3462/rigfile/internal/models"
 	"github.com/digitaldreamer3462/rigfile/internal/rigd"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 )
@@ -108,4 +112,38 @@ func addBrokerChecks(st *state.State, dir string, add func(checkLevel, string, s
 		return
 	}
 	add(worst, "secret broker", "%s", strings.Join(lines, "; "))
+}
+
+// addSyncCheck reports the private-sync membership of this device (from its own settings; the secret store is not opened).
+func addSyncCheck(sd string, add func(checkLevel, string, string, ...any)) {
+	b, err := os.ReadFile(filepath.Join(syncDir(sd), "config.json"))
+	if err != nil {
+		return
+	}
+	var cfg syncConfig
+	if json.Unmarshal(b, &cfg) != nil {
+		add(lvWarn, "sync", "the sync settings are damaged")
+		return
+	}
+	if _, err := os.Stat(cfg.Dir); err != nil {
+		add(lvWarn, "sync", "the vault directory %s is not there (is the drive or folder available?)", cfg.Dir)
+		return
+	}
+	add(lvOK, "sync", "device %s, vault %s, %d file(s) tracked", cfg.Device, cfg.Dir, len(cfg.Tracked))
+}
+
+// addModelChecks reports on every local model set up on this machine: server up, loopback only, chat, tool calls.
+func addModelChecks(dir string, add func(checkLevel, string, string, ...any)) {
+	recs, err := models.Load(dir)
+	if err != nil || len(recs) == 0 {
+		return
+	}
+	level := map[models.Level]checkLevel{models.OK: lvOK, models.Warn: lvWarn, models.Fail: lvFail}
+	for _, n := range recs.Names() {
+		r := recs[n]
+		r.Name = n
+		for _, c := range models.CheckModel(context.Background(), r, models.CheckOptions{}) {
+			add(level[c.Level], "model "+n+": "+c.Name, "%s", c.Detail)
+		}
+	}
 }
