@@ -117,4 +117,4 @@ Also tested end to end through the commands: two machines converging, conflicts 
 1. Two real machines, a private git repository you own: `init`, `join`, `approve`, `finish`, `track`, `push`, `pull`, and confirm the fingerprints match on both screens.
 2. Windows: `platform.WritePrivate` for the state files, path handling for tracked files, git available.
 3. **Check what you track.** The scanner is heuristic: a personal `CLAUDE.md` can hold text you would not want on a second machine's disk.
-4. Nothing was verified against the real Claude Code memory layout; decide whether you want per-project memory synced, which needs that verification first.
+4. ~~Nothing was verified against the real Claude Code memory layout; decide whether you want per-project memory synced, which needs that verification first.~~ **Decided 2026-09-27**: skip — the owner does not use Claude Code project memory across machines today. Revisit (verify the vendor's memory layout first) if that changes.
