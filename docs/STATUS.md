@@ -166,3 +166,5 @@ Not proven: real browsers, a real registry deployment, real teams, the editors' 
 **Broker-token gap (branch `stage-8b`):** closed as far as software on one account can: session requests carry no hosts, and the broker builds sessions from the policy `rigfile apply` writes into `state.json` (`docs/rigd.md` §3a). The red team is now 32 attempts with no "evades" row; the residue is "borrow another approved server's session" (spend its key at its own host), documented as not stopped.
 
 **Private sync (branch `stage-8c`, from `stage-8b`):** built (`docs/private-sync.md` §7): `internal/vault` and `rigfile sync`, end-to-end encrypted, signed roster chain, rollback protection, directory or git transport, red-teamed against a hostile storage. Also: a `private:` path that the rig ships is now a manifest error.
+
+**JSONC (branch `stage-8d`, from `stage-8c`):** `internal/jsonedit` edits JSON with comments and trailing commas by masking; the Copilot adapter uses it (a commented `mcp.json` is edited, comments kept).

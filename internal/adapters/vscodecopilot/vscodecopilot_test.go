@@ -104,21 +104,40 @@ func TestMcpJsonKeepsTheTeamsServersAndNoSecretValues(t *testing.T) {
 	}
 }
 
-func TestAFileWithCommentsIsLeftAloneWithAClearNote(t *testing.T) {
+func TestAFileWithCommentsIsEditedAndItsCommentsKept(t *testing.T) {
 	r := projectRig(t)
-	orig := "{\n  // the team's own server\n  \"servers\": {}\n}\n"
+	orig := "{\n  // the team's own server list\n  \"servers\": {\n    \"theirs\": {\"type\": \"stdio\", \"command\": \"x\"} // needed by CI\n  }\n}\n"
 	r.Put(r.Home, "proj/.vscode/mcp.json", orig, 0o644)
+	st := state.New()
+	p, err := build(t, r, "linux", st, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Apply(p, st, StateTarget)
+	doc := r.Read("proj/.vscode/mcp.json")
+	for _, want := range []string{"// the team's own server list", "// needed by CI", `"theirs"`, `"alpaca"`, `"docs"`} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("missing %q in\n%s", want, doc)
+		}
+	}
+	if p2, _ := build(t, r, "linux", st, true); p2.Changes() != 0 {
+		t.Fatalf("idempotent: %d", p2.Changes())
+	}
+}
+
+func TestAFileThatIsNotJSONIsLeftAloneWithANote(t *testing.T) {
+	r := projectRig(t)
+	r.Put(r.Home, "proj/.vscode/mcp.json", "{ servers: nope", 0o644)
 	p, err := build(t, r, "linux", nil, true)
 	if err != nil {
-		t.Fatalf("a commented file must not fail the whole plan: %v", err)
+		t.Fatalf("%v", err)
 	}
-	notes := strings.Join(p.Notes, "\n")
-	if !strings.Contains(notes, "is not plain JSON") || !strings.Contains(notes, "alpaca, docs") {
-		t.Fatalf("%s", notes)
+	if n := strings.Join(p.Notes, "\n"); !strings.Contains(n, "is not valid JSON") || !strings.Contains(n, "alpaca, docs") {
+		t.Fatalf("%s", n)
 	}
 	r.Apply(p, state.New(), StateTarget)
-	if r.Read("proj/.vscode/mcp.json") != orig {
-		t.Fatal("the file must be untouched")
+	if r.Read("proj/.vscode/mcp.json") != "{ servers: nope" {
+		t.Fatal("untouched")
 	}
 }
 

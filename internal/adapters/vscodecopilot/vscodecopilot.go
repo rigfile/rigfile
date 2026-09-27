@@ -20,6 +20,7 @@ import (
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/common"
 	"github.com/digitaldreamer3462/rigfile/internal/engine"
+	"github.com/digitaldreamer3462/rigfile/internal/jsonedit"
 	"github.com/digitaldreamer3462/rigfile/internal/merge"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/splice"
@@ -126,14 +127,14 @@ func (a *adapter) mcp(p *merge.Projection) {
 		entries = append(entries, common.JSONEntry{Name: s.Name, Raw: string(raw), Layer: s.P.Layer})
 	}
 	dest := filepath.Join(a.env.ProjectDir, ".vscode", "mcp.json")
-	// VS Code accepts comments in mcp.json; Rigfile's layout-preserving editor edits plain JSON only. Say so instead of failing.
-	if doc, _, _ := common.ReadOptional(dest); len(doc) > 0 && !json.Valid(doc) {
+	// VS Code accepts comments in mcp.json and so does the editor; only a file that is not JSON at all is left alone.
+	if doc, _, _ := common.ReadOptional(dest); len(doc) > 0 && !jsonedit.Valid(doc) {
 		names := make([]string, 0, len(entries))
 		for _, e := range entries {
 			names = append(names, e.Name)
 		}
 		if len(names) > 0 {
-			a.b.Note("%s is not plain JSON (VS Code allows comments there; Rigfile cannot edit such a file safely yet), so it was left untouched. Add these servers under \"servers\" by hand, or remove the comments and apply again: %s", dest, strings.Join(names, ", "))
+			a.b.Note("%s is not valid JSON (comments and trailing commas are fine, but something else is wrong), so it was left untouched. Fix it, or add these servers under \"servers\" by hand: %s", dest, strings.Join(names, ", "))
 		}
 		return
 	}
