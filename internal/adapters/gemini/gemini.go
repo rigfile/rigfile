@@ -199,6 +199,13 @@ func (a *adapter) mcp(p *merge.Projection) {
 		}
 		entries = append(entries, common.JSONEntry{Name: s.Name, Raw: raw, Layer: s.P.Layer})
 	}
+	if len(entries) > 0 {
+		// Found live, 2026-09-27 (real gemini-cli 0.61.0): even USER-scope MCP servers are silently suppressed
+		// when Gemini CLI considers the invoking directory untrusted ("gemini mcp list" showed ours as
+		// "Disabled"). Rigfile writes the file correctly either way; this is the vendor's own workspace-trust
+		// gate, not something a different file layout would change.
+		a.b.Note("Gemini CLI hides MCP servers (even user-scope ones) when it does not trust the folder you run it from; trust the folder in the CLI, or pass --skip-trust, or these will not run")
+	}
 	a.b.JSONMembers("mcp", filepath.Join(a.env.GeminiDir, "settings.json"), []string{"mcpServers"}, entries)
 }
 

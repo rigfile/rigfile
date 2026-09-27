@@ -60,6 +60,37 @@ func TestCommandsBecomeTomlAndSecretsStayOutOfSettings(t *testing.T) {
 	}
 }
 
+// TestUntrustedFolderNoteOnlyWhenThereAreServers is a regression test for a real finding (live, 2026-09-27,
+// gemini-cli 0.61.0): Gemini CLI silently disables even user-scope MCP servers in a directory it does not
+// trust ("gemini mcp list" showed one Rigfile wrote as "Disabled"). Rigfile cannot fix the vendor's own
+// trust gate by writing a different file, so it surfaces the caveat instead -- only when it actually wrote a
+// server (nothing to warn about otherwise).
+func TestUntrustedFolderNoteOnlyWhenThereAreServers(t *testing.T) {
+	r := adaptertest.New(t, nil) // the default fixture rig has an mcp server
+	p, _ := build(t, r, "linux", nil, nil)
+	if !strings.Contains(render(p), "does not trust the folder") {
+		t.Fatalf("missing the untrusted-folder note:\n%s", render(p))
+	}
+
+	noMCP := adaptertest.New(t, map[string]string{"rigfile.yaml": strings.Replace(adaptertest.RigYAML, `mcp_servers:
+  alpaca:
+    command: npx
+    args: ['-y', 'alpaca-mcp@1.4.2']
+    env: {ALPACA_API_KEY: 'secret://alpaca/api_key', ALPACA_PAPER: 'true'}
+  docs:
+    transport: http
+    url: https://mcp.example.test/mcp
+    auth: oauth
+`, "", 1)})
+	p2, err := build(t, noMCP, "linux", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(render(p2), "does not trust the folder") {
+		t.Fatalf("the note must not appear when nothing was written:\n%s", render(p2))
+	}
+}
+
 func TestUserSettingsSurviveConflictsAreRefusedAndDroppedServersAreRemoved(t *testing.T) {
 	r := adaptertest.New(t, nil)
 	user := "{\n  \"theme\": \"dark\",\n  \"context\": {\n    \"fileName\": [\"AGENTS.md\"]\n  },\n  \"mcpServers\": {\n    \"alpaca\": {\"command\": \"mine\"}\n  }\n}\n"
