@@ -166,3 +166,10 @@ Not proven: real browsers, a real registry deployment, real teams, the editors' 
 **Broker-token gap (branch `stage-8b`):** closed as far as software on one account can: session requests carry no hosts, and the broker builds sessions from the policy `rigfile apply` writes into `state.json` (`docs/rigd.md` §3a). The red team is now 32 attempts with no "evades" row; the residue is "borrow another approved server's session" (spend its key at its own host), documented as not stopped.
 
 **Private sync (branch `stage-8c`, from `stage-8b`):** built (`docs/private-sync.md` §7): `internal/vault` and `rigfile sync`, end-to-end encrypted, signed roster chain, rollback protection, directory or git transport, red-teamed against a hostile storage. Also: a `private:` path that the rig ships is now a manifest error.
+## Stage 3b: local models, built, awaiting owner steps
+
+Plan of record: `docs/stage-3b-plan.md`; spec as built: `docs/models.md`; owner steps: `docs/stage-3b-owner-checks.md`. Branch `stage-3b` (created from `stage-8`, so it contains Stage 8's commits: merge `stage-8` first; not pushed). Built: hardware detection, the model catalog (Ollama engine version and digest verified 2026-09-26), variant selection and safety validation, the MODELS plan section, pinned hash-verified Hugging Face downloads, Ollama pulls with digest check, a generic per-user service generator (`internal/svc`, also used by `rigd`), `rigfile models list|pull|status|serve|url|run|rm`, `apply --models now|later|skip`, `doctor` checks (server, loopback only, chat, tool-call smoke test), and capture of a running Ollama by `rigfile init`.
+
+**Deviation from the plan:** the exit criterion (Codex and Claude Code using the mlx-lm reference setup) is not reachable without a bridge nobody verified, so it is re-scoped: the reference setup is reproduced and served, and Codex and Claude Code (experimental) are wired only through Ollama. No gateway, no routing translation, no global agent configuration is written.
+
+Not proven: real downloads, real Apple Silicon, real service managers, real agents against a local model. See the owner checks.

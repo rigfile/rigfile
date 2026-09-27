@@ -186,6 +186,7 @@ func cmdDoctor(args []string, e env) int {
 	if rd, derr := rigdDir(e); derr == nil {
 		addBrokerChecks(st, rd, add)
 	}
+	addModelChecks(sd, add)
 
 	addSyncCheck(sd, add)
 

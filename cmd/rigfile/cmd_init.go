@@ -1,16 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
 	"github.com/digitaldreamer3462/rigfile/internal/capture"
 	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/digitaldreamer3462/rigfile/internal/models"
 	"github.com/digitaldreamer3462/rigfile/internal/platform"
 	"github.com/digitaldreamer3462/rigfile/internal/state"
 	"github.com/digitaldreamer3462/rigfile/internal/targets"
@@ -141,7 +144,35 @@ func initFromTarget(e env, pi *platform.Info, home, from, dir, out, name string)
 	return writeCaptured(e, res, out)
 }
 
+// addRunningModels appends a `models:` block for a local Ollama server answering on loopback. It probes the network port
+// only. The block is kept only if the whole manifest still validates.
+func addRunningModels(e env, cp *capture.Result) {
+	var ds []models.Detected
+	if e.detectModels != nil {
+		ds = e.detectModels()
+	} else {
+		ds = models.DetectOllama(context.Background(), nil, models.OllamaPort)
+	}
+	section, notes := models.ManifestSection(ds)
+	if section == "" {
+		return
+	}
+	candidate := append(append([]byte(nil), cp.Manifest...), []byte("\n"+section)...)
+	if _, err := manifest.Parse(candidate); err != nil {
+		cp.Report = append(cp.Report, capture.Finding{Level: "note", Category: "models", Item: "ollama", Msg: "a running Ollama was found but its models could not be captured: " + err.Error()})
+		return
+	}
+	cp.Manifest = candidate
+	for _, d := range ds {
+		cp.Report = append(cp.Report, capture.Finding{Level: "captured", Category: "model", Item: d.Model, Msg: "from the Ollama server on 127.0.0.1:" + strconv.Itoa(d.Port) + ", pinned by digest; only the network port was read"})
+	}
+	for _, n := range notes {
+		cp.Report = append(cp.Report, capture.Finding{Level: "note", Category: "models", Item: "ollama", Msg: n})
+	}
+}
+
 func writeCaptured(e env, cp *capture.Result, out string) int {
+	addRunningModels(e, cp)
 	if _, err := manifest.Parse(cp.Manifest); err != nil {
 		fmt.Fprintln(e.err, "rigfile: the captured rig does not validate (nothing written):", err)
 		return 1
