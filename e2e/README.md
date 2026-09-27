@@ -1,9 +1,19 @@
 # End-to-end tests
 
-`e2e/run.sh [ubuntu|fedora ...]` (needs Docker and Go): cross-compiles a static Linux `rigfile`, builds a
-fresh image per distro (Ubuntu 24.04, Fedora 41), and as an **unprivileged user with an empty home**
-runs `e2e/scenario.sh`: validate → plan (must write nothing) → apply → idempotent re-apply → secrets set
-→ exec → doctor (must be green) → drift → rollback.
+`e2e/run.sh [ubuntu|fedora|arch ...]` (needs Docker and Go): cross-compiles a static Linux `rigfile`, builds a
+fresh image per distro (Ubuntu 24.04, Fedora 41, Arch — apt, dnf and pacman respectively), and as an
+**unprivileged user with an empty home** runs `e2e/scenario.sh`: validate → plan (must write nothing) → apply
+→ idempotent re-apply → secrets set → exec → doctor (must be green) → drift → rollback → base-secure and git
+protections → Codex/Gemini CLI/Cursor/Devin/Zed together → capture round-trip → publish/pull.
+
+Default is `ubuntu fedora` only. `arch` needs an explicit `e2e/run.sh ubuntu fedora arch` (CI does this, since
+`ubuntu-latest` is a native amd64 runner): archlinux has no official arm64 image, so on an Apple Silicon host it
+only runs under QEMU's amd64 emulation, which is **unreliable for this Go binary** — found live, 2026-09-27:
+2 of 5 runs crashed with a segfault inside `regexp/syntax`, at a *different* line each time, while the identical
+binary ran clean, repeatedly, natively on arm64 (and a minimal `regexp.MustCompile` reproduction of the same
+pattern never crashed under the same emulation). A QEMU binary-translation bug, not a Rigfile one — but real
+enough that `arch` stays out of the default set on such a host until a native arm64 image exists or a more
+reliable emulator (e.g. Docker Desktop's Rosetta-based x86_64 mode, not confirmed available here) is used.
 
 Stand-ins, on purpose:
 

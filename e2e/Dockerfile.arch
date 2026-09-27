@@ -1,0 +1,13 @@
+FROM archlinux:latest
+# DisableSandbox: pacman's own seccomp sandbox for its download step fails under QEMU's amd64 emulation
+# (this image has no native arm64 build); unrelated to anything being tested here.
+RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf && \
+    pacman -Sy --noconfirm --needed git ca-certificates >/dev/null && pacman -Scc --noconfirm >/dev/null
+RUN useradd -m dev
+COPY build/rigfile /usr/local/bin/rigfile
+COPY fake-claude /usr/local/bin/claude
+COPY --chown=dev rig /rig
+COPY scenario.sh /scenario.sh
+USER dev
+ENV HOME=/home/dev
+CMD ["/bin/sh", "/scenario.sh"]
