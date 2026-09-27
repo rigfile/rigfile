@@ -87,7 +87,7 @@ func (s *Server) Start() (string, error) {
 	s.token = randHex(24)
 	sum := sha256.Sum256([]byte("csrf:" + s.token))
 	s.csrf = hex.EncodeToString(sum[:])
-	s.tmpl = template.Must(template.New("").Parse(pageTemplates))
+	s.tmpl = template.Must(template.New("").Funcs(template.FuncMap{"transcript": transcript}).Parse(pageTemplates))
 	s.last = time.Now()
 	s.done = make(chan struct{})
 	if s.Idle == 0 {

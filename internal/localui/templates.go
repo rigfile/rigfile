@@ -10,7 +10,7 @@ const pageTemplates = `
 {{if .Notice}}<div class="notice">{{.Notice}}</div>{{end}}
 
 <h2>1. What will change</h2>
-{{if .PlanErr}}<div class="card bad">{{.PlanErr}}</div>{{else}}<pre>{{.Plan}}</pre>{{end}}
+{{if .PlanErr}}<div class="card bad">{{.PlanErr}}</div>{{else}}{{.Plan | transcript}}{{end}}
 
 <h2>2. What you need to provide</h2>
 {{if not .Needs}}<p class="muted">Nothing: this rig needs no secrets or sign-ins.</p>{{end}}
@@ -36,7 +36,7 @@ const pageTemplates = `
 
 {{define "result"}}{{template "head" .}}
 <h1>{{if .Failed}}<span class="bad">That did not work</span>{{else}}Done{{end}}</h1>
-<pre>{{.Result}}</pre>
+{{.Result | transcript}}
 <p><a href="/">Back</a></p>
 {{template "foot" .}}{{end}}
 `

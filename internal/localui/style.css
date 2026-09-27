@@ -10,3 +10,20 @@ pre { background:var(--code); border-radius:6px; padding:12px; overflow:auto; fo
 input[type=password], input[type=text] { font:inherit; padding:6px 8px; width:min(24rem,100%); border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
 button { font:inherit; padding:6px 14px; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
 button.quiet { background:transparent; color:var(--accent); }
+
+/* the plan/result transcript: internal/localui/render.go turns the CLI's plain-text output into this */
+.tblock { border:1px solid var(--line); border-radius:8px; padding:10px 14px 12px; margin:10px 0; }
+.tblock h3 { margin:0 0 8px; font-size:14.5px; }
+.rows { font:13px/1.6 ui-monospace,Menlo,Consolas,monospace; }
+.row { display:flex; gap:8px; align-items:baseline; }
+.cat { color:var(--muted); font-weight:700; min-width:7rem; flex-shrink:0; font-size:11.5px; letter-spacing:.02em; }
+.sym { font-weight:700; min-width:1em; flex-shrink:0; }
+.txt { white-space:pre-wrap; overflow-wrap:anywhere; }
+.op-new { color:var(--ok); } .op-update { color:var(--accent); } .op-unchanged { color:var(--muted); }
+.op-conflict { color:var(--warn); } .op-removal { color:var(--bad); }
+.detail { color:var(--muted); padding-left:7rem; white-space:pre-wrap; overflow-wrap:anywhere; }
+.note { color:var(--muted); font:13px/1.6 system-ui,sans-serif; font-style:italic; padding:3px 0; }
+.ln { padding:2px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+details.noise { margin:4px 0; }
+details.noise summary { color:var(--muted); cursor:pointer; font:12px/1.6 system-ui,sans-serif; }
+details.noise .detail { padding-left:1.2rem; }
