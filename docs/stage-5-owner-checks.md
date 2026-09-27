@@ -23,9 +23,17 @@ The registry is built and tested here against a real Postgres, a fake GitHub and
 1. ~~Provision Postgres 15+ and the bucket~~ — Neon Postgres + Cloudflare R2, credentials set via `fly secrets set`, never in the image or the repo.
 2. ~~Run the image behind a TLS-terminating proxy~~ — Fly.io terminates TLS; `RIGFILE_REGISTRY_PUBLIC_URL=https://rigfile.bytebuilderslab.app`; `RIGFILE_REGISTRY_TRUST_PROXY=1` set (Fly's proxy appends the real client address as the last `X-Forwarded-For` entry).
 3. ~~`rigfile-registry migrate`; `GET /healthz`~~ — migrations run automatically on start (the Dockerfile's `CMD ["serve"]`); `/healthz` returns healthy, TLS verified.
-4. ~~Sign in with GitHub; publish; pull~~ — real `rigfile login` and real `rigfile publish <dir> --to-registry` both done against the live deployment (see `docs/STATUS.md` "Registry: live deployment" for the one real finding: the pin-check blocks *any* registry upload, private or public, not only `--public` ones). **Still open: pulling a published rig from a second real machine/account** — not yet exercised against the live deployment (the container E2E already proves the mechanism).
-5. Back up the database and the bucket; test a restore. **Still open** — no restore has been rehearsed yet, and no procedure is provided by the software.
+4. ~~Sign in with GitHub; publish; pull~~ — real `rigfile login` and real `rigfile publish <dir> --to-registry` both done against the live deployment (see `docs/STATUS.md` "Registry: live deployment" for the one real finding: the pin-check blocks *any* registry upload, private or public, not only `--public` ones). ~~Pulling from a second real account~~ — **done 2026-09-27**, see "Second account, live" below (the owner's own rig only ever exercised the admin bypass, since they are the sole admin; this created a genuine non-admin account for the first time).
+5. ~~Back up the database and the bucket; test a restore~~ — **done 2026-09-27**, see "Restore drill" below.
 6. Watch `rigfile-registry admin reports` and `admin audit` (there is no email or alerting). **Still open** — not yet exercised against the live deployment.
+
+### Second account, live (2026-09-27)
+
+Created a genuine non-admin account on production (`rigfile-registry admin create-user`/`admin token` via `fly ssh console`), stored its token with the real CLI, and published a throwaway public rig with it (`rigfile-livecheck/probe`) — the first real exercise of the normal `owner == u.Login` publish-authorization path in `internal/registry/api.go`; the owner's own rig was published under `local/my-rig` only because they are the sole admin, which bypasses that check (`owner != u.Login && !u.IsAdmin`). From a third, fully anonymous "machine" (no login at all): `rigfile pull rigfile-livecheck/probe --plan-only` succeeded and rendered the full plan; `rigfile pull local/my-rig --plan-only` correctly failed ("no published version satisfies that") — private-rig isolation holds against a real unrelated account on the live deployment, matching what an anonymous `curl` of the rig page already showed (404, not a "private" leak). Cleaned up afterward: `admin takedown` removed the test version, `admin disable-user` disabled the test account.
+
+### Restore drill (2026-09-27)
+
+Neon supports creating a branch from a past point in time without touching the primary branch — the safe way to rehearse a restore. Owner created one from a timestamp a few minutes back, queried it directly (`SELECT owner, name, visibility, created_at FROM rigs ...`) and got back real rows matching production at that point (including the two rigs from the second-account test above), then deleted the throwaway branch. Confirms point-in-time restore actually works on this project's Neon instance; still no written step-by-step procedure for a *real* incident (which branch/timestamp to pick, how to cut over `RIGFILE_REGISTRY_DATABASE_URL` on Fly, who decides) — worth writing up before this matters for real, but the mechanism itself is proven.
 
 ## 4. Legal
 
@@ -43,6 +51,6 @@ Decide who reads reports, how fast, and what your escalation is for malware and 
 
 | Criterion | Evidence today | Open |
 |---|---|---|
-| `rigfile publish` → page appears after the scan → another user `rigfile pull owner/name` works | container E2E (`e2e/registry.sh`: real image, Postgres, two machines) and `TestRegistryEndToEndPublishThenPullOnAnotherMachine`; **`rigfile login` + `rigfile publish --to-registry` done live 2026-09-27 against the real deployment**, page confirmed | pulling the published rig from a second real account/machine against the live deployment |
+| `rigfile publish` → page appears after the scan → another user `rigfile pull owner/name` works | container E2E (`e2e/registry.sh`) and `TestRegistryEndToEndPublishThenPullOnAnotherMachine`; **done live 2026-09-27**: real login, real publish (page confirmed), a second real (non-admin) account publishing and a third anonymous account pulling it, all against the live deployment | — |
 | Security review of auth, upload and scanning complete | self-review with tests and `govulncheck` | **external review (§6)** |
 | Terms, acceptable-use policy, takedown process | drafts and working tools | lawyer (§4) |
