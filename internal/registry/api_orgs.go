@@ -45,7 +45,7 @@ func (s *Server) apiOrgCreate(w http.ResponseWriter, r *http.Request) {
 // organisation the caller may not see is the same 404.
 func orgError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, ErrNameTaken), errors.Is(err, ErrConflict):
+	case errors.Is(err, ErrNameTaken), errors.Is(err, ErrLoginReserved), errors.Is(err, ErrConflict):
 		apiError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrBadInput):
 		apiError(w, http.StatusBadRequest, err.Error())

@@ -2,6 +2,7 @@ package registry
 
 import (
 	"crypto/subtle"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -66,6 +67,10 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == ErrDisabled {
 			s.message(w, r, http.StatusForbidden, "Account disabled", "This account has been disabled. See the takedown and abuse policy.")
+			return
+		}
+		if errors.Is(err, ErrLoginReserved) {
+			s.message(w, r, http.StatusForbidden, "Name reserved", "This GitHub name was used here by another account that has since been renamed, and it stays reserved for that account so nobody can publish under a name others trust. If this is your name, contact the operator.")
 			return
 		}
 		s.Log.Warn("cannot record user", "login", gu.Login, "err", err)

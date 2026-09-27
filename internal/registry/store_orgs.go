@@ -109,6 +109,9 @@ func (s *Store) CreateOrg(ctx context.Context, u *User, login, name string) (*Or
 	var o Org
 	err = tx.QueryRowContext(ctx, `INSERT INTO orgs (login, name, created_by, created_at) VALUES ($1, $2, $3, $4) RETURNING id, login, name, created_by, created_at`, login, name, u.ID, s.now()).
 		Scan(&o.ID, &o.Login, &o.Name, &o.CreatedBy, &o.CreatedAt)
+	if isReserved(err) {
+		return nil, fmt.Errorf("%w: %s", ErrLoginReserved, login)
+	}
 	if isUnique(err) {
 		return nil, fmt.Errorf("%w: %s is already a user or an organisation here", ErrNameTaken, login)
 	}

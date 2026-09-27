@@ -52,6 +52,7 @@ func usage(w io.Writer) {
       takedown --rig owner/name [--version V] --reason R   remove a version (or the whole rig)
       disable-user --login L | enable-user --login L
       disable-org --login ORG | enable-org --login ORG   (an organisation's rigs vanish for everyone but admins while disabled)
+      release-login --login NAME [--reason TEXT]        (free a login reserved after a GitHub rename; docs/registry-security.md §1)
       verify-publisher --login L --kind person|organisation|domain [--reason NOTE] | unverify-publisher --login L
       held                                            list versions held for review
       release --id N [--reason R] | reject --id N --reason R

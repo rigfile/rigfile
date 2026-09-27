@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Store is the database layer. Every query is parameterised; nothing is built from user input.
@@ -73,6 +75,9 @@ func (s *Store) UpsertUser(ctx context.Context, g GitHubUser, isAdmin bool) (*Us
 		ON CONFLICT (github_id) DO UPDATE SET login = EXCLUDED.login, name = EXCLUDED.name, avatar_url = EXCLUDED.avatar_url, is_admin = EXCLUDED.is_admin
 		RETURNING id, github_id, login, name, avatar_url, is_admin, disabled_at`,
 		g.ID, login, g.Name, g.AvatarURL, isAdmin).Scan(&u.ID, &u.GitHubID, &u.Login, &u.Name, &u.AvatarURL, &u.IsAdmin, &disabled)
+	if isReserved(err) {
+		return nil, fmt.Errorf("%w: %s", ErrLoginReserved, login)
+	}
 	if isUnique(err) {
 		return nil, fmt.Errorf("%w: %s is already used here by an organisation or another account", ErrNameTaken, login)
 	}
@@ -83,6 +88,29 @@ func (s *Store) UpsertUser(ctx context.Context, g GitHubUser, isAdmin bool) (*Us
 		return nil, ErrDisabled
 	}
 	return &u, nil
+}
+
+// ErrLoginReserved means the login was vacated by a GitHub rename and still belongs to the account that renamed away from
+// it (migration 0005): someone else taking the freed GitHub name must not inherit the rigs' namespace.
+var ErrLoginReserved = errors.New("that name is reserved for a renamed account")
+
+// isReserved recognises the refusal raised by the login_reserved() trigger.
+func isReserved(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && pg.Code == "23505" && pg.Hint == "login_reserved"
+}
+
+// ReleaseLogin frees a reserved login (admin action, for a departed account or a settled dispute). It returns
+// ErrNotFound when the login is not reserved.
+func (s *Store) ReleaseLogin(ctx context.Context, login string) error {
+	res, err := s.DB.ExecContext(ctx, `DELETE FROM login_reservations WHERE login = $1`, strings.ToLower(login))
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UserByLogin finds an active user.

@@ -175,6 +175,12 @@ func admin(ctx context.Context, args []string, e env) int {
 		}
 		st.Audit(ctx, operator, "admin."+args[0], *login, map[string]string{"reason": *reason})
 		fmt.Fprintln(e.out, args[0], *login)
+	case "release-login":
+		if err := st.ReleaseLogin(ctx, *login); err != nil {
+			return fail(err)
+		}
+		st.Audit(ctx, operator, "admin.release-login", *login, map[string]string{"reason": *reason})
+		fmt.Fprintln(e.out, "released the reserved login", *login)
 	case "disable-org", "enable-org":
 		if err := st.SetOrgDisabled(ctx, *login, args[0] == "disable-org"); err != nil {
 			return fail(err)

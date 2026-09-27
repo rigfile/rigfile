@@ -45,7 +45,7 @@ func (s *Server) formError(w http.ResponseWriter, r *http.Request, err error) {
 		s.message(w, r, http.StatusForbidden, "Not allowed", err.Error())
 	case errors.Is(err, ErrBadInput):
 		s.message(w, r, http.StatusBadRequest, "Please check the form", err.Error())
-	case errors.Is(err, ErrConflict), errors.Is(err, ErrNameTaken):
+	case errors.Is(err, ErrConflict), errors.Is(err, ErrNameTaken), errors.Is(err, ErrLoginReserved):
 		s.message(w, r, http.StatusConflict, "That cannot be done", err.Error())
 	default:
 		s.Log.Error("manage form", "err", err)
