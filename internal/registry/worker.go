@@ -13,14 +13,14 @@ import (
 
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/analyze"
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
-	"github.com/digitaldreamer3462/rigfile/internal/publish"
-	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
-	"github.com/digitaldreamer3462/rigfile/internal/similar"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/analyze"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/pkgcheck"
+	"github.com/rigfile/rigfile/internal/publish"
+	"github.com/rigfile/rigfile/internal/registry/blob"
+	"github.com/rigfile/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/similar"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 // A scan job is claimed with FOR UPDATE SKIP LOCKED, so several workers (or instances) never take the same one; a

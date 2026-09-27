@@ -11,7 +11,7 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 var (

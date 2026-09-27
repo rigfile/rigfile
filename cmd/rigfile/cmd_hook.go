@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/digitaldreamer3462/rigfile/internal/githook"
-	"github.com/digitaldreamer3462/rigfile/internal/hook"
+	"github.com/rigfile/rigfile/internal/githook"
+	"github.com/rigfile/rigfile/internal/hook"
 )
 
 // cmdGitHook runs the git-side checks (plan §8.1b-c). The files git executes are one-line shims that call

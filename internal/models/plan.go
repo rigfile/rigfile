@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 // Default ports per engine (their own defaults; a rig may remap with `serve.port`).

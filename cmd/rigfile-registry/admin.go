@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry"
 )
 
 // operator is the identity recorded in the audit log for command-line actions (there is no account behind it).

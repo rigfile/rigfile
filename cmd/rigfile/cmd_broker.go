@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/rigd"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/rigd"
 )
 
 // rigdDir is where the broker keeps its token, addresses, config and audit log.

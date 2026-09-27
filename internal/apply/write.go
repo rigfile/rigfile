@@ -19,8 +19,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/hashing"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/hashing"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 // RunFile is the journal file inside a run's snapshot directory.

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
-	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
+	"github.com/rigfile/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/sigverify"
 )
 
 // fakeBundle stands in for a Sigstore bundle in server tests (the cryptography is tested in internal/sigverify): it

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 func TestBrokerCommandsKeepTheChoiceAndReportStatus(t *testing.T) {

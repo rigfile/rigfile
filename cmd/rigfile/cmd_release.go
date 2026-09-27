@@ -7,8 +7,8 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/digitaldreamer3462/rigfile/internal/minisign"
-	"github.com/digitaldreamer3462/rigfile/internal/selfupdate"
+	"github.com/rigfile/rigfile/internal/minisign"
+	"github.com/rigfile/rigfile/internal/selfupdate"
 )
 
 // cmdSelfUpdate replaces this binary with the latest release after verifying its signature and checksum.

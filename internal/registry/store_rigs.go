@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
 
-	"github.com/digitaldreamer3462/rigfile/internal/layers"
+	"github.com/rigfile/rigfile/internal/layers"
 )
 
 // Viewer is who is asking. The zero value is an anonymous visitor.

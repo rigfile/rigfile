@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/engine"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/engine"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // slimRigYAML is the demo rig with almost everything removed.

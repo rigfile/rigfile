@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/regclient"
+	"github.com/rigfile/rigfile/internal/regclient"
 )
 
 // Kinds of source.

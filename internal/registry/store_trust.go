@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/similar"
+	"github.com/rigfile/rigfile/internal/similar"
 )
 
 // SimilarCandidates lists the public rigs a new name is compared with: published, public, not removed.

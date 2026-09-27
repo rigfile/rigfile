@@ -1,6 +1,6 @@
 package source
 
-import "github.com/digitaldreamer3462/rigfile/internal/hashing"
+import "github.com/rigfile/rigfile/internal/hashing"
 
 // TreeHash is the content hash of a fetched rig directory: every file's path, size and SHA-256, and nothing else.
 // The execute bit is left out because Windows has none, so the hash is the same on every OS (the lock would

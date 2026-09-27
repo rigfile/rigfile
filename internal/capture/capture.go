@@ -15,7 +15,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 // Finding is one line of the capture report.

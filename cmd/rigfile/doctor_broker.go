@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/models"
-	"github.com/digitaldreamer3462/rigfile/internal/rigd"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/models"
+	"github.com/rigfile/rigfile/internal/rigd"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // wrapped is what doctor learns from a `rigfile exec ...` MCP entry.

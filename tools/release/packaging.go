@@ -35,8 +35,7 @@ func write(root, rel, body string) error {
 }
 
 // renderPackaging writes the package-manager manifests into <out>/packaging. Every hash comes from the archives just
-// built; nothing is guessed. Names, publisher ids and the licence are placeholders the owner must settle
-// (marked TODO-owner) before submitting to a public index.
+// built; nothing is guessed. The names (Rigfile.Rigfile, org rigfile) and the licence are the owner's decisions of 2026-09-26.
 func renderPackaging(cfg Config, arts []Artifact) error {
 	root := filepath.Join(cfg.Out, "packaging")
 	if err := renderHomebrew(cfg, arts, root); err != nil {
@@ -106,9 +105,9 @@ func renderScoop(cfg Config, arts []Artifact, root string) error {
 }
 
 func renderWinget(cfg Config, arts []Artifact, root string) error {
-	id := "TODO-owner.Rigfile" // PackageIdentifier is Publisher.Package; the publisher is the owner's choice
+	id := "Rigfile.Rigfile" // PackageIdentifier is Publisher.Package
 	head := fmt.Sprintf("PackageIdentifier: %s\nPackageVersion: %s\n", id, cfg.Version)
-	dir := "winget/manifests/" + strings.ReplaceAll(id, ".", "/") + "/" + cfg.Version + "/"
+	dir := "winget/manifests/" + strings.ToLower(id[:1]) + "/" + strings.ReplaceAll(id, ".", "/") + "/" + cfg.Version + "/" // winget-pkgs layout: manifests/<first letter>/<Publisher>/<Package>/<version>
 	if err := write(root, dir+id+".yaml", head+"DefaultLocale: en-US\nManifestType: version\nManifestVersion: 1.6.0\n"); err != nil {
 		return err
 	}
@@ -126,7 +125,7 @@ func renderWinget(cfg Config, arts []Artifact, root string) error {
 	if err := write(root, dir+id+".installer.yaml", inst.String()); err != nil {
 		return err
 	}
-	loc := head + "PackageLocale: en-US\nPublisher: TODO-owner\nPackageName: Rigfile\nLicense: Apache-2.0\n" +
+	loc := head + "PackageLocale: en-US\nPublisher: Rigfile\nPackageName: Rigfile\nLicense: Apache-2.0\n" +
 		"ShortDescription: One manifest for every AI coding tool, with secrets kept out of the agent's reach\nPackageUrl: https://github.com/" + cfg.Repo + "\nManifestType: defaultLocale\nManifestVersion: 1.6.0\n"
 	return write(root, dir+id+".locale.en-US.yaml", loc)
 }

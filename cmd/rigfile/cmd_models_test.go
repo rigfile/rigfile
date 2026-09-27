@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/models"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/models"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 var appleHW = platform.Hardware{OS: "macos", Arch: "arm64", MemoryGB: 16, FreeDiskGB: 300, GPUs: []platform.GPU{{Vendor: "apple", Name: "Apple Silicon", VRAMGB: 16}}}

@@ -1,8 +1,8 @@
 package common
 
 import (
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
-	"github.com/digitaldreamer3462/rigfile/internal/splice"
+	"github.com/rigfile/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/splice"
 )
 
 // CaptureMarkdownRegions adds the user's own text (outside Rigfile's marked regions) as one instruction and, with

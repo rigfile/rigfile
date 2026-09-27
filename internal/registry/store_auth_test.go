@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
-	"github.com/digitaldreamer3462/rigfile/internal/registry/dbtest"
+	"github.com/rigfile/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry/dbtest"
 )
 
 type clock struct{ t time.Time }

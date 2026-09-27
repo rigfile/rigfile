@@ -10,13 +10,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/models"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
-	"github.com/digitaldreamer3462/rigfile/internal/targets"
+	"github.com/rigfile/rigfile/internal/adapters/claudecode"
+	"github.com/rigfile/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/models"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/targets"
 )
 
 // cmdInit captures an existing Claude Code setup into a new rig directory. It only READS the Claude

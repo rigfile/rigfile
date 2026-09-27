@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/engine"
-	"github.com/digitaldreamer3462/rigfile/internal/hashing"
-	"github.com/digitaldreamer3462/rigfile/internal/merge"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
-	"github.com/digitaldreamer3462/rigfile/internal/targets"
+	"github.com/rigfile/rigfile/internal/engine"
+	"github.com/rigfile/rigfile/internal/hashing"
+	"github.com/rigfile/rigfile/internal/merge"
+	"github.com/rigfile/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/targets"
 )
 
 // fakeTarget proves the framework with a second, trivial adapter: it is "installed" when ~/.fake exists and

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 // ExecWrap is the argv of a stdio MCP server wrapped for Rigfile's exec shim (docs/targets/*.md): secrets

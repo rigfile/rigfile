@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
-	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
-	"github.com/digitaldreamer3462/rigfile/internal/registry/dbtest"
+	"github.com/rigfile/rigfile/internal/pkgcheck"
+	"github.com/rigfile/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry/blob"
+	"github.com/rigfile/rigfile/internal/registry/dbtest"
 )
 
 // fakeGitHub answers the two endpoints the registry calls. The account it returns is settable.

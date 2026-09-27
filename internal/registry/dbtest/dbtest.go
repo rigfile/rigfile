@@ -12,7 +12,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry"
 )
 
 // New returns a migrated database in a fresh schema that is dropped when the test ends.

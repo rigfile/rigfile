@@ -3,7 +3,7 @@ package rigd
 import (
 	"path/filepath"
 
-	"github.com/digitaldreamer3462/rigfile/internal/svc"
+	"github.com/rigfile/rigfile/internal/svc"
 )
 
 // Service names, one per OS convention (they are what internal/svc derives from the name "rigd").
@@ -34,7 +34,7 @@ func (s ServiceSpec) spec() svc.Spec {
 	return svc.Spec{
 		GOOS: s.GOOS, Home: s.Home, UID: s.UID, StateDir: s.StateDir, Name: "rigd",
 		Description: "Rigfile secret broker (rigd)",
-		Docs:        "https://github.com/digitaldreamer3462/rigfile/blob/main/docs/rigd.md",
+		Docs:        "https://github.com/rigfile/rigfile/blob/main/docs/rigd.md",
 		Exe:         s.Exe, Args: []string{"broker", "run"}, LogPath: s.LogPath,
 		TaskFile: filepath.Join(s.StateDir, "rigd", "rigd-task.xml"),
 	}

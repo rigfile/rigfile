@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 // AllowFile is the repo-level allow list (internal/scan/allow.go).

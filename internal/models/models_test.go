@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 func hw(os, arch string, mem float64, gpus ...platform.GPU) platform.Hardware {

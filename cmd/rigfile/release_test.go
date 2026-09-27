@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/minisign"
+	"github.com/rigfile/rigfile/internal/minisign"
 )
 
 func TestVerifySignatureCommand(t *testing.T) {

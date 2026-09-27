@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 // Matches reports whether a variant's `when` holds for this machine. Recognised keys: os, arch, gpu (nvidia|apple),

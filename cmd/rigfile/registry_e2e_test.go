@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
-	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
-	"github.com/digitaldreamer3462/rigfile/internal/registry/dbtest"
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
-	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry/blob"
+	"github.com/rigfile/rigfile/internal/registry/dbtest"
+	"github.com/rigfile/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/sigverify"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 type noGitHub struct{}

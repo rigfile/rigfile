@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
-	"github.com/digitaldreamer3462/rigfile/internal/registry/dbtest"
+	"github.com/rigfile/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry/dbtest"
 )
 
 func TestMigrationsApplyOnceAndConstraintsHold(t *testing.T) {

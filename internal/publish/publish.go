@@ -17,8 +17,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 // Finding is one thing the scrub found, never including the value itself.

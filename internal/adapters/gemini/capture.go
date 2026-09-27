@@ -9,8 +9,8 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/common"
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/adapters/common"
+	"github.com/rigfile/rigfile/internal/capture"
 )
 
 // Capture reads a Gemini CLI setup (read-only): GEMINI.md, custom commands and MCP servers.

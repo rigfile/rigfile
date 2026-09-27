@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
-	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
-	"github.com/digitaldreamer3462/rigfile/internal/secrets"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/adapters/claudecode"
+	"github.com/rigfile/rigfile/internal/gitmod"
+	"github.com/rigfile/rigfile/internal/secrets"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 type checkLevel string

@@ -14,17 +14,17 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudedesktop"
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/codex"
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/cursor"
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/gemini"
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/vscodecopilot"
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
-	"github.com/digitaldreamer3462/rigfile/internal/engine"
-	"github.com/digitaldreamer3462/rigfile/internal/merge"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/adapters/claudecode"
+	"github.com/rigfile/rigfile/internal/adapters/claudedesktop"
+	"github.com/rigfile/rigfile/internal/adapters/codex"
+	"github.com/rigfile/rigfile/internal/adapters/cursor"
+	"github.com/rigfile/rigfile/internal/adapters/gemini"
+	"github.com/rigfile/rigfile/internal/adapters/vscodecopilot"
+	"github.com/rigfile/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/engine"
+	"github.com/rigfile/rigfile/internal/merge"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // Ctx is everything a target needs to detect itself and build a plan. Zero values mean "the real machine".

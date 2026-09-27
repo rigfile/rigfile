@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 // Fetcher resolves and downloads one kind of source.

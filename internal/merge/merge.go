@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 // BaseSecure is the reserved name of the always-on safety layer (plan §8). Items from it are locked.

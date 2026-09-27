@@ -1,8 +1,8 @@
 package claudecode
 
 import (
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 // wslWindowsSide are the credential locations under the Windows user profile that are reachable from inside WSL

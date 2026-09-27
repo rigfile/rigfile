@@ -16,7 +16,7 @@ One list, drawn from the per-stage owner-check documents (linked in each row). N
 | Decision | Recommendation | Where |
 |---|---|---|
 | ~~LICENSE~~ | **Decided 2026-09-26: Apache-2.0** (`LICENSE`; package manifests carry it). Still open: the copyright holder line for a `NOTICE`, if you want one | `docs/stage-4-owner-checks.md` §2 |
-| Package names (Homebrew tap, npm, PyPI, winget id), `.deb` maintainer | check availability first | same |
+| ~~Package names, `.deb` maintainer~~ | **Decided 2026-09-26:** org `rigfile` (created, repo transferred to `rigfile/rigfile`); winget `Rigfile.Rigfile`; tap `rigfile/homebrew-tap`; `.deb` maintainer `Rigfile maintainers <bytebuilderslab@gmail.com>`. Yours to do: reserve npm `rigfile` and PyPI `rigfile` (plus `rigfile-cli`), create the tap repo | same |
 | Registry: domain, hosting, bucket (R2 or S3), GitHub OAuth app, admins, retention of rejected uploads, GitHub-rename hijack policy, one instance only until a shared rate limiter exists | | `docs/stage-5-owner-checks.md` §2 |
 | Popular-rig threshold, who counts as a verified publisher, who reads `/admin` and how often | leave the threshold 0 until you have signing publishers | `docs/stage-6-owner-checks.md` §2 |
 | Organisations: who may create one; are members fully trusted to publish (no approval step) | keep open with `disable-org` as the brake | `docs/stage-8-owner-checks.md` §3 |

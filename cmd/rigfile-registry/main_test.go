@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
-	"github.com/digitaldreamer3462/rigfile/internal/registry/dbtest"
+	"github.com/rigfile/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry/dbtest"
 )
 
 func run2(t *testing.T, dsn string, args ...string) (int, string, string) {

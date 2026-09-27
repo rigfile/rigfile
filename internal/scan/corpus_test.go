@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
-	"github.com/digitaldreamer3462/rigfile/internal/scan/corpus"
+	"github.com/rigfile/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/scan/corpus"
 )
 
 var update = flag.Bool("update", false, "rewrite docs/scanner-metrics.md")

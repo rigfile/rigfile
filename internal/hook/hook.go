@@ -21,7 +21,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 // Input is the subset of Claude Code's PreToolUse JSON (docs/targets/claude-code.md §7) we read.

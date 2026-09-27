@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 func fakeSecret() string { return "gh" + "p_" + "wJ4kP9xQm2Rt7VbN5cLd8HyZaE3sUfG6TiOo" }

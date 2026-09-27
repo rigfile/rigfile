@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/hook"
-	"github.com/digitaldreamer3462/rigfile/internal/redteam"
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/hook"
+	"github.com/rigfile/rigfile/internal/redteam"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 var redteamUpdate = flag.Bool("update-redteam", false, "rewrite docs/red-team.md")

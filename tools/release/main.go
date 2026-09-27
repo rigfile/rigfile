@@ -43,7 +43,7 @@ func main() {
 		targets = flag.String("targets", "", "comma-separated os/arch list (default: all six)")
 		pubkey  = flag.String("pubkey", "", "minisign public key (file or base64 line) built into the binary")
 		signKey = flag.String("sign-key", "", "minisign secret key file: sign SHA256SUMS with the minisign tool")
-		repo    = flag.String("repo", "digitaldreamer3462/rigfile", "GitHub owner/repo the release is published to")
+		repo    = flag.String("repo", "rigfile/rigfile", "GitHub owner/repo the release is published to")
 	)
 	flag.Parse()
 	if *version == "" {
@@ -51,7 +51,7 @@ func main() {
 		os.Exit(2)
 	}
 	cfg := Config{Version: strings.TrimPrefix(*version, "v"), Out: *out, Package: "./cmd/rigfile", Repo: *repo,
-		Module: "github.com/digitaldreamer3462/rigfile", Epoch: 1700000000, Scripts: "scripts"}
+		Module: "github.com/rigfile/rigfile", Epoch: 1700000000, Scripts: "scripts"}
 	if *targets == "" {
 		cfg.Targets = allTargets
 	} else {

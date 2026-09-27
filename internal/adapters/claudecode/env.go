@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/digitaldreamer3462/rigfile/internal/engine"
-	"github.com/digitaldreamer3462/rigfile/internal/hashing"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/engine"
+	"github.com/rigfile/rigfile/internal/hashing"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // StateTarget is this adapter's key in state.json.

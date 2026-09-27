@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/svc"
+	"github.com/rigfile/rigfile/internal/svc"
 )
 
 // Deps is everything Setup touches outside this package; tests replace each piece.

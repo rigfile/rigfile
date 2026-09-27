@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry"
 )
 
 func publishPublic(t *testing.T, e *env, c *client, owner, name, version string, files map[string]string) {

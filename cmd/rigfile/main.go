@@ -25,13 +25,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
-	"github.com/digitaldreamer3462/rigfile/internal/models"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/rigd"
-	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
-	"github.com/digitaldreamer3462/rigfile/internal/tools"
+	"github.com/rigfile/rigfile/internal/adapters/claudecode"
+	"github.com/rigfile/rigfile/internal/models"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/rigd"
+	"github.com/rigfile/rigfile/internal/sigverify"
+	"github.com/rigfile/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/tools"
 )
 
 var version = "0.1.0-stage1"

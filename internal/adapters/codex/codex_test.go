@@ -7,11 +7,11 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/adaptertest"
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
-	"github.com/digitaldreamer3462/rigfile/internal/engine"
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/adapters/adaptertest"
+	"github.com/rigfile/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/engine"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 func build(t *testing.T, r *adaptertest.Rig, goos string, st *state.State, mod func(*Env)) (*engine.Plan, error) {

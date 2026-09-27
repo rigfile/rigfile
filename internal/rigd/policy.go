@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // Policies is what the last `rigfile apply` approved, per MCP server (docs/rigd.md §3a).

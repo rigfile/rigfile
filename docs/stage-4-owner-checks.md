@@ -11,7 +11,7 @@ Everything the build could do without your accounts, signing identities or other
 | Decision | Why it blocks | Where it lands |
 |---|---|---|
 | ~~**LICENSE**~~ decided 2026-09-26: Apache-2.0 | was: every package manifest carried `TODO-owner` for the licence | `LICENSE`, `tools/release/packaging.go` |
-| **Package names**: Homebrew tap name, npm `rigfile`, PyPI `rigfile`, winget `Publisher.Rigfile` | names may be taken; winget needs a publisher id | `tools/release/packaging.go` (`TODO-owner` markers) |
+| ~~**Package names**~~ decided 2026-09-26: GitHub org `rigfile`; winget `Rigfile.Rigfile`; tap `rigfile/homebrew-tap` (`brew install rigfile/tap/rigfile`); npm and PyPI `rigfile`. You still reserve the npm and PyPI names (and `rigfile-cli` as a defensive placeholder) with your own logins | was: | names may be taken; winget needs a publisher id | `tools/release/packaging.go` (`TODO-owner` markers) |
 | **Maintainer contact** for the `.deb` | `Maintainer:` is a placeholder | `tools/release/deb.go` |
 
 ## 3. Release signing key (minisign)
@@ -36,7 +36,7 @@ The release writes ready-to-submit manifests to `dist/packaging/` (uploaded by t
 
 | Channel | You do | Check first |
 |---|---|---|
-| Homebrew | create `homebrew-rigfile`, copy `homebrew/rigfile.rb` into `Formula/` | `brew audit --strict --new rigfile` and `brew install --build-from-source`, `brew test rigfile` |
+| Homebrew | create `rigfile/homebrew-tap`, copy `homebrew/rigfile.rb` into `Formula/` | `brew audit --strict --new rigfile` and `brew install --build-from-source`, `brew test rigfile` |
 | Scoop | create a bucket repository, copy `scoop/rigfile.json` into `bucket/` | `scoop install ./rigfile.json` on Windows |
 | winget | pull request to `microsoft/winget-pkgs` with `winget/manifests/...` | `winget validate --manifest <dir>`; sandbox test |
 | npm | `cd dist/packaging/npm && npm pack && npm publish` (2FA on) | install the tarball on a clean machine: the postinstall downloads from the GitHub release and refuses a checksum mismatch |

@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 // manifestHits looks at what the manifest itself declares: hooks, MCP servers and permissions.

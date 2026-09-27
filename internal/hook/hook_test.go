@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 func bash(cmd string) Input {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 type fakeRemote struct {

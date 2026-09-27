@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/digitaldreamer3462/rigfile/internal/hashing"
-	"github.com/digitaldreamer3462/rigfile/internal/layers"
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/hashing"
+	"github.com/rigfile/rigfile/internal/layers"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 // FileName is the lockfile name inside a rig directory.

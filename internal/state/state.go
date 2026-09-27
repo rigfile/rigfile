@@ -13,10 +13,10 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/digitaldreamer3462/rigfile/internal/hashing"
-	"github.com/digitaldreamer3462/rigfile/internal/jsonedit"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/splice"
+	"github.com/rigfile/rigfile/internal/hashing"
+	"github.com/rigfile/rigfile/internal/jsonedit"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/splice"
 )
 
 // FileName is state.json inside the state directory.

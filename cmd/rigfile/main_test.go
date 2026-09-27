@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/digitaldreamer3462/rigfile/internal/models"
+	"github.com/rigfile/rigfile/internal/models"
 	"io"
 	"os"
 	"os/exec"
@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/apply"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
-	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/apply"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/sigverify"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 // ---- harness ----------------------------------------------------------------------------------

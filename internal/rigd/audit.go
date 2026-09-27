@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 // Event is one audit record (docs/rigd.md §6). It never carries a header value, a body, a surrogate or a real secret:

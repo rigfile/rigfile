@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/pkgcheck"
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/pkgcheck"
+	"github.com/rigfile/rigfile/internal/registry"
 )
 
 func dangerRig(owner, name, version string) map[string]string {

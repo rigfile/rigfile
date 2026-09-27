@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry"
 )
 
 func TestLegalPagesAreServedAndMarkedAsDrafts(t *testing.T) {

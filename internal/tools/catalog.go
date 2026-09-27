@@ -10,7 +10,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/digitaldreamer3462/rigfile/catalog"
+	"github.com/rigfile/rigfile/catalog"
 )
 
 // Catalog is catalog/tools.yaml.

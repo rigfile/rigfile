@@ -39,7 +39,7 @@ func buildDeb(cfg Config, t Target) (Artifact, error) {
 		}
 		return b.Bytes(), nil
 	}
-	control := fmt.Sprintf("Package: rigfile\nVersion: %s\nArchitecture: %s\nMaintainer: Rigfile maintainers <TODO-owner-email@example.invalid>\n"+
+	control := fmt.Sprintf("Package: rigfile\nVersion: %s\nArchitecture: %s\nMaintainer: Rigfile maintainers <bytebuilderslab@gmail.com>\n"+
 		"Installed-Size: %d\nSection: utils\nPriority: optional\nHomepage: https://github.com/%s\n"+
 		"Description: one manifest for every AI coding tool\n Rigfile applies a rig (instructions, skills, MCP servers, hooks, permissions) to Claude Code,\n Codex, Gemini CLI and Cursor, and keeps secrets out of the agent's reach.\n",
 		cfg.Version, t.Arch, (len(bin)+1023)/1024, cfg.Repo)

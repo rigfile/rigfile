@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/minisign"
+	"github.com/rigfile/rigfile/internal/minisign"
 )
 
 func key(seed byte) minisign.KeyPair {

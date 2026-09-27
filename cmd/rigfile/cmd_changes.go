@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/rigdiff"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/rigdiff"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 // sourceClient is the git/registry source client every pulling command uses.

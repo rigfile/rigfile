@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/minisign"
+	"github.com/rigfile/rigfile/internal/minisign"
 )
 
 func hostTarget() Target { return Target{runtime.GOOS, runtime.GOARCH} }
@@ -55,7 +55,7 @@ func TestReleaseBuildsVerifiableReproducibleArtifacts(t *testing.T) {
 		}
 	}
 	mk := func() (string, Config) {
-		cfg := Config{Version: "9.9.9", Out: filepath.Join(t.TempDir(), "dist"), Targets: targets, PubKey: pubLine(k), Module: "github.com/digitaldreamer3462/rigfile",
+		cfg := Config{Version: "9.9.9", Out: filepath.Join(t.TempDir(), "dist"), Targets: targets, PubKey: pubLine(k), Module: "github.com/rigfile/rigfile",
 			Repo: "example-owner/rigfile", Epoch: 1700000000}
 		run(t, cfg)
 		return cfg.Out, cfg
@@ -187,7 +187,7 @@ func checkPackaging(t *testing.T, out string) {
 	if scoop["version"] != "9.9.9" || a["hash"] != hashOf("rigfile_9.9.9_windows_amd64.zip") || a["extract_dir"] != "rigfile_9.9.9_windows_amd64" {
 		t.Errorf("scoop: %v", scoop)
 	}
-	inst := read(t, filepath.Join(out, "packaging/winget/manifests/TODO-owner/Rigfile/9.9.9/TODO-owner.Rigfile.installer.yaml"))
+	inst := read(t, filepath.Join(out, "packaging/winget/manifests/r/Rigfile/Rigfile/9.9.9/Rigfile.Rigfile.installer.yaml"))
 	if !strings.Contains(inst, strings.ToUpper(hashOf("rigfile_9.9.9_windows_amd64.zip"))) || !strings.Contains(inst, "PortableCommandAlias: rigfile") || !strings.Contains(inst, "ManifestVersion: 1.6.0") {
 		t.Errorf("winget installer:\n%s", inst)
 	}

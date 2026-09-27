@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 // readme describes what is inside a published rig, how to pull it, and what it will ask for. It is generated from
@@ -17,7 +17,7 @@ func readme(m *manifest.Manifest) string {
 		fmt.Fprintf(&b, "%s\n\n", m.Description)
 	}
 	owner, name, _ := strings.Cut(m.Name, "/")
-	fmt.Fprintf(&b, "A [Rigfile](https://github.com/digitaldreamer3462/rigfile) rig, version %s.\n\n## Use it\n\n```sh\nrigfile pull github.com/%s/%s     # fetch, show the plan, apply on approval\n```\n\n", m.Version, owner, name)
+	fmt.Fprintf(&b, "A [Rigfile](https://github.com/rigfile/rigfile) rig, version %s.\n\n## Use it\n\n```sh\nrigfile pull github.com/%s/%s     # fetch, show the plan, apply on approval\n```\n\n", m.Version, owner, name)
 	b.WriteString("**Review before you approve.** A rig can install hooks and scripts and register MCP servers; those run on your machine. `rigfile pull` shows every one of them first and changes nothing until you approve.\n\n## What is inside\n\n")
 	list := func(title string, items []string) {
 		if len(items) == 0 {

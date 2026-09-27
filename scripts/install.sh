@@ -1,7 +1,7 @@
 #!/bin/sh
 # Rigfile installer for macOS and Linux.
 #
-#   curl -fsSL https://github.com/digitaldreamer3462/rigfile/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/rigfile/rigfile/releases/latest/download/install.sh | sh
 #
 # It downloads a release, verifies the minisign signature of SHA256SUMS with the public key below, checks the
 # archive's SHA-256 against that signed list, and only then installs the binary. Nothing is run before verification.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/rigd"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/rigd"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 func TestDoctorShowsTheLevelPerServer(t *testing.T) {

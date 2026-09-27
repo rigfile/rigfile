@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
+	"github.com/rigfile/rigfile/internal/sigverify"
 )
 
 func (s *Server) apiRoutes(mux *http.ServeMux) {

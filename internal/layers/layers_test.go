@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/merge"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/merge"
 )
 
 // writeRig writes <root>/<owner>/<name>/rigfile.yaml and returns its dir.

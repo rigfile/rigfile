@@ -17,7 +17,7 @@ import (
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
-	"github.com/digitaldreamer3462/rigfile/schema"
+	"github.com/rigfile/rigfile/schema"
 )
 
 const schemaURL = "https://rigfile.dev/schema/rigfile.v1.json"

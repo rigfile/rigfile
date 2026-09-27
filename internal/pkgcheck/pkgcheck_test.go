@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 func mfst(t *testing.T, servers string) *manifest.Manifest {

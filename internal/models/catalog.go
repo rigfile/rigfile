@@ -8,7 +8,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/digitaldreamer3462/rigfile/catalog"
+	"github.com/rigfile/rigfile/catalog"
 )
 
 // Variant is one hardware-specific choice, from a rig's `models:` entry or from the catalog. The two share the fields a

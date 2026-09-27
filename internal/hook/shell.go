@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 // Shell command rules (RIGFILE_PLAN.md §8.2, docs/targets/claude-code.md §12.3). Claude Code's own Bash

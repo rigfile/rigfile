@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/engine"
-	"github.com/digitaldreamer3462/rigfile/internal/hashing"
-	"github.com/digitaldreamer3462/rigfile/internal/jsonedit"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/engine"
+	"github.com/rigfile/rigfile/internal/hashing"
+	"github.com/rigfile/rigfile/internal/jsonedit"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // JSONEntry is one member Rigfile wants inside a JSON object (an MCP server in `mcpServers`).

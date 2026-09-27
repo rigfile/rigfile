@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/source"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 func gitTestEnv(t *testing.T) []string {

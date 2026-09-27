@@ -1,6 +1,6 @@
 [Unit]
 Description=Rigfile secret broker (rigd)
-Documentation=https://github.com/digitaldreamer3462/rigfile/blob/main/docs/rigd.md
+Documentation=https://github.com/rigfile/rigfile/blob/main/docs/rigd.md
 
 [Service]
 Type=simple

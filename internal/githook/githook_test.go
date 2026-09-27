@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 // Fake token assembled at run time (see internal/scan tests): never a complete credential in the source.

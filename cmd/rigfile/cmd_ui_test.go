@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 func TestUIShowsThePlanStoresDeclaredSecretsAndApplies(t *testing.T) {

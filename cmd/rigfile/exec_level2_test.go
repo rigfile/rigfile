@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/rigd"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/rigd"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // TestHelperLevel2 is the child launched by the Level 2 tests: it reports what its environment holds.

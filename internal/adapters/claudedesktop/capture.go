@@ -3,8 +3,8 @@ package claudedesktop
 import (
 	"path/filepath"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/common"
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/adapters/common"
+	"github.com/rigfile/rigfile/internal/capture"
 )
 
 // Capture reads Claude Desktop's local MCP servers (read-only).

@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 // Result is a full comparison of two versions of a rig.

@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/apply"
-	"github.com/digitaldreamer3462/rigfile/internal/merge"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/apply"
+	"github.com/rigfile/rigfile/internal/merge"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // Symbols for Op.Symbol.

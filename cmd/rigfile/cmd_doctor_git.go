@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/githook"
+	"github.com/rigfile/rigfile/internal/githook"
 )
 
 // effectiveHooksPath is core.hooksPath as git resolves it from the current directory ("" = unset).

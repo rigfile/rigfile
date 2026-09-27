@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 func TestExecWrapForCarriesLevel2MetadataOnlyWhenTheServerDeclaresAllow(t *testing.T) {

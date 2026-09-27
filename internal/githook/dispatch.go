@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 // HookNames are every hook git can run (githooks(5)). With `core.hooksPath` pointing at Rigfile's directory

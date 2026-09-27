@@ -8,9 +8,9 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/common"
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
-	"github.com/digitaldreamer3462/rigfile/internal/splice"
+	"github.com/rigfile/rigfile/internal/adapters/common"
+	"github.com/rigfile/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/splice"
 )
 
 // Capture reads a Codex setup (read-only) into a rig: AGENTS.md, skills, agents and MCP servers. Commands do not

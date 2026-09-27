@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/source"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // cmdPull implements `pull <source>` and `update`: fetch a rig from a git source into the content-addressed cache,

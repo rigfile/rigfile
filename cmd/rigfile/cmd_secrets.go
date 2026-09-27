@@ -12,11 +12,11 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/digitaldreamer3462/rigfile/internal/execshim"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/secrets"
-	"github.com/digitaldreamer3462/rigfile/internal/session"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/execshim"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/secrets"
+	"github.com/rigfile/rigfile/internal/session"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 func isTTY(r io.Reader) (int, bool) {

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/digitaldreamer3462/rigfile/internal/login"
-	"github.com/digitaldreamer3462/rigfile/internal/secrets"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/login"
+	"github.com/rigfile/rigfile/internal/secrets"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // cmdLogins walks through the logins the applied rig declared, one after another (docs/sharing.md §8). It reads the

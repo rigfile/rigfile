@@ -3,8 +3,8 @@ package cursor
 import (
 	"path/filepath"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/common"
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/adapters/common"
+	"github.com/rigfile/rigfile/internal/capture"
 )
 
 // Capture reads Cursor's MCP servers (read-only). User rules live in the app and cannot be read from a file.

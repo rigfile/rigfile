@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/githook"
+	"github.com/rigfile/rigfile/internal/githook"
 )
 
 // TestMain lets the test binary double as the `rigfile` executable: the git hook shims below call it with

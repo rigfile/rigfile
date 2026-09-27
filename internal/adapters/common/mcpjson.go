@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/digitaldreamer3462/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/capture"
 )
 
 // CaptureMCPJSON captures the `mcpServers` object of a JSON config file (Cursor, Claude Desktop). Members with a

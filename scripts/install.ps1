@@ -1,6 +1,6 @@
 # Rigfile installer for Windows (PowerShell 5.1+ or 7).
 #
-#   irm https://github.com/digitaldreamer3462/rigfile/releases/latest/download/install.ps1 | iex
+#   irm https://github.com/rigfile/rigfile/releases/latest/download/install.ps1 | iex
 #
 # Downloads a release, verifies the minisign signature of SHA256SUMS with the public key below, checks the archive's
 # SHA-256 against that signed list, and only then installs rigfile.exe. Nothing is run before verification.

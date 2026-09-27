@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 // SourceRemote resolves git-source layers through a source.Client, holding each one to the pin an earlier lock

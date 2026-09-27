@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/merge"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/merge"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 // MaxDepth bounds `from:` nesting (merge-semantics §2.1 proposal).

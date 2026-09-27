@@ -25,11 +25,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/minisign"
+	"github.com/rigfile/rigfile/internal/minisign"
 )
 
 // Repo is where releases are published.
-const Repo = "digitaldreamer3462/rigfile"
+const Repo = "rigfile/rigfile"
 
 // PublicKey is the minisign public key releases are signed with. It is empty until the owner generates the release
 // key (docs/stage-4-owner-checks.md); a build without it refuses to self-update instead of trusting anything.

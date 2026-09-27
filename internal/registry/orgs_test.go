@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry"
+	"github.com/rigfile/rigfile/internal/registry"
 )
 
 func putJSON(c *client, method, path string, v any) int {

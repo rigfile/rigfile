@@ -3,7 +3,7 @@ package merge
 import (
 	"fmt"
 
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/manifest"
 )
 
 // Skipped explains why an item is not applied on this OS/target (shown collapsed on the plan screen:

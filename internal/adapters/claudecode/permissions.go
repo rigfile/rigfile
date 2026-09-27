@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/jsonedit"
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/jsonedit"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 // Target is this adapter's name in manifest `targets:` lists.

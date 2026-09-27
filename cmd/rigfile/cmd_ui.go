@@ -12,8 +12,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/digitaldreamer3462/rigfile/internal/localui"
-	"github.com/digitaldreamer3462/rigfile/internal/secrets"
+	"github.com/rigfile/rigfile/internal/localui"
+	"github.com/rigfile/rigfile/internal/secrets"
 )
 
 // cmdUI implements `ui [<rig-dir>]`: the plan and the checklist of what the rig still needs, in a browser page on this

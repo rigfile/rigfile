@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/login"
-	"github.com/digitaldreamer3462/rigfile/internal/regclient"
-	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/login"
+	"github.com/rigfile/rigfile/internal/regclient"
+	"github.com/rigfile/rigfile/internal/sigverify"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 var nonRef = regexp.MustCompile(`[^a-z0-9_-]+`)

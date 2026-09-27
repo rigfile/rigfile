@@ -11,8 +11,8 @@ import (
 
 	"github.com/zalando/go-keyring"
 
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/secrets"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/secrets"
 )
 
 // TestHelperProcess is not a real test: it is the child program that Run launches. It prints its

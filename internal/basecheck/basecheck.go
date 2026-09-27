@@ -11,15 +11,15 @@ import (
 	"regexp"
 	"strings"
 
-	basesecure "github.com/digitaldreamer3462/rigfile/base-secure"
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
-	"github.com/digitaldreamer3462/rigfile/internal/engine"
-	"github.com/digitaldreamer3462/rigfile/internal/githook"
-	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/merge"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	basesecure "github.com/rigfile/rigfile/base-secure"
+	"github.com/rigfile/rigfile/internal/adapters/claudecode"
+	"github.com/rigfile/rigfile/internal/engine"
+	"github.com/rigfile/rigfile/internal/githook"
+	"github.com/rigfile/rigfile/internal/gitmod"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/merge"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // Options describe the machine to check.

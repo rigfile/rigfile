@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
-	"github.com/digitaldreamer3462/rigfile/internal/sigverify"
+	"github.com/rigfile/rigfile/internal/registry/blob"
+	"github.com/rigfile/rigfile/internal/sigverify"
 	"github.com/sigstore/sigstore-go/pkg/root"
 )
 

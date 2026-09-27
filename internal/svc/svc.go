@@ -19,7 +19,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/digitaldreamer3462/rigfile/internal/apply"
+	"github.com/rigfile/rigfile/internal/apply"
 )
 
 // Spec is everything a generated definition depends on.

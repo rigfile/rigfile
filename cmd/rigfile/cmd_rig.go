@@ -10,15 +10,15 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
-	"github.com/digitaldreamer3462/rigfile/internal/analyze"
-	"github.com/digitaldreamer3462/rigfile/internal/apply"
-	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/session"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
-	"github.com/digitaldreamer3462/rigfile/internal/targets"
-	"github.com/digitaldreamer3462/rigfile/internal/tools"
+	"github.com/rigfile/rigfile/internal/adapters/claudecode"
+	"github.com/rigfile/rigfile/internal/analyze"
+	"github.com/rigfile/rigfile/internal/apply"
+	"github.com/rigfile/rigfile/internal/gitmod"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/session"
+	"github.com/rigfile/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/targets"
+	"github.com/rigfile/rigfile/internal/tools"
 )
 
 // ---- validate ---------------------------------------------------------------------------------

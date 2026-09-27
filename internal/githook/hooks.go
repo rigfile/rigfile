@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/scan"
 )
 
 // ScannerFunc builds the scanner on first use: compiling the rule set costs tens of milliseconds, which the

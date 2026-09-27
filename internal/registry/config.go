@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digitaldreamer3462/rigfile/internal/registry/blob"
+	"github.com/rigfile/rigfile/internal/registry/blob"
 )
 
 // Config is the service configuration. It comes from environment variables (never flags, so secrets do not appear in

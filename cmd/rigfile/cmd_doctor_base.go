@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/adapters/claudecode"
-	"github.com/digitaldreamer3462/rigfile/internal/basecheck"
-	"github.com/digitaldreamer3462/rigfile/internal/gitmod"
-	"github.com/digitaldreamer3462/rigfile/internal/jsonedit"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
-	"github.com/digitaldreamer3462/rigfile/internal/scan"
-	"github.com/digitaldreamer3462/rigfile/internal/state"
+	"github.com/rigfile/rigfile/internal/adapters/claudecode"
+	"github.com/rigfile/rigfile/internal/basecheck"
+	"github.com/rigfile/rigfile/internal/gitmod"
+	"github.com/rigfile/rigfile/internal/jsonedit"
+	"github.com/rigfile/rigfile/internal/platform"
+	"github.com/rigfile/rigfile/internal/scan"
+	"github.com/rigfile/rigfile/internal/state"
 )
 
 // doctorBase runs the base-secure integrity checks (plan §8.4) and reports whether anything drifted.

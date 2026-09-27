@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/digitaldreamer3462/rigfile/internal/rigd"
+	"github.com/rigfile/rigfile/internal/rigd"
 )
 
 // level2 is a live broker session for one `rigfile exec` launch.

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/digitaldreamer3462/rigfile/internal/rigdiff"
-	"github.com/digitaldreamer3462/rigfile/internal/source"
+	"github.com/rigfile/rigfile/internal/rigdiff"
+	"github.com/rigfile/rigfile/internal/source"
 )
 
 // Diffs are CPU and disk work on data the publisher chose, so they are limited three ways: a per-client rate limit, at most

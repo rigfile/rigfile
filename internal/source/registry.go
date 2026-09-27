@@ -9,7 +9,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/digitaldreamer3462/rigfile/internal/regclient"
+	"github.com/rigfile/rigfile/internal/regclient"
 )
 
 // RegistryFetcher pulls rigs from a Rigfile registry. The "commit" of a registry source is the SHA-256 of the version's

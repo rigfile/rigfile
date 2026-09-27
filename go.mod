@@ -1,4 +1,4 @@
-module github.com/digitaldreamer3462/rigfile
+module github.com/rigfile/rigfile
 
 go 1.27
 

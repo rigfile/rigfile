@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	basesecure "github.com/digitaldreamer3462/rigfile/base-secure"
-	"github.com/digitaldreamer3462/rigfile/internal/manifest"
-	"github.com/digitaldreamer3462/rigfile/internal/platform"
+	basesecure "github.com/rigfile/rigfile/base-secure"
+	"github.com/rigfile/rigfile/internal/manifest"
+	"github.com/rigfile/rigfile/internal/platform"
 )
 
 // base-secure has PowerShell forms of its shell rules and Windows credential locations; they apply on Windows
