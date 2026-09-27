@@ -70,6 +70,8 @@ dist/
 
 # Editor / OS
 .vscode/
+# ...except the VS Code adapter's golden files, which are test data
+!internal/adapters/vscodecopilot/testdata/golden/**/.vscode/
 .idea/
 e2e/build/
 e2e/build-install/
