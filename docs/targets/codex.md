@@ -153,6 +153,8 @@ bearer_token_env_var = "EXAMPLE_TOKEN"     # env var NAME, not the value
 
 Source: https://learn.chatgpt.com/docs/extend/mcp (2026-09-25)
 
+**Verified live, 2026-09-27** (real `@openai/codex` 0.157.1, via npx, against a real `rigfile apply --no-git`, no login/API key): the `command = "rigfile"` shim table Rigfile writes into `config.toml` was correctly read — `codex mcp list` showed `demo  rigfile  exec -- echo hello  -  -  enabled  Unsupported` (`enabled`; the "Unsupported" column is the MCP auth kind, irrelevant here, none declared). Unlike Gemini CLI, **no workspace-trust gate applies**: the server was usable immediately, no extra flag needed. `codex doctor` separately confirmed base-secure's own settings were read correctly: `✓ sandbox restricted fs + restricted network · approval OnRequest`, matching the `approval_policy = "on-request"` / `sandbox_mode = "workspace-write"` Rigfile wrote (§8). 19 ok, 0 fail; the one warning (a WebSocket 401) is expected with no real credentials configured.
+
 ---
 
 ## 7. Hooks
