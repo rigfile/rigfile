@@ -18,7 +18,7 @@ Migrations `0003_collections.sql` and `0004_orgs.sql` run automatically at start
 
 | Decision | Recommendation | Where it lands |
 |---|---|---|
-| **Who may create an organisation.** Today any signed-in user, capped at 10 | keep while the registry is small; require verification (or an admin) once real names matter. `rigfile-registry admin disable-org` is the brake | `store_orgs.go` |
+| ~~**Who may create an organisation.**~~ Confirmed 2026-09-26: keep as built — any signed-in user, capped at 10, members fully trusted to publish with no approval step. `rigfile-registry admin disable-org` is the brake | revisit once real, contested names start to matter | `store_orgs.go` |
 | **Org members are fully trusted to publish.** No approval step, no per-rig roles | accept for a team registry; if you want two-person review, say so and I will design an approval queue | `docs/orgs.md` |
 | **Are org rigs allowed to be public?** Yes, as built (same review rules as personal rigs) | keep | `SetVisibility` |
 | **`rigfile ui` applies without a terminal prompt** after a checkbox | acceptable: same code path, backups and rollback; it refuses a rig whose lockfile no longer matches | `docs/local-ui.md` |
