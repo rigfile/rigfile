@@ -10,8 +10,8 @@ Stage 6 is built and tested against fakes and bundled test data. Nothing below h
 
 | Decision | Recommendation | Where it lands |
 |---|---|---|
-| **Popular threshold** (`RIGFILE_REGISTRY_POPULAR_STARS`) | leave 0 (off) until you have publishers who can sign; then 25-50 | configuration |
-| **Who is a verified publisher** | people and organisations you can identify out of band (a domain, a known organisation, someone you know); record the kind and a private note | `rigfile-registry admin verify-publisher` |
+| ~~**Popular threshold**~~ (`RIGFILE_REGISTRY_POPULAR_STARS`) | Decided 2026-09-26: leave at 0 (off) — no outside publishers yet, nothing to protect. Revisit once real ones exist; 25-50 was the working estimate | configuration |
+| **Who is a verified publisher** | Decided 2026-09-26: deferred — no criteria set in the abstract; decide case by case when someone first asks, using out-of-band identification (a domain, a known organisation, someone you know); record the kind and a private note | `rigfile-registry admin verify-publisher` |
 | **Who reads `/admin`** and how often | a named person, at least daily while the registry is young; there is no alerting | runbook §1 |
 | **Similar-name strictness** | the defaults are conservative (distance ≤ 1, ≤ 2 for long names; only notable rigs, 5+ stars or verified, trigger review); tune after real data | `internal/similar` |
 | **OSV** | keep on; check its terms of use for your expected volume; pin `RIGFILE_REGISTRY_OSV_URL` if you mirror it | configuration |
