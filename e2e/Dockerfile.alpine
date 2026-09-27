@@ -1,0 +1,13 @@
+FROM alpine:3.20
+# Rigfile's tool catalog has no apk entries (catalog/tools.yaml: apt, dnf, pacman only) -- this distro is here
+# to prove Rigfile degrades honestly when the catalog knows nothing about the detected package manager
+# ("no supported package manager found"), not to claim verified apk package support.
+RUN apk add --no-cache git ca-certificates >/dev/null
+RUN adduser -D dev
+COPY build/rigfile /usr/local/bin/rigfile
+COPY fake-claude /usr/local/bin/claude
+COPY --chown=dev rig /rig
+COPY scenario.sh /scenario.sh
+USER dev
+ENV HOME=/home/dev
+CMD ["/bin/sh", "/scenario.sh"]

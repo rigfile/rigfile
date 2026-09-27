@@ -1,12 +1,18 @@
 # End-to-end tests
 
-`e2e/run.sh [ubuntu|fedora|arch ...]` (needs Docker and Go): cross-compiles a static Linux `rigfile`, builds a
-fresh image per distro (Ubuntu 24.04, Fedora 41, Arch — apt, dnf and pacman respectively), and as an
-**unprivileged user with an empty home** runs `e2e/scenario.sh`: validate → plan (must write nothing) → apply
-→ idempotent re-apply → secrets set → exec → doctor (must be green) → drift → rollback → base-secure and git
-protections → Codex/Gemini CLI/Cursor/Devin/Zed together → capture round-trip → publish/pull.
+`e2e/run.sh [ubuntu|fedora|alpine|arch ...]` (needs Docker and Go): cross-compiles a static Linux `rigfile`,
+builds a fresh image per distro (Ubuntu 24.04, Fedora 41, Alpine 3.20, Arch — apt, dnf, none, and pacman
+respectively), and as an **unprivileged user with an empty home** runs `e2e/scenario.sh`: validate → plan
+(must write nothing) → apply → idempotent re-apply → secrets set → exec → doctor (must be green) → drift →
+rollback → base-secure and git protections → Codex/Gemini CLI/Cursor/Devin/Zed together → capture round-trip
+→ publish/pull.
 
-Default is `ubuntu fedora` only. `arch` needs an explicit `e2e/run.sh ubuntu fedora arch` (CI does this, since
+Alpine has no `apk` entries in `catalog/tools.yaml` at all — it is here to prove Rigfile degrades honestly
+("no supported package manager found") rather than crashing or misbehaving, not to claim verified apk
+package support (that needs real package names researched first, per working agreement 2). It runs on musl
+libc under busybox `sh`, natively on arm64 (an official image exists), so it is in the default set.
+
+`arch` needs an explicit `e2e/run.sh ubuntu fedora alpine arch` (CI does this, since
 `ubuntu-latest` is a native amd64 runner): archlinux has no official arm64 image, so on an Apple Silicon host it
 only runs under QEMU's amd64 emulation, which is **unreliable for this Go binary** — found live, 2026-09-27:
 2 of 5 runs crashed with a segfault inside `regexp/syntax`, at a *different* line each time, while the identical
