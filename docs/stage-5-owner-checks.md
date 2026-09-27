@@ -14,7 +14,7 @@ The registry is built and tested here against a real Postgres, a fake GitHub and
 | **Bucket** | Cloudflare R2 is what the plan suggests; any S3-compatible bucket works (`RIGFILE_REGISTRY_BLOB=s3` and the `RIGFILE_REGISTRY_S3_*` variables). Not tested against a real R2 endpoint: only against a fake S3 server. |
 | **GitHub sign-in** | Create an OAuth App (Settings > Developer settings): callback `https://<domain>/auth/callback`. Set `RIGFILE_REGISTRY_GITHUB_CLIENT_ID` and `..._CLIENT_SECRET` (or `..._SECRET_FILE`). No scopes are requested. **Never tested against the real github.com** (`GitHubHTTP` is tested against a fake): do a real sign-in on a staging deployment. |
 | **Admins** | `RIGFILE_REGISTRY_ADMINS=login1,login2` (GitHub logins). |
-| **Retention of rejected uploads** | Rejected blobs stay in the bucket today (docs/registry-security.md §2): choose a deletion policy. |
+| ~~**Retention of rejected uploads**~~ | Decided 2026-09-26: delete the archive at once (docs/registry-security.md §2); the rejection reason stays on the version row so the uploader still sees why. |
 | ~~**GitHub rename hijack**~~ | Decided 2026-09-26: reserve vacated logins that own rigs (built; docs/registry-security.md §1). Back up the database before migration 0005 as well. |
 | **Multi-instance** | The rate limiter is per process. Run one instance until a shared limiter exists. |
 

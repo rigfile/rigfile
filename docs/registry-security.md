@@ -32,10 +32,10 @@ Known weak points:
 | A secret anywhere rejects the version; findings and the database never contain the value | `TestScanRejectsSecretsWithoutLeakingThem`; every core corpus secret blocks (`internal/publish` corpus test) |
 | Public rigs must pin packages; private ones only warn; going public re-checks the newest version | `TestPinningPublicVersusPrivate` |
 | A crashed worker's job is retried; two workers never take the same job; repeated failure rejects rather than looping | `TestWorkerRecoversAndLocks` |
+| A rejected upload's archive is deleted at once (owner decision 2026-09-26); the reason (never the secret value) stays on the version row; a blob still referenced by another version is kept | `TestRejectedUploadArchiveIsDeletedAtOnce`, `TestRejectedUploadKeepsABlobStillUsedByAnotherVersion`, `internal/registry/blob` `contract` (Delete) |
 
 Known weak points:
 - The scan covers secrets, manifest validity and pinning. **It does not analyse hooks or scripts for malicious behaviour, and does not check package reputation or typosquatting** (Stage 6). A rig can pass the scan and still be harmful; the pull screen and the plan screen are the defence today, and the site says so.
-- Scanning happens after the upload is stored. Rejected blobs remain in the bucket (they may contain a secret the publisher pasted). They are unreachable through the API (the visibility predicate) but exist on disk. **Decision needed:** delete rejected blobs after N days.
 - Upload bodies are read into memory (≤20 MiB by default) before validation. With the per-user rate limit this is bounded, but a distributed flood of authenticated uploads could use memory; set the container memory limit accordingly.
 - The scanner has a per-file size cap and a 2-minute time box per job; a pathological file that defeats the scanner's regexes could take the full time box. The corpus timing gate (Stage 2) is the evidence for typical input.
 

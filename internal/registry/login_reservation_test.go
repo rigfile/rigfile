@@ -124,3 +124,80 @@ func TestStrangerOnAVacatedLoginIsTurnedAwayAtSignIn(t *testing.T) {
 		t.Fatalf("%d %s", resp.StatusCode, page)
 	}
 }
+
+// --- rejected-upload retention (owner decision 2026-09-26: delete the archive at once, keep the reason) ---
+
+func tarballSHA(t *testing.T, e *env, owner, name, version string) string {
+	t.Helper()
+	var sha string
+	if err := e.store.DB.QueryRow(`SELECT v.tarball_sha256 FROM versions v JOIN rigs r ON r.id = v.rig_id
+		WHERE r.owner = $1 AND r.name = $2 AND v.version = $3`, owner, name, version).Scan(&sha); err != nil {
+		t.Fatal(err)
+	}
+	return sha
+}
+
+func TestRejectedUploadArchiveIsDeletedAtOnce(t *testing.T) {
+	e := newEnv(t, nil)
+	_, tok := e.userToken("jia", 1)
+	c := e.as(tok)
+	files := goodRig("jia", "leaky2", "1.0.0")
+	files["instructions/style.md"] = "# Style\ntoken = \"" + fakeSecret() + "\"\n"
+	if s, _ := c.upload("jia", "leaky2", rigTar(t, files)); s != 202 {
+		t.Fatal(s)
+	}
+	sha := tarballSHA(t, e, "jia", "leaky2", "1.0.0")
+	if ok, err := e.blobs.Has(t.Context(), sha); err != nil || !ok {
+		t.Fatalf("the archive must exist before it is scanned: %v %v", ok, err)
+	}
+	e.scanAll()
+	if got := c.versionStatus("jia", "leaky2", "1.0.0"); got != "rejected" {
+		t.Fatalf("status %s", got)
+	}
+	if ok, err := e.blobs.Has(t.Context(), sha); err != nil || ok {
+		t.Fatalf("a rejected upload's archive must be deleted at once: exists=%v err=%v", ok, err)
+	}
+	// the reason is still visible to the uploader at the time of rejection
+	s, b := c.get("/v1/rigs/jia/leaky2/versions/1.0.0")
+	if s != 200 || !strings.Contains(string(b), `"kind":"secret"`) {
+		t.Fatalf("the rejection reason must survive the archive's deletion: %s", b)
+	}
+}
+
+func TestRejectedUploadKeepsABlobStillUsedByAnotherVersion(t *testing.T) {
+	// Content-addressed storage means two version rows can share one blob key only if their tarball bytes are
+	// byte-identical, which the manifest (it embeds owner/name/version) makes unreachable through the public upload
+	// API. This tests the reference-count guard directly, using Store.CreateVersion to construct that situation.
+	e := newEnv(t, nil)
+	_, tok := e.userToken("jia", 1)
+	c := e.as(tok)
+	if s, _ := c.upload("jia", "solo", rigTar(t, goodRig("jia", "solo", "1.0.0"))); s != 202 {
+		t.Fatal(s)
+	}
+	e.scanAll()
+	if got := c.versionStatus("jia", "solo", "1.0.0"); got != "published" {
+		t.Fatalf("status %s", got)
+	}
+	sha := tarballSHA(t, e, "jia", "solo", "1.0.0")
+	soloID := int64(0)
+	if err := e.store.DB.QueryRow(`SELECT v.id FROM versions v JOIN rigs r ON r.id = v.rig_id WHERE r.owner='jia' AND r.name='solo'`).Scan(&soloID); err != nil {
+		t.Fatal(err)
+	}
+	if ref, err := e.store.BlobReferenced(t.Context(), sha, soloID); err != nil || ref {
+		t.Fatalf("nothing else points at this blob yet: %v %v", ref, err)
+	}
+	u, err := e.store.UserByLogin(t.Context(), "jia")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dup, err := e.store.CreateVersion(t.Context(), registry.NewVersion{Owner: "jia", Name: "solo-dup", Version: "1.0.0", TarballSHA: sha, UserID: u.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref, err := e.store.BlobReferenced(t.Context(), sha, soloID); err != nil || !ref {
+		t.Fatalf("a second version now points at the same blob: %v %v", ref, err)
+	}
+	if ref, err := e.store.BlobReferenced(t.Context(), sha, dup.ID); err != nil || !ref {
+		t.Fatalf("and the original still points at it too, from the duplicate's point of view: %v %v", ref, err)
+	}
+}

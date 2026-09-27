@@ -84,6 +84,26 @@ func contract(t *testing.T, s Store) {
 			t.Error(err)
 		}
 	}
+
+	// Delete: removes a blob (owner decision 2026-09-26: a rejected upload's archive is deleted at once), is a no-op on
+	// one that never existed, and idempotent.
+	if err := s.Delete(ctx, want); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if ok, err := s.Has(ctx, want); err != nil || ok {
+		t.Fatalf("has after delete: %v %v", ok, err)
+	}
+	if err := s.Delete(ctx, want); err != nil {
+		t.Fatalf("delete again: %v", err)
+	}
+	if err := s.Delete(ctx, strings.Repeat("0", 64)); err != nil {
+		t.Fatalf("delete something never put: %v", err)
+	}
+	for _, k := range []string{"short", "../../etc/passwd"} {
+		if err := s.Delete(ctx, k); err != nil {
+			t.Errorf("delete(%q) must be a quiet no-op, not an error: %v", k, err)
+		}
+	}
 }
 
 func TestFS(t *testing.T) { contract(t, FS{Root: t.TempDir()}) }
@@ -128,6 +148,9 @@ func fakeS3(t *testing.T) (S3Config, *int) {
 			if r.Method == http.MethodGet {
 				_, _ = w.Write(b)
 			}
+		case http.MethodDelete:
+			delete(objs, key)
+			w.WriteHeader(204)
 		default:
 			w.WriteHeader(405)
 		}

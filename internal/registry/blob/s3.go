@@ -90,6 +90,18 @@ func (s *S3) Get(ctx context.Context, sha string) (io.ReadCloser, int64, error) 
 	return o, st.Size, nil
 }
 
+// Delete implements Store.
+func (s *S3) Delete(ctx context.Context, sha string) error {
+	if !ValidKey(sha) {
+		return nil
+	}
+	err := s.c.RemoveObject(ctx, s.cfg.Bucket, s.key(sha), minio.RemoveObjectOptions{})
+	if err != nil && minio.ToErrorResponse(err).Code != "NoSuchKey" {
+		return fmt.Errorf("blob: s3 delete: %w", err)
+	}
+	return nil
+}
+
 // Has implements Store.
 func (s *S3) Has(ctx context.Context, sha string) (bool, error) {
 	if !ValidKey(sha) {

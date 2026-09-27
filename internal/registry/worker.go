@@ -49,6 +49,7 @@ type ScanResult struct {
 	Analysis   []AnalysisFinding
 	Similar    []SimilarRig
 	HeldReason string
+	sha        string // set by ScanVersion; used by RunOnce to delete a rejected blob
 }
 
 // FinishScan records the result: the version becomes published, held or rejected, and the job is done.
@@ -73,6 +74,15 @@ func (s *Store) FinishScan(ctx context.Context, versionID int64, r ScanResult) e
 		return err
 	}
 	return tx.Commit()
+}
+
+// BlobReferenced reports whether a blob is still referenced by any version other than excludeVersionID
+// (content-addressed storage dedupes identical uploads, so two unrelated versions can share one blob). Used before
+// deleting a rejected upload's archive, and available for future storage cleanup tooling.
+func (s *Store) BlobReferenced(ctx context.Context, sha string, excludeVersionID int64) (bool, error) {
+	var n int
+	err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM versions WHERE tarball_sha256 = $1 AND id <> $2`, sha, excludeVersionID).Scan(&n)
+	return n > 0, err
 }
 
 func nzA(f []AnalysisFinding) []AnalysisFinding {
@@ -232,6 +242,7 @@ func (sc *Scanner) ScanVersion(ctx context.Context, versionID int64) (ScanResult
 			res.Similar = append(res.Similar, SimilarRig{Ref: m.Ref, Kind: m.Kind, Stars: m.Stars, Verified: m.Verified})
 		}
 	}
+	res.sha = sha
 	switch {
 	case len(res.Findings) > 0:
 		res.Status = "rejected"
@@ -281,7 +292,22 @@ func (sc *Scanner) RunOnce(ctx context.Context, worker string) (bool, error) {
 		return true, sc.Store.RetryOrFail(ctx, id, attempts, err)
 	}
 	sc.logf("scanned", "version", id, "status", res.Status, "findings", len(res.Findings), "warnings", len(res.Warnings), "analysis", len(res.Analysis))
-	return true, sc.Store.FinishScan(ctx, id, res)
+	if err := sc.Store.FinishScan(ctx, id, res); err != nil {
+		return true, err
+	}
+	if res.Status == "rejected" {
+		// Owner decision 2026-09-26: a rejected upload's archive is deleted at once, not retained. The rejection reason
+		// (res.Findings, never the secret value) stays on the version row, so the uploader still sees why. The blob is
+		// content-addressed and shared by exact-byte-match, so it is deleted only when no other version still needs it.
+		if shared, err := sc.Store.BlobReferenced(ctx, res.sha, id); err != nil {
+			sc.logf("could not check blob sharing before deleting a rejected upload", "version", id, "err", err.Error())
+		} else if !shared {
+			if err := sc.Blobs.Delete(ctx, res.sha); err != nil {
+				sc.logf("could not delete a rejected upload's archive", "version", id, "err", err.Error())
+			}
+		}
+	}
+	return true, nil
 }
 
 func (sc *Scanner) logf(msg string, args ...any) {

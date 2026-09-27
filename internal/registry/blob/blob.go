@@ -27,6 +27,8 @@ type Store interface {
 	Get(ctx context.Context, sha string) (io.ReadCloser, int64, error)
 	// Has reports whether the blob exists.
 	Has(ctx context.Context, sha string) (bool, error)
+	// Delete removes a blob. Deleting one that does not exist is not an error (the caller need not check Has first).
+	Delete(ctx context.Context, sha string) error
 }
 
 // ErrTooLarge means the input exceeded the limit.
@@ -100,6 +102,17 @@ func (f FS) Get(_ context.Context, sha string) (io.ReadCloser, int64, error) {
 		return nil, 0, err
 	}
 	return fh, st.Size(), nil
+}
+
+// Delete implements Store.
+func (f FS) Delete(_ context.Context, sha string) error {
+	if !ValidKey(sha) {
+		return nil
+	}
+	if err := os.Remove(f.path(sha)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // Has implements Store.
