@@ -56,7 +56,7 @@ func renderPackaging(cfg Config, arts []Artifact) error {
 
 func renderHomebrew(cfg Config, arts []Artifact, root string) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "class Rigfile < Formula\n  desc \"One manifest for every AI coding tool, with secrets kept out of the agent's reach\"\n  homepage \"https://github.com/%s\"\n  version \"%s\"\n  # license \"TODO-owner\"  (the project licence is not decided yet)\n\n", cfg.Repo, cfg.Version)
+	fmt.Fprintf(&b, "class Rigfile < Formula\n  desc \"One manifest for every AI coding tool, with secrets kept out of the agent's reach\"\n  homepage \"https://github.com/%s\"\n  version \"%s\"\n  license \"Apache-2.0\"\n\n", cfg.Repo, cfg.Version)
 	for _, blk := range [][2]string{{"macos", "darwin"}, {"linux", "linux"}} {
 		fmt.Fprintf(&b, "  on_%s do\n", blk[0])
 		first := true
@@ -91,7 +91,7 @@ func renderScoop(cfg Config, arts []Artifact, root string) error {
 	}
 	m := map[string]any{
 		"version": cfg.Version, "description": "One manifest for every AI coding tool, with secrets kept out of the agent's reach",
-		"homepage": "https://github.com/" + cfg.Repo, "license": "TODO-owner", "architecture": arch, "bin": "rigfile.exe",
+		"homepage": "https://github.com/" + cfg.Repo, "license": "Apache-2.0", "architecture": arch, "bin": "rigfile.exe",
 		"checkver": map[string]any{"github": "https://github.com/" + cfg.Repo},
 		"autoupdate": map[string]any{"architecture": map[string]any{
 			"64bit": map[string]any{"url": "https://github.com/" + cfg.Repo + "/releases/download/v$version/rigfile_$version_windows_amd64.zip", "extract_dir": "rigfile_$version_windows_amd64"},
@@ -126,7 +126,7 @@ func renderWinget(cfg Config, arts []Artifact, root string) error {
 	if err := write(root, dir+id+".installer.yaml", inst.String()); err != nil {
 		return err
 	}
-	loc := head + "PackageLocale: en-US\nPublisher: TODO-owner\nPackageName: Rigfile\nLicense: TODO-owner\n" +
+	loc := head + "PackageLocale: en-US\nPublisher: TODO-owner\nPackageName: Rigfile\nLicense: Apache-2.0\n" +
 		"ShortDescription: One manifest for every AI coding tool, with secrets kept out of the agent's reach\nPackageUrl: https://github.com/" + cfg.Repo + "\nManifestType: defaultLocale\nManifestVersion: 1.6.0\n"
 	return write(root, dir+id+".locale.en-US.yaml", loc)
 }
@@ -142,7 +142,7 @@ func renderNPM(cfg Config, arts []Artifact, root string) error {
 		"name": "rigfile", "version": cfg.Version, "description": "One manifest for every AI coding tool, with secrets kept out of the agent's reach",
 		"bin": map[string]string{"rigfile": "bin/rigfile.js"}, "scripts": map[string]string{"postinstall": "node install.js"},
 		"files": []string{"bin", "install.js", "checksums.json"}, "engines": map[string]string{"node": ">=18"},
-		"repository": "github:" + cfg.Repo, "license": "TODO-owner",
+		"repository": "github:" + cfg.Repo, "license": "Apache-2.0",
 	}
 	pb, _ := json.MarshalIndent(pkg, "", "  ")
 	cb, _ := json.MarshalIndent(map[string]any{"version": cfg.Version, "base": fmt.Sprintf("https://github.com/%s/releases/download/v%s/", cfg.Repo, cfg.Version), "sha256": sums}, "", "  ")
@@ -283,7 +283,7 @@ func renderWheels(cfg Config, arts []Artifact, root string) error {
 			return err
 		}
 		dist := "rigfile-" + cfg.Version
-		meta := fmt.Sprintf("Metadata-Version: 2.1\nName: rigfile\nVersion: %s\nSummary: One manifest for every AI coding tool, with secrets kept out of the agent's reach\nHome-page: https://github.com/%s\nLicense: TODO-owner\nRequires-Python: >=3.8\n", cfg.Version, cfg.Repo)
+		meta := fmt.Sprintf("Metadata-Version: 2.1\nName: rigfile\nVersion: %s\nSummary: One manifest for every AI coding tool, with secrets kept out of the agent's reach\nHome-page: https://github.com/%s\nLicense: Apache-2.0\nRequires-Python: >=3.8\n", cfg.Version, cfg.Repo)
 		wheel := fmt.Sprintf("Wheel-Version: 1.0\nGenerator: rigfile-release\nRoot-Is-Purelib: false\nTag: py3-none-%s\n", tag)
 		entry := "[console_scripts]\nrigfile = rigfile:main\n"
 		files := []struct {
