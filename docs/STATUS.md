@@ -173,3 +173,5 @@ Plan of record: `docs/stage-3b-plan.md`; spec as built: `docs/models.md`; owner 
 **Deviation from the plan:** the exit criterion (Codex and Claude Code using the mlx-lm reference setup) is not reachable without a bridge nobody verified, so it is re-scoped: the reference setup is reproduced and served, and Codex and Claude Code (experimental) are wired only through Ollama. No gateway, no routing translation, no global agent configuration is written.
 
 Not proven: real downloads, real Apple Silicon, real service managers, real agents against a local model. See the owner checks.
+
+**JSONC (branch `stage-8d`, from `stage-8c`):** `internal/jsonedit` edits JSON with comments and trailing commas by masking; the Copilot adapter uses it (a commented `mcp.json` is edited, comments kept).
