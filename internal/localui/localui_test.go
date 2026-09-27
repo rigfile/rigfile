@@ -138,6 +138,13 @@ func TestGuardRefusesRebindingCrossOriginAndMissingCSRF(t *testing.T) {
 	}{
 		"same origin": {"", "", "same-origin", 200}, "typed address": {"", "", "none", 200},
 		"rebinding": {"evil.example.test:80", "", "", 403}, "foreign origin": {"", "http://evil.example.test", "", 403}, "cross-site fetch": {"", "", "cross-site", 403},
+		// real Chrome sends the literal string "null" as Origin for a top-level form POST when the page's own
+		// Referrer-Policy is no-referrer (confirmed live: Chrome 153, macOS) — this must still be accepted, with
+		// Sec-Fetch-Site carrying the weight instead of Origin.
+		"null origin, same-origin fetch metadata": {"", "null", "same-origin", 200},
+		// a cross-site request cannot forge Sec-Fetch-Site (the browser sets it, unspoofable by page script), so
+		// pairing a "null" Origin with cross-site fetch metadata must still be refused.
+		"null origin, cross-site fetch metadata": {"", "null", "cross-site", 403},
 	} {
 		if got := get(c.host, c.origin, c.site); got != c.want {
 			t.Errorf("%s: %d, want %d", name, got, c.want)
@@ -246,5 +253,38 @@ func TestQuitAndIdleTimeout(t *testing.T) {
 	case <-stopped:
 	case <-time.After(5 * time.Second):
 		t.Fatal("an unused page must stop by itself")
+	}
+}
+
+// TestApplySucceedsWithARealBrowsersNullOrigin is a regression test for a real bug (found live, Chrome 153,
+// macOS, 2026-09-27): every POST in this page is a plain <form method="post"> — there is no script, by design —
+// so a click on Apply is a top-level navigation, not a fetch. For that kind of request, a spec-compliant browser
+// sends the literal string "null" as Origin, not the real origin, because the page's own Referrer-Policy is
+// no-referrer. go's http.Client (used by every other test here via PostForm) never sends an Origin header at all,
+// so this case slipped past every existing test, including a hand check with curl (which had to be told an
+// Origin to send). This test sends exactly what a real browser sends.
+func TestApplySucceedsWithARealBrowsersNullOrigin(t *testing.T) {
+	s, f, landing := newFixture(t)
+	b := browser(t)
+	b.Get(landing)
+	resp, _ := b.Get("http://" + s.addr + "/")
+	tok := csrfOf(t, read(t, resp))
+	form := url.Values{"confirm": {"yes"}, "csrf": {tok}}
+	req, _ := http.NewRequest("POST", "http://"+s.addr+"/apply", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "null")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	got, err := b.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := read(t, got)
+	if got.StatusCode != 200 || !strings.Contains(body, "applied 3 change(s)") {
+		t.Fatalf("a real browser's Apply click must succeed: %d %s", got.StatusCode, body)
+	}
+	if f.applied != 1 {
+		t.Fatalf("applied=%d", f.applied)
 	}
 }

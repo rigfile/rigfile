@@ -156,7 +156,13 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		if o := r.Header.Get("Origin"); o != "" && o != "http://"+s.addr {
+		// A browser sends the literal string "null" as Origin, not a real origin, on a top-level navigational POST
+		// (a plain <form method="post">, which is everything this page ever submits: there is no script to use
+		// fetch) when the page's own Referrer-Policy is no-referrer, exactly as set below — this is expected,
+		// spec-correct behaviour (confirmed live: real Chrome 153, Sec-Fetch-Site: same-origin, Host matching),
+		// not a forged header. Treat it like an absent Origin and lean on Sec-Fetch-Site and the CSRF token below,
+		// which a cross-site request cannot produce.
+		if o := r.Header.Get("Origin"); o != "" && o != "null" && o != "http://"+s.addr {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

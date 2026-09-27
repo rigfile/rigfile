@@ -18,7 +18,7 @@ The page can store secrets and change files, so it is treated like the broker's 
 |---|---|
 | Another user or machine reaches it | listens on `127.0.0.1` only, on a random port |
 | A web page you visit talks to it (DNS rebinding) | the `Host` header must be the listener's own address |
-| A web page you visit posts to it (CSRF) | a browser `Origin` must be the page's own; `Sec-Fetch-Site` must be same-origin or none; every POST needs a CSRF token that only the page carries |
+| A web page you visit posts to it (CSRF) | a browser `Origin` must be the page's own, **or the literal string `null`** (found live, 2026-09-27: real Chrome sends exactly that, not a real origin, on the plain `<form method="post">` navigations this page uses, because of its own `Referrer-Policy: no-referrer` below — expected, spec-correct, not forgeable); `Sec-Fetch-Site` must be same-origin or none (unspoofable by page script, so it carries the real weight when Origin is `null`); every POST also needs a CSRF token that only the page carries |
 | Someone else on the machine guesses the address | the address carries a random one-time token, swapped on first use for an `HttpOnly`, `SameSite=Strict` cookie and removed from the address bar (no token in history, no referrer: `Referrer-Policy: no-referrer`) |
 | Script injection from a rig's text | plan text is escaped; the page has no script and no inline style; `Content-Security-Policy: default-src 'none'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'` |
 | Arbitrary secrets written through the page | only refs the rig declares can be set |
@@ -29,4 +29,4 @@ What it does not do: it is not a defence against another program running as you 
 
 ## Tests
 
-`internal/localui`: `TestLandingSwapsTheTokenForACookieAndEscapesEverything`, `TestGuardRefusesRebindingCrossOriginAndMissingCSRF`, `TestStoringSecretsAndApplying`, `TestQuitAndIdleTimeout`. `cmd/rigfile`: `TestUIShowsThePlanStoresDeclaredSecretsAndApplies` (the whole command: plan, declared and undeclared secrets, apply, quit; nothing written by looking).
+`internal/localui`: `TestLandingSwapsTheTokenForACookieAndEscapesEverything`, `TestGuardRefusesRebindingCrossOriginAndMissingCSRF`, `TestApplySucceedsWithARealBrowsersNullOrigin`, `TestStoringSecretsAndApplying`, `TestQuitAndIdleTimeout`. `cmd/rigfile`: `TestUIShowsThePlanStoresDeclaredSecretsAndApplies` (the whole command: plan, declared and undeclared secrets, apply, quit; nothing written by looking).
