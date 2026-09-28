@@ -5,13 +5,14 @@ A rig can install hooks and scripts and register MCP servers, and those run on y
 ## Sources
 
 ```sh
-rigfile pull owner/name --registry %REGISTRY%          # newest published version
-rigfile pull owner/name@1.2.0 --registry %REGISTRY%    # an exact version
 rigfile pull github.com/owner/repo                      # a git repository (default branch)
 rigfile pull github.com/owner/repo@v1.2.0               # a tag, branch or 40-hex commit
 rigfile pull github.com/owner/repo@main//rigs/python    # a rig in a subdirectory
 rigfile pull gitlab.com/owner/repo@v1.0.0
 rigfile pull https://git.example.com/team/rigs.git@v2   # any git URL (https or ssh; needs git)
+
+rigfile pull owner/name --registry %REGISTRY%          # from the registry: newest published version
+rigfile pull owner/name@1.2.0 --registry %REGISTRY%    # an exact version
 ```
 
 A git reference is resolved to a commit once, and the downloaded tree is hashed. A branch or default branch is pinned to that commit in your lockfile with a warning; a tag that later points somewhere else is reported as "the tag moved" and never applied silently.

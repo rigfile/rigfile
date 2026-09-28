@@ -22,7 +22,7 @@
 <div class="navlinks">
 {{if .User}}<span class="who">{{if .User.AvatarURL}}<img class="avatar" src="{{.User.AvatarURL}}" alt="" width="20" height="20">{{end}}<a href="/u/{{.User.Login}}">{{.User.Login}}</a></span>
 <form action="/logout" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link" type="submit">Sign out</button></form>
-{{else}}<a class="btn primary" href="/login?next={{.Path}}">Sign in<span class="long"> with GitHub</span></a>{{end}}
+{{else}}<a class="btn primary" href="/login?next={{.Path}}">Sign in<span class="long">&nbsp;with GitHub</span></a>{{end}}
 </div>
 <details class="menu"><summary aria-label="Menu">Menu</summary>
 <div class="menu-panel">

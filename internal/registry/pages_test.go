@@ -48,7 +48,7 @@ func TestPagesShowPublicRigsAndKeepPrivateOnesPrivate(t *testing.T) {
 	e.scanAll()
 
 	code, page := getPage(t, e, nil, "/")
-	if code != 200 || !strings.Contains(page, "ada/shared") || strings.Contains(page, "ada/hidden") || !strings.Contains(page, "rigfile pull owner/name --registry "+e.srv.URL) {
+	if code != 200 || !strings.Contains(page, "ada/shared") || strings.Contains(page, "ada/hidden") || !strings.Contains(page, "rigfile pull github.com/owner/repo") {
 		t.Fatalf("home: %d\n%s", code, page)
 	}
 	if _, page = getPage(t, e, nil, "/search?q=shar"); !strings.Contains(page, "ada/shared") {

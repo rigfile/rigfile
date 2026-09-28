@@ -1,6 +1,8 @@
 # Getting started
 
-This walkthrough takes you from nothing to a published rig in about five minutes: install the CLI, capture the setup you already have, review and apply it, then share it on this registry.
+This walkthrough takes you from nothing to a published rig in about five minutes: install the CLI, capture the setup you already have, review and apply it, then share it.
+
+Rigs share over plain **git** — push to any host, no account needed. This registry (%REGISTRY%) is an optional extra for search and a few things git alone can't do; both are shown below, git first.
 
 A **rig** is one `rigfile.yaml` plus the files it points to (instructions, skills, commands, hook scripts). It describes how an AI coding tool is set up: what it is told, which MCP servers it runs, which hooks fire, and what it is allowed to do. See [Concepts](/docs/concepts) for the full picture.
 
@@ -27,7 +29,6 @@ rigfile init --name your-login/my-rig
 
 `init` reads your current Claude Code setup (instructions, skills, agents, commands, MCP servers, hooks, permissions) and writes a rig into `./rig`. It is **read-only**: nothing on your machine changes. Secret **values** are never captured; any secret it finds becomes a `secret://` reference instead.
 
-- Use your **GitHub login, in lower case**, as the owner part of the name. The registry only accepts rigs under your own name (or an [organisation](/docs/collaboration) you belong to).
 - To capture another tool, add `--from codex`, `--from cursor`, `--from gemini-cli` (and so on; see [Supported tools](/docs/tools)).
 - Open `rig/rigfile.yaml` and read it. Instructions and hooks are your own text and may contain things you would rather not share.
 
@@ -48,28 +49,30 @@ rigfile secrets set alpaca/api_key
 
 ## 4. Share it
 
-Sign in to this registry once (a device flow: you confirm a short code in your browser):
+Publish to a git repository and push it anywhere — GitHub, GitLab, your own host:
+
+```sh
+rigfile publish rig --to-git ../my-rig-repo --git-init
+```
+
+Before anything is written, `publish` rewrites your home-directory paths, blocks the output if it finds a secret, lists personal information for you to review (`--ack-personal` once you have), and checks that every package is pinned to an exact version. Push the directory it creates to a repository (public or private, your call) and you're done.
+
+```sh
+rigfile pull github.com/you/my-rig-repo          # how anyone else gets it
+```
+
+**Optional:** publish to this registry instead (or as well), for search and a page with trust facts. Sign in once (a device flow: confirm a short code in your browser), then publish — a rig is private until you add `--public`:
 
 ```sh
 rigfile login --registry %REGISTRY%
-```
-
-Then publish:
-
-```sh
 rigfile publish rig --to-registry --registry %REGISTRY%
 ```
-
-Before anything leaves your machine, `publish` rewrites your home-directory paths, blocks the upload if it finds a secret, lists personal information for you to review (`--ack-personal` once you have), and checks that every package is pinned to an exact version. The registry scans it again before it is published.
-
-A rig is **private** until you say otherwise: only you can see or pull it. Add `--public` (or use the button on the rig's page) to let anyone pull it.
-
-Tip: set `RIGFILE_REGISTRY=%REGISTRY%` in your shell profile and you can drop `--registry` from every command.
 
 ## 5. Pull someone else's rig
 
 ```sh
-rigfile pull owner/name --registry %REGISTRY%
+rigfile pull github.com/owner/repo              # a git repository
+rigfile pull owner/name --registry %REGISTRY%   # or from the registry
 ```
 
 You see who published it, how old it is, whether it is signed, what static analysis found, and the full plan. Nothing runs until you approve. Read [Pulling a rig safely](/docs/pulling) before you pull from someone you do not know.

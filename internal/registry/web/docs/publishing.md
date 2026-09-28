@@ -1,6 +1,6 @@
 # Publishing and sharing
 
-You can share a rig two ways: publish it to **this registry**, or write it as a **git repository** you host anywhere. Both go through the same safety pipeline first.
+You can share a rig two ways: write it as a **git repository** you host anywhere (the primary, recommended way — no account needed), or publish it to **this registry** (optional: search and version-range layering). Both go through the same safety pipeline first.
 
 ## What `publish` does before anything leaves your machine
 
@@ -14,7 +14,22 @@ If personal information was found, re-run with `--ack-personal` once you have ch
 
 Run `rigfile publish my-rig` with no destination to do all of this as a **dry run**: it reports what it found and publishes nothing.
 
-## To the registry
+## To git (recommended)
+
+```sh
+rigfile publish my-rig --to-git ../my-rig-repo --git-init
+```
+
+This writes the scrubbed rig into an empty directory (and, with `--git-init`, makes one commit). Push it to any host — public or private, GitHub, GitLab, your own. Others pull it with:
+
+```sh
+rigfile pull github.com/you/my-rig-repo
+rigfile pull github.com/you/my-rig-repo@v1.2.0
+```
+
+## To the registry (optional)
+
+Useful when you want your rig searchable, or you're using `from:` with a version **range** (`@^1.2`) rather than a fixed git ref — that resolution is registry-only (see [Concepts](/docs/concepts)).
 
 ```sh
 rigfile login --registry %REGISTRY%
@@ -27,13 +42,9 @@ rigfile publish my-rig --to-registry --registry %REGISTRY%
 - New rigs are **private**: only you (or your organisation's members) can see and pull them. Make one public with `--public` on publish, or the **Make public** button on the rig's page.
 - Publishing under a reserved name (`rigfile/`, and names of AI vendors) is not allowed.
 
-### Yanking
+### Signing (registry only, optional)
 
-A published version can be *yanked* by its publisher (or an organisation member) with a reason, through the registry API (`POST /v1/rigs/{owner}/{name}/versions/{version}/yank`). A yanked version stays pullable by its exact number, with a visible warning, but version ranges (`@^1.2`) skip it.
-
-### Signing (optional)
-
-A rig can carry a Sigstore signature over its archive:
+A rig published to the registry can carry a Sigstore signature over its archive:
 
 ```sh
 rigfile publish my-rig --write-tarball rig.tgz          # dry run that writes the exact archive
@@ -41,27 +52,18 @@ cosign sign-blob --bundle rig.sigstore.json rig.tgz
 rigfile publish my-rig --to-registry --sign-bundle rig.sigstore.json
 ```
 
-The registry and every puller verify it, and the rig page says whether it was signed by the publisher's own identity (a GitHub Actions workflow in the publisher's account, or their GitHub sign-in). Pullers can insist on it with `--require-signature`.
+The registry and every puller verify it, and the rig page says whether it was signed by the publisher's own identity (a GitHub Actions workflow in the publisher's account, or their GitHub sign-in). Pullers can insist on it with `--require-signature`. There is no signing path for a git-only publish yet.
 
-## To git
+### Yanking
 
-```sh
-rigfile publish my-rig --to-git ../my-rig-repo --git-init
-```
-
-This writes the scrubbed rig into an empty directory (and, with `--git-init`, makes one commit). Push it to any host. Others pull it with:
-
-```sh
-rigfile pull github.com/you/my-rig-repo
-rigfile pull github.com/you/my-rig-repo@v1.2.0
-```
+A published version can be *yanked* by its publisher (or an organisation member) with a reason, through the registry API (`POST /v1/rigs/{owner}/{name}/versions/{version}/yank`). A yanked version stays pullable by its exact number, with a visible warning, but version ranges (`@^1.2`) skip it.
 
 ## Publishing a capture directly
 
 Without a rig directory, `publish` captures your current setup and publishes it in one step. It shows a checklist of what it found so you can leave things out (`--all` takes everything):
 
 ```sh
-rigfile publish --name your-login/my-setup --to-registry --registry %REGISTRY%
+rigfile publish --name you/my-setup --to-git ../my-setup-repo --git-init
 ```
 
-Use `--from codex` (or another tool) to capture something other than Claude Code.
+Use `--from codex` (or another tool) to capture something other than Claude Code, and `--to-registry --registry %REGISTRY%` instead if you'd rather publish there.

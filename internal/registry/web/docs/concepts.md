@@ -51,6 +51,6 @@ Every apply is a **run**: files are backed up before they are written, and the r
 
 Manifests hold `secret://path` references; values live in your OS keychain (or an encrypted-file fallback) on each machine. When a tool starts an MCP server, it starts it through `rigfile exec`, which fetches the values and puts them into that one process's environment. See [Secrets](/docs/secrets).
 
-## Registry
+## Git vs. the registry
 
-This site. It stores published versions (immutable once published), scans every upload, shows trust facts, and serves pulls. Rigs are private until made public. You can also share rigs through any git host; see [Publishing and sharing](/docs/publishing).
+The primary way to share a rig is a plain **git** repository — any host, no account needed. This site is an **optional registry**: it stores published versions (immutable once published), scans every upload, shows trust facts, and serves pulls. Rigs are private until made public. The one thing only the registry does: resolve a `from:` layer pinned to a semver **range** (`owner/name@^1.2`) to the newest version that satisfies it. A git `from:` source (or `pull`) always pins to one fixed ref — a tag, branch or commit — never a range. See [Publishing and sharing](/docs/publishing).
