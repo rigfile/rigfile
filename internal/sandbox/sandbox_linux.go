@@ -50,6 +50,23 @@ func abiVersion() (int, error) {
 	return int(r0), nil
 }
 
+// disableLandlockNetConfinement, when true, makes wrap refuse unconditionally regardless of the kernel's Landlock
+// ABI. Set 2026-09-28 after real evidence on GitHub Actions' ubuntu-latest (which does answer ABI >= 4) that the
+// per-port enforcement below is not trustworthy: a canary port deliberately left out of the ruleset was correctly
+// denied (proving *something* was being restricted), yet in the same run, on the same restricted process, the
+// broker's own control-API port -- also never added to the ruleset -- was NOT denied
+// (TestExecConfineBlocksTheBrokerControlAPI, cmd/rigfile/exec_confine_test.go, CI run 36479130018, job
+// "registry (postgres)", 2026-09-28T20:31Z). createNetRuleset/restrictSelf/the canary self-check below were
+// reviewed line by line against the kernel UAPI header (struct layout, flag values and the rule type all verified
+// live against torvalds/linux's include/uapi/linux/landlock.h) and found correct; the caller-side policy
+// (cmd/rigfile/cmd_secrets.go) was verified to pass only the proxy port, never the API port. No local machine or
+// container available to this project has a real ABI 4 kernel to debug this interactively (Docker Desktop's own
+// Linux VM is 5.15, ENOSYS for Landlock entirely), so the cause -- a kernel-specific Landlock limitation, or
+// something this review missed -- is unresolved. Until it is, on a machine that can actually reproduce it: fail
+// closed unconditionally rather than ship a control that appeared to work in testing but demonstrably didn't
+// enforce the one thing it exists for.
+const disableLandlockNetConfinement = true
+
 // wrap re-execs this same binary under the hidden landlock-exec subcommand, which applies the restriction to
 // itself and then execve()s into prog. The preflight ABI check here means a person sees a clear, immediate refusal
 // rather than a confusing failure from deep inside the helper.
@@ -61,7 +78,14 @@ func abiVersion() (int, error) {
 // port that is deliberately left OUT of the ruleset, and the restricted child dials it before ever exec-ing the
 // real target (LandlockExecMain below): if that dial succeeds, the restriction plainly is not taking effect, and
 // the child refuses to proceed rather than launch the real command believing itself confined when it is not.
+//
+// That canary technique is necessary but, per disableLandlockNetConfinement above, not sufficient: it only proves
+// enforcement exists for the one port it tests, not for every port the caller actually needs denied. Kept in
+// place, reachable once disableLandlockNetConfinement is lifted, for whoever debugs this next on real hardware.
 func wrap(prog string, args []string, policy Policy) (*Wrapped, error) {
+	if disableLandlockNetConfinement {
+		return nil, fmt.Errorf("%w: Linux network confinement is disabled pending investigation of unreliable per-port enforcement found on real hardware (see disableLandlockNetConfinement in this file)", ErrUnsupported)
+	}
 	abi, err := abiVersion()
 	if err != nil {
 		return nil, fmt.Errorf("%w: Landlock is not available (%v)", ErrUnsupported, err)

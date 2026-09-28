@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,6 +30,26 @@ func publishRig(t *testing.T) string {
 	return d
 }
 
+// setGitTestIdentity makes the real `git commit` that gitInitCommit shells out to hermetic. cmd_publish.go
+// deliberately never sets a git identity itself ("through the user's own hooks" -- a real publish should be
+// attributed to the actual publisher, unlike e.g. cmd_sync.go's synthetic "rigfile" identity for background
+// syncs), so it depends on the ambient git config -- fine on a developer machine that has one, but not on a
+// bare CI runner (found live, 2026-09-28: every test below failed on a fresh ubuntu-latest with "Author
+// identity unknown"). Same values as gitTestEnv in pull_test.go, kept as a separate helper because t.Setenv
+// needs key/value pairs, not gitTestEnv's "KEY=VALUE" strings meant for exec.Command's Env slice.
+func setGitTestIdentity(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_AUTHOR_NAME", "t")
+	t.Setenv("GIT_AUTHOR_EMAIL", "t@example.test")
+	t.Setenv("GIT_COMMITTER_NAME", "t")
+	t.Setenv("GIT_COMMITTER_EMAIL", "t@example.test")
+}
+
 // sourceDirFromArgv finds gh's --source=<dir> in a captured argv (the scratch directory publishToGitHub built,
 // still on disk at the moment runCmd is called: cleanup happens after it returns).
 func sourceDirFromArgv(argv []string) string {
@@ -41,6 +62,7 @@ func sourceDirFromArgv(argv []string) string {
 }
 
 func TestPublishToGitHubCreatesAndPushesAScrubbedRepo(t *testing.T) {
+	setGitTestIdentity(t)
 	m := newMachine(t)
 	var argv []string
 	var sourceHadFiles, sourceHadNotes bool
@@ -84,6 +106,7 @@ func TestPublishToGitHubCreatesAndPushesAScrubbedRepo(t *testing.T) {
 }
 
 func TestPublishToGitHubPublic(t *testing.T) {
+	setGitTestIdentity(t)
 	m := newMachine(t)
 	var argv []string
 	var out, errb bytes.Buffer
@@ -112,6 +135,7 @@ func TestPublishToGitHubRejectsOwnerSlashName(t *testing.T) {
 // TestPublishBareDefaultsToGitHub is the main behaviour change: no flags at all still means "push to GitHub", not
 // a dry run. The owner comes from the authenticated `gh` user (ghUser), not from a flag.
 func TestPublishBareDefaultsToGitHub(t *testing.T) {
+	setGitTestIdentity(t)
 	m := newMachine(t)
 	var argv []string
 	var out, errb bytes.Buffer
@@ -131,6 +155,7 @@ func TestPublishBareDefaultsToGitHub(t *testing.T) {
 // TestPublishSignsInWhenNotAlreadyAuthenticated: gh auth status fails first, so gh auth login runs before gh repo
 // create -- and only then, matching what the user asked for ("if github is already logged in, nothing to do").
 func TestPublishSignsInWhenNotAlreadyAuthenticated(t *testing.T) {
+	setGitTestIdentity(t)
 	m := newMachine(t)
 	var calls [][]string
 	var out, errb bytes.Buffer
@@ -206,6 +231,7 @@ func TestPublishBlocksASecretAndWritesNothing(t *testing.T) {
 }
 
 func TestPublishCaptureUsesTheChecklistAndPersonalInfoNeedsAck(t *testing.T) {
+	setGitTestIdentity(t)
 	m := newMachine(t)
 	m.tty = true
 	cd := filepath.Join(m.home, ".claude")
