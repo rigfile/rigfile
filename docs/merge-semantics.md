@@ -102,7 +102,7 @@ Legend: **U** union, **R** later replaces earlier (per identity), **W** whole-en
 - If the destination has a shadowing file (Codex `AGENTS.override.md`), `plan` reports it and does not write.
 
 ### 4.2 Skills, agents, commands
-- **U + R** by id; every replacement is listed in the plan ("`skills/pdf` from `jiaxu/python-dev` replaced by `jiaxu/data-science`").
+- **U + R** by id; every replacement is listed in the plan ("`skills/pdf` from `adams/python-dev` replaced by `adams/data-science`").
 - Skill *contents* are never merged file-by-file; a skill is an atomic directory. Replacement swaps the whole directory.
 - Codex does **not** merge same-named skills (both appear in selectors). Rigfile therefore dedupes itself before writing.
 - Codex has no command directory in current use (deprecated prompts): `commands:` is projected to skills for Codex (`docs/targets/codex.md` §4).

@@ -1,6 +1,6 @@
 # Organisations and team registries (S8-M4)
 
-An **organisation** is a namespace several people publish under: `acme/tool` instead of `jia/tool`. Its private rigs are visible to its members, so the registry doubles as a team's private registry with no separate server.
+An **organisation** is a namespace several people publish under: `acme/tool` instead of `ada/tool`. Its private rigs are visible to its members, so the registry doubles as a team's private registry with no separate server.
 
 ## Model
 

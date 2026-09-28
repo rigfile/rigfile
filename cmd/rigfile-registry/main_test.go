@@ -26,10 +26,10 @@ func TestAdminTools(t *testing.T) {
 	if c, _, e := run2(t, dsn, "migrate"); c != 0 {
 		t.Fatal(e)
 	}
-	if c, out, e := run2(t, dsn, "admin", "create-user", "--login", "jia", "--github-id", "1"); c != 0 || !strings.Contains(out, "account jia ready") {
+	if c, out, e := run2(t, dsn, "admin", "create-user", "--login", "ada", "--github-id", "1"); c != 0 || !strings.Contains(out, "account ada ready") {
 		t.Fatalf("%s %s", out, e)
 	}
-	c, tok, e := run2(t, dsn, "admin", "token", "--login", "jia")
+	c, tok, e := run2(t, dsn, "admin", "token", "--login", "ada")
 	tok = strings.TrimSpace(tok)
 	if c != 0 || !strings.HasPrefix(tok, "rgf_") {
 		t.Fatalf("%q %s", tok, e)
@@ -47,7 +47,7 @@ func TestAdminTools(t *testing.T) {
 	if _, err := st.TokenUser(context.Background(), tok); err != nil {
 		t.Fatal(err)
 	}
-	if c, _, _ := run2(t, dsn, "admin", "disable-user", "--login", "jia", "--reason", "abuse"); c != 0 {
+	if c, _, _ := run2(t, dsn, "admin", "disable-user", "--login", "ada", "--reason", "abuse"); c != 0 {
 		t.Fatal("disable")
 	}
 	if _, err := st.TokenUser(context.Background(), tok); err == nil {
@@ -59,18 +59,18 @@ func TestAdminTools(t *testing.T) {
 	if c, out, _ := run2(t, dsn, "admin", "audit"); c != 0 || !strings.Contains(out, "admin.token") || !strings.Contains(out, "admin.disable-user") {
 		t.Fatalf("the operator's actions must be audited:\n%s", out)
 	}
-	if c, _, _ := run2(t, dsn, "admin", "takedown", "--rig", "jia/none"); c != 1 {
+	if c, _, _ := run2(t, dsn, "admin", "takedown", "--rig", "ada/none"); c != 1 {
 		t.Fatal("takedown needs a reason and an existing rig")
 	}
 	// trust and incident tools
-	if c, out, e := run2(t, dsn, "admin", "verify-publisher", "--login", "jia", "--kind", "organisation", "--reason", "checked"); c != 1 {
+	if c, out, e := run2(t, dsn, "admin", "verify-publisher", "--login", "ada", "--kind", "organisation", "--reason", "checked"); c != 1 {
 		t.Fatalf("a disabled account cannot be verified: %d %s %s", c, out, e)
 	}
-	run2(t, dsn, "admin", "enable-user", "--login", "jia")
-	if c, out, _ := run2(t, dsn, "admin", "verify-publisher", "--login", "jia", "--kind", "organisation", "--reason", "checked"); c != 0 || !strings.Contains(out, "verified jia as organisation") {
+	run2(t, dsn, "admin", "enable-user", "--login", "ada")
+	if c, out, _ := run2(t, dsn, "admin", "verify-publisher", "--login", "ada", "--kind", "organisation", "--reason", "checked"); c != 0 || !strings.Contains(out, "verified ada as organisation") {
 		t.Fatal(out)
 	}
-	if c, _, _ := run2(t, dsn, "admin", "verify-publisher", "--login", "jia", "--kind", "celebrity"); c != 1 {
+	if c, _, _ := run2(t, dsn, "admin", "verify-publisher", "--login", "ada", "--kind", "celebrity"); c != 1 {
 		t.Fatal("kind is validated")
 	}
 	if c, out, _ := run2(t, dsn, "admin", "held"); c != 0 || !strings.Contains(out, "nothing is held") {

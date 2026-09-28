@@ -39,8 +39,8 @@ func ruleStrings(list []Prov[manifest.PermissionRule]) []string {
 // §7 A: permissions union; deny is never removed; allow/ask are kept as data (shadowing is the adapter's job).
 func TestPermissionsUnionAndDenyIsNeverRemoved(t *testing.T) {
 	base := layer(t, BaseSecure, true, "permissions:\n  deny: [{read: '~/.ssh/**'}]\n  ask: [{bash: 'git push*'}]\n")
-	py := layer(t, "jiaxu/python-dev", false, "permissions:\n  allow: [{read: '~/.ssh/config'}]\n  deny: [{bash: 'rm -rf /*'}]\n")
-	ds := layer(t, "jiaxu/data-science", false, "permissions:\n  allow: [{bash: 'git push*'}]\n  deny: [{read: '~/.ssh/**'}]\n") // duplicate deny: deduped
+	py := layer(t, "adams/python-dev", false, "permissions:\n  allow: [{read: '~/.ssh/config'}]\n  deny: [{bash: 'rm -rf /*'}]\n")
+	ds := layer(t, "adams/data-science", false, "permissions:\n  allow: [{bash: 'git push*'}]\n  deny: [{read: '~/.ssh/**'}]\n") // duplicate deny: deduped
 	m := mustMerge(t, "claude-code", base, py, ds)
 	if got := strings.Join(ruleStrings(m.Deny), " | "); got != "read:~/.ssh/** | bash:rm -rf /*" {
 		t.Fatalf("deny = %s", got)
@@ -62,14 +62,14 @@ func TestLockedItemsCannotBeReplaced(t *testing.T) {
 		"instruction": "instructions:\n  - {id: security, file: mine.md}\n",
 		"mcp server":  "mcp_servers:\n  guard: {command: evil}\n",
 	} {
-		_, err := Merge([]Layer{base, layer(t, "jiaxu/x", false, body)}, "claude-code")
+		_, err := Merge([]Layer{base, layer(t, "adams/x", false, body)}, "claude-code")
 		var le *LockedError
 		if !errors.As(err, &le) || le.LockedBy != BaseSecure {
 			t.Errorf("%s: want LockedError, got %v", name, err)
 		}
 	}
 	// A different id next to it is fine, and both exist.
-	m := mustMerge(t, "claude-code", base, layer(t, "jiaxu/x", false, "hooks:\n  - {id: mine, event: stop, run: 'builtin:x'}\n"))
+	m := mustMerge(t, "claude-code", base, layer(t, "adams/x", false, "hooks:\n  - {id: mine, event: stop, run: 'builtin:x'}\n"))
 	if len(m.Hooks) != 2 {
 		t.Fatalf("hooks = %d", len(m.Hooks))
 	}
@@ -77,14 +77,14 @@ func TestLockedItemsCannotBeReplaced(t *testing.T) {
 
 // §7 C: MCP servers are replaced wholesale; nothing leaks through from the earlier definition.
 func TestMCPServerIsReplacedWholesale(t *testing.T) {
-	a := layer(t, "jiaxu/python-dev", false, "mcp_servers:\n  github: {transport: http, url: 'https://mcp.example.test/mcp', auth: oauth}\n")
-	b := layer(t, "jiaxu/data-science", false, "mcp_servers:\n  github: {command: npx, args: ['-y', 'pkg@1.0.0']}\n")
+	a := layer(t, "adams/python-dev", false, "mcp_servers:\n  github: {transport: http, url: 'https://mcp.example.test/mcp', auth: oauth}\n")
+	b := layer(t, "adams/data-science", false, "mcp_servers:\n  github: {command: npx, args: ['-y', 'pkg@1.0.0']}\n")
 	m := mustMerge(t, "claude-code", a, b)
 	g := m.MCPServers["github"]
-	if g.V.Command != "npx" || g.V.URL != "" || g.V.Auth != "" || g.Layer != "jiaxu/data-science" {
+	if g.V.Command != "npx" || g.V.URL != "" || g.V.Auth != "" || g.Layer != "adams/data-science" {
 		t.Fatalf("not replaced wholesale: %+v", g)
 	}
-	if len(m.Replaced) != 1 || m.Replaced[0] != (Replacement{"mcp server", "github", "jiaxu/python-dev", "jiaxu/data-science"}) {
+	if len(m.Replaced) != 1 || m.Replaced[0] != (Replacement{"mcp server", "github", "adams/python-dev", "adams/data-science"}) {
 		t.Fatalf("replacements = %+v", m.Replaced)
 	}
 }
@@ -106,7 +106,7 @@ func TestInstructionsKeepPositionAndScopesAreSeparate(t *testing.T) {
 
 // §7 E: overrides.<target> apply after their own layer, only for that target, and cannot remove denies.
 func TestOverridesApplyOnlyToTheirTarget(t *testing.T) {
-	top := layer(t, "jiaxu/data-science", false, `permissions:
+	top := layer(t, "adams/data-science", false, `permissions:
   deny: [{read: '**/secrets/**'}]
 mcp_servers:
   helper: {command: npx, args: ['-y', 'h@1.0.0']}
@@ -125,7 +125,7 @@ overrides:
 	if len(cx.Deny) != 2 || cx.MCPServers["helper"].V.Args[1] != "h@2.0.0" {
 		t.Fatalf("codex overrides missing: %v %v", ruleStrings(cx.Deny), cx.MCPServers["helper"].V.Args)
 	}
-	if cx.MCPServers["helper"].Layer != "jiaxu/data-science#overrides.codex" {
+	if cx.MCPServers["helper"].Layer != "adams/data-science#overrides.codex" {
 		t.Fatalf("override provenance: %s", cx.MCPServers["helper"].Layer)
 	}
 	// No target => no overrides at all.

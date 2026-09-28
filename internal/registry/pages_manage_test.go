@@ -9,15 +9,15 @@ import (
 
 func TestWebFormsForCollections(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1001)
-	publishPublic(t, e, e.as(tok), "jia", "shared", "1.0.0", goodRig("jia", "shared", "1.0.0"))
+	_, tok := e.userToken("ada", 1001)
+	publishPublic(t, e, e.as(tok), "ada", "shared", "1.0.0", goodRig("ada", "shared", "1.0.0"))
 	cl := e.signIn("/")
-	_, page := getPage(t, e, cl, "/u/jia")
+	_, page := getPage(t, e, cl, "/u/ada")
 	if !strings.Contains(page, "New collection") || !strings.Contains(page, "New organisation") {
 		t.Fatalf("the owner's profile offers the forms:\n%s", page)
 	}
 	csrf := csrfFrom(t, page)
-	if _, page := getPage(t, e, nil, "/u/jia"); strings.Contains(page, "New collection") {
+	if _, page := getPage(t, e, nil, "/u/ada"); strings.Contains(page, "New collection") {
 		t.Fatal("a stranger must not be offered the owner's forms")
 	}
 	post := func(path string, vals url.Values) (int, string) {
@@ -45,23 +45,23 @@ func TestWebFormsForCollections(t *testing.T) {
 	if code, msg := post("/manage/collections", url.Values{"title": {"Again"}, "slug": {"starters"}}); code != 409 || !strings.Contains(msg, "already have") {
 		t.Fatalf("%d %s", code, msg)
 	}
-	if code, msg := post("/manage/collections/starters/add", url.Values{"rig": {"jia/nothing"}}); code != 404 {
+	if code, msg := post("/manage/collections/starters/add", url.Values{"rig": {"ada/nothing"}}); code != 404 {
 		t.Fatalf("%d %s", code, msg)
 	}
-	if code, _ := post("/manage/collections/starters/add", url.Values{"rig": {"jia/shared"}, "note": {"a small one"}}); code != 303 {
+	if code, _ := post("/manage/collections/starters/add", url.Values{"rig": {"ada/shared"}, "note": {"a small one"}}); code != 303 {
 		t.Fatalf("%d", code)
 	}
-	_, page = getPage(t, e, cl, "/c/jia/starters")
-	if !strings.Contains(page, "jia/shared") || !strings.Contains(page, "a small one") || !strings.Contains(page, "Add a rig") || !strings.Contains(page, "remove") {
+	_, page = getPage(t, e, cl, "/c/ada/starters")
+	if !strings.Contains(page, "ada/shared") || !strings.Contains(page, "a small one") || !strings.Contains(page, "Add a rig") || !strings.Contains(page, "remove") {
 		t.Fatalf("%s", page)
 	}
-	if _, page := getPage(t, e, nil, "/c/jia/starters"); strings.Contains(page, "Add a rig") || strings.Contains(page, "Delete this collection") {
+	if _, page := getPage(t, e, nil, "/c/ada/starters"); strings.Contains(page, "Add a rig") || strings.Contains(page, "Delete this collection") {
 		t.Fatal("a visitor is not offered the owner's controls")
 	}
-	if code, _ := post("/manage/collections/starters/remove", url.Values{"rig": {"jia/shared"}}); code != 303 {
+	if code, _ := post("/manage/collections/starters/remove", url.Values{"rig": {"ada/shared"}}); code != 303 {
 		t.Fatalf("%d", code)
 	}
-	if _, page := getPage(t, e, cl, "/c/jia/starters"); strings.Contains(page, "a small one") {
+	if _, page := getPage(t, e, cl, "/c/ada/starters"); strings.Contains(page, "a small one") {
 		t.Fatal("removed")
 	}
 	if code, msg := post("/manage/collections/starters/delete", url.Values{}); code != 400 || !strings.Contains(msg, "confirm") {
@@ -70,17 +70,17 @@ func TestWebFormsForCollections(t *testing.T) {
 	if code, _ := post("/manage/collections/starters/delete", url.Values{"confirm": {"yes"}}); code != 303 {
 		t.Fatalf("%d", code)
 	}
-	if code, _ := getPage(t, e, cl, "/c/jia/starters"); code != 404 {
+	if code, _ := getPage(t, e, cl, "/c/ada/starters"); code != 404 {
 		t.Fatalf("%d", code)
 	}
 }
 
 func TestWebFormsForOrganisations(t *testing.T) {
 	e := newEnv(t, nil)
-	e.userToken("jia", 1001)
+	e.userToken("ada", 1001)
 	e.userToken("bob", 2)
-	owner := e.signIn("/") // jia
-	_, page := getPage(t, e, owner, "/u/jia")
+	owner := e.signIn("/") // ada
+	_, page := getPage(t, e, owner, "/u/ada")
 	csrf := csrfFrom(t, page)
 	post := func(path string, vals url.Values, token string) (int, string) {
 		vals.Set("csrf", token)
@@ -120,7 +120,7 @@ func TestWebFormsForOrganisations(t *testing.T) {
 		t.Fatalf("a plain member cannot appoint: %d", code)
 	}
 	e.clk.add(time.Minute)
-	if code, _ := postForm(t, e, member, "/manage/orgs/acme/remove", url.Values{"login": {"jia"}, "csrf": {mcsrf}}, e.srv.URL); code != 403 {
+	if code, _ := postForm(t, e, member, "/manage/orgs/acme/remove", url.Values{"login": {"ada"}, "csrf": {mcsrf}}, e.srv.URL); code != 403 {
 		t.Fatalf("a plain member cannot remove the owner: %d", code)
 	}
 	e.clk.add(time.Minute)

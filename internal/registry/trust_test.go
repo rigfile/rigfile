@@ -118,17 +118,17 @@ func TestHeldVersions(t *testing.T) {
 
 func TestSimilarNamesAreRecordedShownAndHoldTheNameBack(t *testing.T) {
 	e := newEnv(t, nil)
-	owner, tok := e.userToken("jiaxu", 1001)
+	owner, tok := e.userToken("adams", 1001)
 	_ = owner
 	c := e.as(tok)
 	adm := admin(t, e)
-	publishPublic(t, e, c, "jiaxu", "data-science", "1.0.0", goodRig("jiaxu", "data-science", "1.0.0"))
-	if err := e.store.SetVerified(t.Context(), "jiaxu", "person", "known to the operator", adm); err != nil {
+	publishPublic(t, e, c, "adams", "data-science", "1.0.0", goodRig("adams", "data-science", "1.0.0"))
+	if err := e.store.SetVerified(t.Context(), "adams", "person", "known to the operator", adm); err != nil {
 		t.Fatal(err)
 	}
 	for i, login := range []string{"s1", "s2", "s3", "s4", "s5"} {
 		u, _ := e.userToken(login, int64(100+i))
-		if err := e.store.SetStar(t.Context(), "jiaxu", "data-science", u, true); err != nil {
+		if err := e.store.SetStar(t.Context(), "adams", "data-science", u, true); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -140,12 +140,12 @@ func TestSimilarNamesAreRecordedShownAndHoldTheNameBack(t *testing.T) {
 	}
 	e.scanAll()
 	_, b := m.get("/v1/rigs/mallory/datascience/versions/1.0.0")
-	if !strings.Contains(string(b), `"ref":"jiaxu/data-science"`) || !strings.Contains(string(b), `"kind":"lookalike"`) || !strings.Contains(string(b), `"verified":true`) {
+	if !strings.Contains(string(b), `"ref":"adams/data-science"`) || !strings.Contains(string(b), `"kind":"lookalike"`) || !strings.Contains(string(b), `"verified":true`) {
 		t.Fatalf("similar_to: %s", b)
 	}
 	// and it cannot go public without a review
 	s, _, body := m.do("POST", "/v1/rigs/mallory/datascience/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded")
-	if s != 409 || !strings.Contains(string(body), "confusingly close to jiaxu/data-science") {
+	if s != 409 || !strings.Contains(string(body), "confusingly close to adams/data-science") {
 		t.Fatalf("%d %s", s, body)
 	}
 	// an unrelated name is not bothered
@@ -157,12 +157,12 @@ func TestSimilarNamesAreRecordedShownAndHoldTheNameBack(t *testing.T) {
 		t.Fatalf("%d %s", s, body)
 	}
 	// the trust facts show the publisher, the stars, the verified badge
-	s, tb := e.as("").get("/v1/rigs/jiaxu/data-science/versions/1.0.0/trust")
+	s, tb := e.as("").get("/v1/rigs/adams/data-science/versions/1.0.0/trust")
 	var tr registry.Trust
 	if s != 200 || json.Unmarshal(tb, &tr) != nil {
 		t.Fatalf("%d %s", s, tb)
 	}
-	if tr.Stars != 5 || !tr.Publisher.Verified || tr.Publisher.VerifiedKind != "person" || tr.Publisher.Login != "jiaxu" || tr.Versions != 1 || tr.Signature.Signed {
+	if tr.Stars != 5 || !tr.Publisher.Verified || tr.Publisher.VerifiedKind != "person" || tr.Publisher.Login != "adams" || tr.Versions != 1 || tr.Signature.Signed {
 		t.Fatalf("%+v", tr)
 	}
 	if strings.Contains(string(tb), "known to the operator") {
@@ -175,21 +175,21 @@ func TestSimilarNamesAreRecordedShownAndHoldTheNameBack(t *testing.T) {
 
 func TestTrustFactsAreNotAvailableForVersionsYouCannotSee(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1001)
-	if s, _ := e.as(tok).upload("jia", "demo", rigTar(t, goodRig("jia", "demo", "1.0.0"))); s != 202 {
+	_, tok := e.userToken("ada", 1001)
+	if s, _ := e.as(tok).upload("ada", "demo", rigTar(t, goodRig("ada", "demo", "1.0.0"))); s != 202 {
 		t.Fatal(s)
 	}
 	e.scanAll()
-	if s, _ := e.as("").get("/v1/rigs/jia/demo/versions/1.0.0/trust"); s != 404 {
+	if s, _ := e.as("").get("/v1/rigs/ada/demo/versions/1.0.0/trust"); s != 404 {
 		t.Fatalf("a private rig's facts: %d", s)
 	}
-	if s, _ := e.as(tok).get("/v1/rigs/jia/demo/versions/1.0.0/trust"); s != 200 {
+	if s, _ := e.as(tok).get("/v1/rigs/ada/demo/versions/1.0.0/trust"); s != 200 {
 		t.Fatal("the owner can see them")
 	}
 }
 
 func TestAdminPage(t *testing.T) {
-	e := newEnv(t, func(c *registry.Config) { c.Admins = []string{"jia"} })
+	e := newEnv(t, func(c *registry.Config) { c.Admins = []string{"ada"} })
 	_, bob := e.userToken("bob", 2002)
 	c := e.as(bob)
 	publishPublic(t, e, c, "bob", "rig", "1.0.0", goodRig("bob", "rig", "1.0.0"))
@@ -207,8 +207,8 @@ func TestAdminPage(t *testing.T) {
 	if code, _ := getPage(t, e, carol, "/admin"); code != 404 {
 		t.Fatalf("a non-admin must not learn the page exists: %d", code)
 	}
-	// the administrator (jia, from the configured list)
-	e.gh.user = map[string]any{"id": 1001, "login": "jia", "name": "Jia", "avatar_url": ""}
+	// the administrator (ada, from the configured list)
+	e.gh.user = map[string]any{"id": 1001, "login": "ada", "name": "Ada", "avatar_url": ""}
 	e.clk.add(time.Minute)
 	adm := e.signIn("/")
 	code, page := getPage(t, e, adm, "/admin")
@@ -267,10 +267,10 @@ func jsonNum(n int64) string {
 
 func TestPublishingPauseAndTokenRevocation(t *testing.T) {
 	e := newEnv(t, nil)
-	_, jia := e.userToken("jia", 1)
+	_, ada := e.userToken("ada", 1)
 	_, bob := e.userToken("bob", 2)
 	op := &registry.User{Login: "operator", IsAdmin: true}
-	good := rigTar(t, goodRig("jia", "demo", "1.0.0"))
+	good := rigTar(t, goodRig("ada", "demo", "1.0.0"))
 
 	if err := e.store.PausePublishing(t.Context(), "", op); err == nil {
 		t.Fatal("a pause needs a reason")
@@ -278,7 +278,7 @@ func TestPublishingPauseAndTokenRevocation(t *testing.T) {
 	if err := e.store.PausePublishing(t.Context(), "investigating a report", op); err != nil {
 		t.Fatal(err)
 	}
-	s, h, b := e.as(jia).do("POST", "/v1/rigs/jia/demo/versions", good, "application/gzip")
+	s, h, b := e.as(ada).do("POST", "/v1/rigs/ada/demo/versions", good, "application/gzip")
 	if s != 503 || !strings.Contains(string(b), "investigating a report") || h.Get("Retry-After") == "" {
 		t.Fatalf("%d %s", s, b)
 	}
@@ -289,15 +289,15 @@ func TestPublishingPauseAndTokenRevocation(t *testing.T) {
 	if err := e.store.ResumePublishing(t.Context(), op); err != nil {
 		t.Fatal(err)
 	}
-	if s, _ := e.as(jia).upload("jia", "demo", good); s != 202 {
+	if s, _ := e.as(ada).upload("ada", "demo", good); s != 202 {
 		t.Fatalf("after resume: %d", s)
 	}
 	// revoke one account's tokens, then everyone's
-	if n, err := e.store.RevokeTokens(t.Context(), "jia", op); err != nil || n != 1 {
+	if n, err := e.store.RevokeTokens(t.Context(), "ada", op); err != nil || n != 1 {
 		t.Fatalf("%d %v", n, err)
 	}
-	if s, _ := e.as(jia).get("/v1/me"); s != 401 {
-		t.Fatal("jia's token must be revoked")
+	if s, _ := e.as(ada).get("/v1/me"); s != 401 {
+		t.Fatal("ada's token must be revoked")
 	}
 	if s, _ := e.as(bob).get("/v1/me"); s != 200 {
 		t.Fatal("bob is unaffected")
@@ -316,21 +316,21 @@ func TestPublishingPauseAndTokenRevocation(t *testing.T) {
 
 func TestVerifiedPublisherNeedsAnAdminAndAValidKind(t *testing.T) {
 	e := newEnv(t, nil)
-	e.userToken("jia", 1)
+	e.userToken("ada", 1)
 	adm := admin(t, e)
-	if err := e.store.SetVerified(t.Context(), "jia", "person", "x", &registry.User{}); err == nil {
+	if err := e.store.SetVerified(t.Context(), "ada", "person", "x", &registry.User{}); err == nil {
 		t.Fatal("only admins verify")
 	}
-	if err := e.store.SetVerified(t.Context(), "jia", "celebrity", "x", adm); err == nil {
+	if err := e.store.SetVerified(t.Context(), "ada", "celebrity", "x", adm); err == nil {
 		t.Fatal("kind is checked")
 	}
 	if err := e.store.SetVerified(t.Context(), "nobody", "person", "x", adm); err == nil {
 		t.Fatal("unknown account")
 	}
-	if err := e.store.SetVerified(t.Context(), "jia", "domain", "example.org", adm); err != nil {
+	if err := e.store.SetVerified(t.Context(), "ada", "domain", "example.org", adm); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.store.ClearVerified(t.Context(), "jia", adm); err != nil {
+	if err := e.store.ClearVerified(t.Context(), "ada", adm); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -355,38 +355,38 @@ func TestPackageLookupsDuringTheScan(t *testing.T) {
 	defer osv.Close()
 	e := newEnv(t, nil)
 	e.osv = &pkgcheck.Client{BaseURL: osv.URL}
-	_, tok := e.userToken("jia", 1001)
+	_, tok := e.userToken("ada", 1001)
 	c := e.as(tok)
 	with := func(name, pkg string) map[string]string {
-		f := goodRig("jia", name, "1.0.0")
-		f["rigfile.yaml"] = manifestYAML("jia", name, "1.0.0", "mcp_servers:\n  x:\n    command: npx\n    args: ['-y', '"+pkg+"@1.0.0']\n")
+		f := goodRig("ada", name, "1.0.0")
+		f["rigfile.yaml"] = manifestYAML("ada", name, "1.0.0", "mcp_servers:\n  x:\n    command: npx\n    args: ['-y', '"+pkg+"@1.0.0']\n")
 		return f
 	}
 	for _, n := range []struct{ rig, pkg string }{{"a", "evil-mcp"}, {"b", "old-mcp"}, {"c", "flaky-mcp"}, {"d", "clean-mcp"}} {
-		if s, _ := c.upload("jia", n.rig, rigTar(t, with(n.rig, n.pkg))); s != 202 {
+		if s, _ := c.upload("ada", n.rig, rigTar(t, with(n.rig, n.pkg))); s != 202 {
 			t.Fatal(s)
 		}
 	}
 	e.scanAll()
-	if got := c.versionStatus("jia", "a", "1.0.0"); got != "rejected" {
+	if got := c.versionStatus("ada", "a", "1.0.0"); got != "rejected" {
 		t.Fatalf("a package listed as malicious rejects the version: %s", got)
 	}
-	_, b := c.get("/v1/rigs/jia/a/versions/1.0.0")
+	_, b := c.get("/v1/rigs/ada/a/versions/1.0.0")
 	if !strings.Contains(string(b), `"kind":"malicious-package"`) || !strings.Contains(string(b), "MAL-2026-1") {
 		t.Fatalf("%s", b)
 	}
-	if got := c.versionStatus("jia", "b", "1.0.0"); got != "published" {
+	if got := c.versionStatus("ada", "b", "1.0.0"); got != "published" {
 		t.Fatalf("a vulnerable package only warns: %s", got)
 	}
-	_, b = c.get("/v1/rigs/jia/b/versions/1.0.0")
+	_, b = c.get("/v1/rigs/ada/b/versions/1.0.0")
 	if !strings.Contains(string(b), `"kind":"vulnerable-package"`) || !strings.Contains(string(b), "GHSA-aaaa") || !strings.Contains(string(b), "HIGH") {
 		t.Fatalf("%s", b)
 	}
-	_, b = c.get("/v1/rigs/jia/c/versions/1.0.0")
+	_, b = c.get("/v1/rigs/ada/c/versions/1.0.0")
 	if !strings.Contains(string(b), `"status":"published"`) || !strings.Contains(string(b), "package-check-unavailable") {
 		t.Fatalf("an unreachable OSV is reported, not passed silently: %s", b)
 	}
-	_, b = c.get("/v1/rigs/jia/d/versions/1.0.0")
+	_, b = c.get("/v1/rigs/ada/d/versions/1.0.0")
 	if strings.Contains(string(b), "package") && strings.Contains(string(b), "unavailable") {
 		t.Fatalf("a clean package has no warning: %s", b)
 	}

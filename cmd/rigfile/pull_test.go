@@ -59,7 +59,7 @@ func TestPullFetchesShowsTheSourceAndAppliesOnApproval(t *testing.T) {
 
 	// plan-only: the screen names the source and its pin, and nothing is written
 	r := m.run("", "pull", url, "--plan-only", "--no-git")
-	for _, want := range []string{"Source: " + url, "commit ", "tree ", "you did not write", "Nothing has run yet", "Rig: jiaxu/plain"} {
+	for _, want := range []string{"Source: " + url, "commit ", "tree ", "you did not write", "Nothing has run yet", "Rig: adams/plain"} {
 		if r.code != 0 || !strings.Contains(r.out, want) {
 			t.Fatalf("missing %q:\n%+v", want, r)
 		}
@@ -208,11 +208,11 @@ func TestForkCopiesARigAsYourOwn(t *testing.T) {
 	put(t, src, "scripts/run.sh", "#!/bin/sh\necho hi\n", 0o755)
 	out := filepath.Join(t.TempDir(), "mine")
 	r := m.run("", "fork", src, "--name", "me/mine", "--out", out)
-	if r.code != 0 || !strings.Contains(r.out, "forked from jiaxu/plain@") {
+	if r.code != 0 || !strings.Contains(r.out, "forked from adams/plain@") {
 		t.Fatalf("%+v", r)
 	}
 	doc := mustReadStr(t, filepath.Join(out, "rigfile.yaml"))
-	if !strings.HasPrefix(doc, "# Forked from jiaxu/plain@") || !strings.Contains(doc, "\nname: me/mine\n") || !strings.Contains(doc, "\nversion: 0.1.0\n") || strings.Contains(doc, "name: jiaxu/plain") {
+	if !strings.HasPrefix(doc, "# Forked from adams/plain@") || !strings.Contains(doc, "\nname: me/mine\n") || !strings.Contains(doc, "\nversion: 0.1.0\n") || strings.Contains(doc, "name: adams/plain") {
 		t.Fatalf("the manifest must be renamed and credit the original:\n%s", doc)
 	}
 	for _, gone := range []string{".git", "rigfile.lock"} {
@@ -264,12 +264,12 @@ func TestForkExtendBuildsOnARegistryRig(t *testing.T) {
 	src := plainRig(t, "")
 	m.src = &source.Client{CacheDir: filepath.Join(t.TempDir(), "sources"), Registry: fakeRegistry{rig: src}}
 	out := filepath.Join(t.TempDir(), "child")
-	r := m.run("", "fork", "jiaxu/plain@1.0.0", "--name", "me/child", "--out", out, "--extend")
-	if r.code != 0 || !strings.Contains(r.out, "builds on jiaxu/plain@") {
+	r := m.run("", "fork", "adams/plain@1.0.0", "--name", "me/child", "--out", out, "--extend")
+	if r.code != 0 || !strings.Contains(r.out, "builds on adams/plain@") {
 		t.Fatalf("%+v", r)
 	}
 	doc := mustReadStr(t, filepath.Join(out, "rigfile.yaml"))
-	if !strings.Contains(doc, "name: me/child\n") || !strings.Contains(doc, "from:\n  - jiaxu/plain@^") || strings.Contains(doc, "instructions") {
+	if !strings.Contains(doc, "name: me/child\n") || !strings.Contains(doc, "from:\n  - adams/plain@^") || strings.Contains(doc, "instructions") {
 		t.Fatalf("an extension holds only what it adds, and points at the base:\n%s", doc)
 	}
 	if r := m.run("", "validate", out); r.code != 0 {

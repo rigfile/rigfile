@@ -132,7 +132,7 @@ func (c *client) versionStatus(owner, name, ver string) string {
 
 func TestUploadRefusesHostileArchives(t *testing.T) {
 	e := newEnv(t, func(c *registry.Config) { c.MaxUpload = 64 << 10 })
-	_, tok := e.userToken("jia", 1)
+	_, tok := e.userToken("ada", 1)
 	c := e.as(tok)
 	tarWith := func(h tar.Header, body string) []byte {
 		var buf bytes.Buffer
@@ -151,12 +151,12 @@ func TestUploadRefusesHostileArchives(t *testing.T) {
 		"not gzip":                    []byte("plain text, not a tarball"),
 		"no manifest":                 rigTar(t, map[string]string{"README.md": "x"}),
 		"invalid manifest":            rigTar(t, map[string]string{"rigfile.yaml": "apiVersion: nope\n"}),
-		"missing file":                rigTar(t, map[string]string{"rigfile.yaml": manifestYAML("jia", "demo", "1.0.0", "")}),
-		"bad version":                 rigTar(t, map[string]string{"rigfile.yaml": manifestYAML("jia", "demo", "1.0", ""), "instructions/style.md": "x"}),
-		"an inherited rigfile/ layer": rigTar(t, map[string]string{"rigfile.yaml": manifestYAML("jia", "demo", "1.0.0", "from: [rigfile/other]\n"), "instructions/style.md": "x"}),
+		"missing file":                rigTar(t, map[string]string{"rigfile.yaml": manifestYAML("ada", "demo", "1.0.0", "")}),
+		"bad version":                 rigTar(t, map[string]string{"rigfile.yaml": manifestYAML("ada", "demo", "1.0", ""), "instructions/style.md": "x"}),
+		"an inherited rigfile/ layer": rigTar(t, map[string]string{"rigfile.yaml": manifestYAML("ada", "demo", "1.0.0", "from: [rigfile/other]\n"), "instructions/style.md": "x"}),
 	}
 	for name, data := range cases {
-		if s, out := c.upload("jia", "demo", data); s != 422 && s != 400 {
+		if s, out := c.upload("ada", "demo", data); s != 422 && s != 400 {
 			t.Errorf("%s: status %d %v, want a refusal", name, s, out)
 		}
 	}
@@ -164,7 +164,7 @@ func TestUploadRefusesHostileArchives(t *testing.T) {
 	big := rigTar(t, map[string]string{"rigfile.yaml": "x", "big": strings.Repeat(string(bytes.Repeat([]byte{0}, 1)), 1)})
 	_ = big
 	huge := make([]byte, 128<<10)
-	if s, _, _ := c.do("POST", "/v1/rigs/jia/demo/versions", huge, "application/gzip"); s != http.StatusRequestEntityTooLarge {
+	if s, _, _ := c.do("POST", "/v1/rigs/ada/demo/versions", huge, "application/gzip"); s != http.StatusRequestEntityTooLarge {
 		t.Errorf("oversized upload: %d", s)
 	}
 	// nothing was stored, nothing was created
@@ -177,36 +177,36 @@ func TestUploadRefusesHostileArchives(t *testing.T) {
 
 func TestUploadNamespaceRules(t *testing.T) {
 	e := newEnv(t, nil)
-	_, jia := e.userToken("jia", 1)
+	_, ada := e.userToken("ada", 1)
 	_, other := e.userToken("bob", 2)
-	c := e.as(jia)
-	good := rigTar(t, goodRig("jia", "demo", "1.0.0"))
+	c := e.as(ada)
+	good := rigTar(t, goodRig("ada", "demo", "1.0.0"))
 
-	if s, _, _ := e.as("").do("POST", "/v1/rigs/jia/demo/versions", good, "application/gzip"); s != 401 {
+	if s, _, _ := e.as("").do("POST", "/v1/rigs/ada/demo/versions", good, "application/gzip"); s != 401 {
 		t.Errorf("no token: %d", s)
 	}
-	if s, _, _ := e.as("rgf_invalid").do("POST", "/v1/rigs/jia/demo/versions", good, "application/gzip"); s != 401 {
+	if s, _, _ := e.as("rgf_invalid").do("POST", "/v1/rigs/ada/demo/versions", good, "application/gzip"); s != 401 {
 		t.Errorf("bad token: %d", s)
 	}
-	if s, _, _ := c.do("POST", "/v1/rigs/jia/demo/versions", good, "text/plain"); s != 415 {
+	if s, _, _ := c.do("POST", "/v1/rigs/ada/demo/versions", good, "text/plain"); s != 415 {
 		t.Errorf("content type: %d", s)
 	}
-	if s, _ := e.as(other).upload("jia", "demo", good); s != 403 {
+	if s, _ := e.as(other).upload("ada", "demo", good); s != 403 {
 		t.Errorf("publishing under someone else's name: %d", s)
 	}
-	if s, _ := c.upload("jia", "other-name", good); s != 422 {
+	if s, _ := c.upload("ada", "other-name", good); s != 422 {
 		t.Errorf("manifest name must equal the URL: %d", s)
 	}
-	if s, _ := c.upload("Jia", "demo", good); s != 400 {
+	if s, _ := c.upload("Ada", "demo", good); s != 400 {
 		t.Errorf("owner must be lowercase: %d", s)
 	}
-	if s, _ := c.upload("jia", "Bad Name", good); s != 400 {
+	if s, _ := c.upload("ada", "Bad Name", good); s != 400 {
 		t.Errorf("rig name: %d", s)
 	}
-	if s, out := c.upload("jia", "demo", good); s != 202 || out["status"] != "pending" || out["version"] != "1.0.0" {
+	if s, out := c.upload("ada", "demo", good); s != 202 || out["status"] != "pending" || out["version"] != "1.0.0" {
 		t.Fatalf("%d %v", s, out)
 	}
-	// someone else cannot add a version to jia's rig even under their own namespace path, and an admin can
+	// someone else cannot add a version to ada's rig even under their own namespace path, and an admin can
 	if s, _ := e.as(other).upload("bob", "demo", rigTar(t, goodRig("bob", "demo", "1.0.0"))); s != 202 {
 		t.Errorf("bob's own rig: %d", s)
 	}
@@ -215,7 +215,7 @@ func TestUploadNamespaceRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	admTok, _ := e.store.CreateToken(t.Context(), adm.ID, "t", time.Hour)
-	if s, _ := e.as(admTok).upload("jia", "demo", rigTar(t, goodRig("jia", "demo", "1.0.1"))); s != 202 {
+	if s, _ := e.as(admTok).upload("ada", "demo", rigTar(t, goodRig("ada", "demo", "1.0.1"))); s != 202 {
 		t.Errorf("an admin may publish anywhere: %d", s)
 	}
 }
@@ -231,39 +231,39 @@ func TestReservedNames(t *testing.T) {
 			t.Errorf("%s must be reserved", o)
 		}
 	}
-	if registry.IsReservedOwner("jia") {
-		t.Error("jia is not reserved")
+	if registry.IsReservedOwner("ada") {
+		t.Error("ada is not reserved")
 	}
 }
 
 func TestVersionsAreImmutable(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1)
+	_, tok := e.userToken("ada", 1)
 	c := e.as(tok)
-	data := rigTar(t, goodRig("jia", "demo", "1.0.0"))
-	if s, _ := c.upload("jia", "demo", data); s != 202 {
+	data := rigTar(t, goodRig("ada", "demo", "1.0.0"))
+	if s, _ := c.upload("ada", "demo", data); s != 202 {
 		t.Fatal(s)
 	}
-	if s, out := c.upload("jia", "demo", data); s != 409 {
+	if s, out := c.upload("ada", "demo", data); s != 409 {
 		t.Fatalf("a second upload of the same version: %d %v", s, out)
 	}
 	// even with different content
-	changed := goodRig("jia", "demo", "1.0.0")
+	changed := goodRig("ada", "demo", "1.0.0")
 	changed["instructions/style.md"] = "# different\n"
-	if s, _ := c.upload("jia", "demo", rigTar(t, changed)); s != 409 {
+	if s, _ := c.upload("ada", "demo", rigTar(t, changed)); s != 409 {
 		t.Fatal("content of a version cannot change")
 	}
 	// concurrent uploads of a new version: exactly one wins
 	var wg sync.WaitGroup
 	codes := make(chan int, 6)
-	up := rigTar(t, goodRig("jia", "demo", "2.0.0"))
+	up := rigTar(t, goodRig("ada", "demo", "2.0.0"))
 	e.s.Lim = registry.NewLimiter(func() time.Time { return time.Now().Add(1000 * time.Hour) }) // do not let the rate limit interfere
 	_ = up
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s, _ := c.upload("jia", "demo", up)
+			s, _ := c.upload("ada", "demo", up)
 			codes <- s
 		}()
 	}
@@ -285,83 +285,83 @@ func TestVersionsAreImmutable(t *testing.T) {
 
 func TestVisibilityPredicate(t *testing.T) {
 	e := newEnv(t, nil)
-	_, jia := e.userToken("jia", 1)
+	_, ada := e.userToken("ada", 1)
 	_, bob := e.userToken("bob", 2)
-	owner, stranger, anon := e.as(jia), e.as(bob), e.as("")
-	if s, _ := owner.upload("jia", "demo", rigTar(t, goodRig("jia", "demo", "1.0.0"))); s != 202 {
+	owner, stranger, anon := e.as(ada), e.as(bob), e.as("")
+	if s, _ := owner.upload("ada", "demo", rigTar(t, goodRig("ada", "demo", "1.0.0"))); s != 202 {
 		t.Fatal(s)
 	}
 	// pending: only the owner sees it
-	if owner.versionStatus("jia", "demo", "1.0.0") != "pending" {
+	if owner.versionStatus("ada", "demo", "1.0.0") != "pending" {
 		t.Fatal("owner sees pending")
 	}
 	for name, c := range map[string]*client{"stranger": stranger, "anonymous": anon} {
-		if s, _ := c.get("/v1/rigs/jia/demo/versions/1.0.0"); s != 404 {
+		if s, _ := c.get("/v1/rigs/ada/demo/versions/1.0.0"); s != 404 {
 			t.Errorf("%s sees a pending version: %d", name, s)
 		}
-		if s, _ := c.get("/v1/rigs/jia/demo/versions/1.0.0/tarball"); s != 404 {
+		if s, _ := c.get("/v1/rigs/ada/demo/versions/1.0.0/tarball"); s != 404 {
 			t.Errorf("%s downloads a pending version: %d", name, s)
 		}
 	}
 	e.scanAll()
-	if owner.versionStatus("jia", "demo", "1.0.0") != "published" {
+	if owner.versionStatus("ada", "demo", "1.0.0") != "published" {
 		t.Fatal("a clean rig is published by the scan")
 	}
 	// published but PRIVATE: still invisible to others, identical to a rig that does not exist
-	sMissing, bMissing := anon.get("/v1/rigs/jia/nothing")
-	sPriv, bPriv := anon.get("/v1/rigs/jia/demo")
+	sMissing, bMissing := anon.get("/v1/rigs/ada/nothing")
+	sPriv, bPriv := anon.get("/v1/rigs/ada/demo")
 	if sMissing != 404 || sPriv != 404 || string(bMissing) != string(bPriv) {
 		t.Fatalf("private and missing must be indistinguishable: %d %q / %d %q", sPriv, bPriv, sMissing, bMissing)
 	}
-	if s, _ := stranger.get("/v1/rigs/jia/demo/versions/1.0.0/manifest"); s != 404 {
+	if s, _ := stranger.get("/v1/rigs/ada/demo/versions/1.0.0/manifest"); s != 404 {
 		t.Fatal("private manifest leaked")
 	}
 	// make it public: now everyone sees the published version, but not other people's pending ones
-	if s, _, b := owner.do("POST", "/v1/rigs/jia/demo/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 204 {
+	if s, _, b := owner.do("POST", "/v1/rigs/ada/demo/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 204 {
 		t.Fatalf("%d %s", s, b)
 	}
-	if s, _ := anon.get("/v1/rigs/jia/demo/versions/1.0.0/manifest"); s != 200 {
+	if s, _ := anon.get("/v1/rigs/ada/demo/versions/1.0.0/manifest"); s != 200 {
 		t.Fatal("a public published version is readable")
 	}
-	if s, _ := owner.upload("jia", "demo", rigTar(t, goodRig("jia", "demo", "1.1.0"))); s != 202 {
+	if s, _ := owner.upload("ada", "demo", rigTar(t, goodRig("ada", "demo", "1.1.0"))); s != 202 {
 		t.Fatal(s)
 	}
-	if s, _ := anon.get("/v1/rigs/jia/demo/versions/1.1.0"); s != 404 {
+	if s, _ := anon.get("/v1/rigs/ada/demo/versions/1.1.0"); s != 404 {
 		t.Fatal("a pending version of a public rig is invisible to others")
 	}
-	_, body := anon.get("/v1/rigs/jia/demo")
+	_, body := anon.get("/v1/rigs/ada/demo")
 	if strings.Contains(string(body), "1.1.0") {
 		t.Fatalf("the rig page lists a pending version: %s", body)
 	}
 	// non-owners cannot change visibility, stars need a token
-	if s, _, _ := stranger.do("POST", "/v1/rigs/jia/demo/visibility", []byte("visibility=private"), "application/x-www-form-urlencoded"); s != 403 {
+	if s, _, _ := stranger.do("POST", "/v1/rigs/ada/demo/visibility", []byte("visibility=private"), "application/x-www-form-urlencoded"); s != 403 {
 		t.Fatalf("%d", s)
 	}
-	if s, _, _ := anon.do("PUT", "/v1/rigs/jia/demo/star", nil, ""); s != 401 {
+	if s, _, _ := anon.do("PUT", "/v1/rigs/ada/demo/star", nil, ""); s != 401 {
 		t.Fatal("stars need a token")
 	}
-	if s, _, _ := stranger.do("PUT", "/v1/rigs/jia/demo/star", nil, ""); s != 204 {
+	if s, _, _ := stranger.do("PUT", "/v1/rigs/ada/demo/star", nil, ""); s != 204 {
 		t.Fatal("star")
 	}
-	if _, b := anon.get("/v1/rigs/jia/demo"); !strings.Contains(string(b), `"stars":1`) {
+	if _, b := anon.get("/v1/rigs/ada/demo"); !strings.Contains(string(b), `"stars":1`) {
 		t.Fatalf("%s", b)
 	}
 }
 
 func TestScanRejectsSecretsWithoutLeakingThem(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1)
+	_, tok := e.userToken("ada", 1)
 	c := e.as(tok)
-	files := goodRig("jia", "leaky", "1.0.0")
+	files := goodRig("ada", "leaky", "1.0.0")
 	files["instructions/style.md"] = "# Style\ntoken = \"" + fakeSecret() + "\"\n"
-	if s, _ := c.upload("jia", "leaky", rigTar(t, files)); s != 202 {
+	if s, _ := c.upload("ada", "leaky", rigTar(t, files)); s != 202 {
 		t.Fatal(s)
 	}
 	e.scanAll()
-	if got := c.versionStatus("jia", "leaky", "1.0.0"); got != "rejected" {
+	if got := c.versionStatus("ada", "leaky", "1.0.0"); got != "rejected" {
 		t.Fatalf("status %s", got)
 	}
-	s, b := c.get("/v1/rigs/jia/leaky/versions/1.0.0")
+	s, b := c.get("/v1/rigs/ada/leaky/versions/1.0.0")
 	if s != 200 || !strings.Contains(string(b), `"kind":"secret"`) || !strings.Contains(string(b), "style.md") {
 		t.Fatalf("the owner must see where: %s", b)
 	}
@@ -374,72 +374,72 @@ func TestScanRejectsSecretsWithoutLeakingThem(t *testing.T) {
 		t.Fatal("the value is in the database findings")
 	}
 	// nobody else can pull it, and it can never be made visible
-	if s, _ := e.as("").get("/v1/rigs/jia/leaky/versions/1.0.0/tarball"); s != 404 {
+	if s, _ := e.as("").get("/v1/rigs/ada/leaky/versions/1.0.0/tarball"); s != 404 {
 		t.Fatal("a rejected version must not be downloadable")
 	}
-	if s, _, _ := c.do("POST", "/v1/rigs/jia/leaky/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 409 {
+	if s, _, _ := c.do("POST", "/v1/rigs/ada/leaky/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 409 {
 		t.Fatalf("no published version, so it cannot go public: %d", s)
 	}
 }
 
 func TestPinningPublicVersusPrivate(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1)
+	_, tok := e.userToken("ada", 1)
 	c := e.as(tok)
 	unpinned := func(ver string) map[string]string {
-		f := goodRig("jia", "pins", ver)
-		f["rigfile.yaml"] = manifestYAML("jia", "pins", ver, "mcp_servers:\n  tool:\n    command: npx\n    args: ['-y', 'some-mcp']\n")
+		f := goodRig("ada", "pins", ver)
+		f["rigfile.yaml"] = manifestYAML("ada", "pins", ver, "mcp_servers:\n  tool:\n    command: npx\n    args: ['-y', 'some-mcp']\n")
 		return f
 	}
 	// private: published, with a warning
-	if s, _ := c.upload("jia", "pins", rigTar(t, unpinned("1.0.0"))); s != 202 {
+	if s, _ := c.upload("ada", "pins", rigTar(t, unpinned("1.0.0"))); s != 202 {
 		t.Fatal(s)
 	}
 	e.scanAll()
-	s, b := c.get("/v1/rigs/jia/pins/versions/1.0.0")
+	s, b := c.get("/v1/rigs/ada/pins/versions/1.0.0")
 	if s != 200 || !strings.Contains(string(b), `"status":"published"`) || !strings.Contains(string(b), `"kind":"unpinned"`) {
 		t.Fatalf("%s", b)
 	}
 	// going public is refused while the newest version has unpinned packages
-	if st, _, body := c.do("POST", "/v1/rigs/jia/pins/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); st != 409 || !strings.Contains(string(body), "pin") {
+	if st, _, body := c.do("POST", "/v1/rigs/ada/pins/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); st != 409 || !strings.Contains(string(body), "pin") {
 		t.Fatalf("%d %s", st, body)
 	}
 	// a fixed version, then public is allowed
-	fixed := goodRig("jia", "pins", "1.0.1")
-	fixed["rigfile.yaml"] = manifestYAML("jia", "pins", "1.0.1", "mcp_servers:\n  tool:\n    command: npx\n    args: ['-y', 'some-mcp@1.2.3']\n")
-	if s, _ := c.upload("jia", "pins", rigTar(t, fixed)); s != 202 {
+	fixed := goodRig("ada", "pins", "1.0.1")
+	fixed["rigfile.yaml"] = manifestYAML("ada", "pins", "1.0.1", "mcp_servers:\n  tool:\n    command: npx\n    args: ['-y', 'some-mcp@1.2.3']\n")
+	if s, _ := c.upload("ada", "pins", rigTar(t, fixed)); s != 202 {
 		t.Fatal(s)
 	}
 	e.scanAll()
-	if st, _, body := c.do("POST", "/v1/rigs/jia/pins/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); st != 204 {
+	if st, _, body := c.do("POST", "/v1/rigs/ada/pins/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); st != 204 {
 		t.Fatalf("%d %s", st, body)
 	}
 	// once public, an unpinned new version is rejected
-	if s, _ := c.upload("jia", "pins", rigTar(t, unpinned("2.0.0"))); s != 202 {
+	if s, _ := c.upload("ada", "pins", rigTar(t, unpinned("2.0.0"))); s != 202 {
 		t.Fatal(s)
 	}
 	e.scanAll()
-	if got := c.versionStatus("jia", "pins", "2.0.0"); got != "rejected" {
+	if got := c.versionStatus("ada", "pins", "2.0.0"); got != "rejected" {
 		t.Fatalf("an unpinned version of a public rig: %s", got)
 	}
 }
 
 func TestResolveRangesAndYankAndRemove(t *testing.T) {
 	e := newEnv(t, nil)
-	owner, tok := e.userToken("jia", 1)
+	owner, tok := e.userToken("ada", 1)
 	c, anon := e.as(tok), e.as("")
 	for _, v := range []string{"1.0.0", "1.2.0", "1.3.0-rc1", "2.0.0"} {
-		if s, out := c.upload("jia", "demo", rigTar(t, goodRig("jia", "demo", v))); s != 202 {
+		if s, out := c.upload("ada", "demo", rigTar(t, goodRig("ada", "demo", v))); s != 202 {
 			t.Fatalf("%s: %d %v", v, s, out)
 		}
 		e.s.Lim = registry.NewLimiter(func() time.Time { return time.Now().Add(time.Duration(len(v)) * 1000 * time.Hour) })
 	}
 	e.scanAll()
-	if s, _, _ := c.do("POST", "/v1/rigs/jia/demo/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 204 {
+	if s, _, _ := c.do("POST", "/v1/rigs/ada/demo/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 204 {
 		t.Fatal(s)
 	}
 	resolve := func(cl *client, rng string) string {
-		s, b := cl.get("/v1/rigs/jia/demo/resolve?range=" + rng)
+		s, b := cl.get("/v1/rigs/ada/demo/resolve?range=" + rng)
 		if s != 200 {
 			return fmt.Sprintf("http %d", s)
 		}
@@ -453,13 +453,13 @@ func TestResolveRangesAndYankAndRemove(t *testing.T) {
 		}
 	}
 	// yank 1.2.0: ranges skip it, an exact request still finds it, the tarball still downloads with a marker
-	if s, _, _ := c.do("POST", "/v1/rigs/jia/demo/versions/1.2.0/yank", []byte("reason=broken+hook"), "application/x-www-form-urlencoded"); s != 204 {
+	if s, _, _ := c.do("POST", "/v1/rigs/ada/demo/versions/1.2.0/yank", []byte("reason=broken+hook"), "application/x-www-form-urlencoded"); s != 204 {
 		t.Fatal(s)
 	}
-	if s, _, _ := anon.do("POST", "/v1/rigs/jia/demo/versions/1.0.0/yank", []byte("reason=x"), "application/x-www-form-urlencoded"); s != 401 {
+	if s, _, _ := anon.do("POST", "/v1/rigs/ada/demo/versions/1.0.0/yank", []byte("reason=x"), "application/x-www-form-urlencoded"); s != 401 {
 		t.Fatal("yank needs a token")
 	}
-	if s, _, _ := c.do("POST", "/v1/rigs/jia/demo/versions/1.0.0/yank", nil, "application/x-www-form-urlencoded"); s != 400 {
+	if s, _, _ := c.do("POST", "/v1/rigs/ada/demo/versions/1.0.0/yank", nil, "application/x-www-form-urlencoded"); s != 400 {
 		t.Fatal("yank needs a reason")
 	}
 	if got := resolve(anon, "%5E1"); got != "1.0.0" {
@@ -468,20 +468,20 @@ func TestResolveRangesAndYankAndRemove(t *testing.T) {
 	if got := resolve(anon, "1.2.0"); got != "1.2.0" {
 		t.Fatalf("an exact request for a yanked version still resolves: %s", got)
 	}
-	s, h, body := c.do("GET", "/v1/rigs/jia/demo/versions/1.2.0/tarball", nil, "")
+	s, h, body := c.do("GET", "/v1/rigs/ada/demo/versions/1.2.0/tarball", nil, "")
 	if s != 200 || h.Get("X-Rigfile-Yanked") != "true" || len(h.Get("X-Rigfile-SHA256")) != 64 || len(body) == 0 || h.Get("Cache-Control") == "" {
 		t.Fatalf("yanked tarball: %d %v", s, h)
 	}
 	// takedown (admin): the version is gone for everyone but admins
 	adm, _ := e.store.UpsertUser(t.Context(), registry.GitHubUser{ID: 9, Login: "admin-user"}, true)
-	if err := e.store.RemoveVersion(t.Context(), "jia", "demo", "1.2.0", "malware report", owner); err == nil {
+	if err := e.store.RemoveVersion(t.Context(), "ada", "demo", "1.2.0", "malware report", owner); err == nil {
 		t.Fatal("only admins remove")
 	}
-	if err := e.store.RemoveVersion(t.Context(), "jia", "demo", "1.2.0", "malware report", adm); err != nil {
+	if err := e.store.RemoveVersion(t.Context(), "ada", "demo", "1.2.0", "malware report", adm); err != nil {
 		t.Fatal(err)
 	}
 	for _, cl := range []*client{anon, c} {
-		if s, _ := cl.get("/v1/rigs/jia/demo/versions/1.2.0/tarball"); s != 404 {
+		if s, _ := cl.get("/v1/rigs/ada/demo/versions/1.2.0/tarball"); s != 404 {
 			t.Fatalf("a removed version must be unavailable: %d", s)
 		}
 	}
@@ -494,17 +494,17 @@ func TestResolveRangesAndYankAndRemove(t *testing.T) {
 
 func TestSearchListsOnlyPublishedPublicRigs(t *testing.T) {
 	e := newEnv(t, nil)
-	_, jia := e.userToken("jia", 1)
-	c, anon := e.as(jia), e.as("")
+	_, ada := e.userToken("ada", 1)
+	c, anon := e.as(ada), e.as("")
 	for _, n := range []string{"data-science", "web-dev", "private-one"} {
-		if s, _ := c.upload("jia", n, rigTar(t, goodRig("jia", n, "1.0.0"))); s != 202 {
+		if s, _ := c.upload("ada", n, rigTar(t, goodRig("ada", n, "1.0.0"))); s != 202 {
 			t.Fatal(s)
 		}
 		e.s.Lim = registry.NewLimiter(func() time.Time { return time.Now().Add(1000 * time.Hour * time.Duration(len(n))) })
 	}
 	e.scanAll()
 	for _, n := range []string{"data-science", "web-dev"} {
-		if s, _, _ := c.do("POST", "/v1/rigs/jia/"+n+"/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 204 {
+		if s, _, _ := c.do("POST", "/v1/rigs/ada/"+n+"/visibility", []byte("visibility=public"), "application/x-www-form-urlencoded"); s != 204 {
 			t.Fatal(s)
 		}
 	}
@@ -529,8 +529,8 @@ func TestSearchListsOnlyPublishedPublicRigs(t *testing.T) {
 
 func TestWorkerRecoversAndLocks(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1)
-	if s, _ := e.as(tok).upload("jia", "demo", rigTar(t, goodRig("jia", "demo", "1.0.0"))); s != 202 {
+	_, tok := e.userToken("ada", 1)
+	if s, _ := e.as(tok).upload("ada", "demo", rigTar(t, goodRig("ada", "demo", "1.0.0"))); s != 202 {
 		t.Fatal(s)
 	}
 	ctx := t.Context()
@@ -574,7 +574,7 @@ func TestWorkerRecoversAndLocks(t *testing.T) {
 	if err := e.store.RetryOrFail(ctx, id, 3, fmt.Errorf("boom")); err != nil {
 		t.Fatal(err)
 	}
-	if got := e.as(tok).versionStatus("jia", "demo", "1.0.0"); got != "rejected" {
+	if got := e.as(tok).versionStatus("ada", "demo", "1.0.0"); got != "rejected" {
 		t.Fatalf("after the last attempt: %s", got)
 	}
 }

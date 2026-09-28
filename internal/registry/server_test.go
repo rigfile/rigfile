@@ -26,7 +26,7 @@ type fakeGitHub struct {
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
-	f := &fakeGitHub{user: map[string]any{"id": 1001, "login": "Jia", "name": "Jia X", "avatar_url": "https://avatars.githubusercontent.com/u/1001"}}
+	f := &fakeGitHub{user: map[string]any{"id": 1001, "login": "Ada", "name": "Ada X", "avatar_url": "https://avatars.githubusercontent.com/u/1001"}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /login/oauth/access_token", func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
@@ -199,7 +199,7 @@ func TestOAuthStateIsChecked(t *testing.T) {
 		t.Fatalf("session cookie: %+v", sess)
 	}
 	// the account was created with a lowercased login
-	if u, err := e.store.UserByLogin(t.Context(), "jia"); err != nil || u.GitHubID != 1001 {
+	if u, err := e.store.UserByLogin(t.Context(), "ada"); err != nil || u.GitHubID != 1001 {
 		t.Fatalf("%v", err)
 	}
 }
@@ -223,7 +223,7 @@ func TestOpenRedirectsAreRefused(t *testing.T) {
 func TestDisabledAccountCannotSignIn(t *testing.T) {
 	e := newEnv(t, nil)
 	e.signIn("/")
-	if err := e.store.SetDisabled(t.Context(), "jia", true); err != nil {
+	if err := e.store.SetDisabled(t.Context(), "ada", true); err != nil {
 		t.Fatal(err)
 	}
 	c := e.client()
@@ -364,7 +364,7 @@ func TestDeviceFlowOverHTTP(t *testing.T) {
 		if r.StatusCode == 200 {
 			var m map[string]any
 			_ = json.Unmarshal([]byte(body(t, r)), &m)
-			if m["login"] != "jia" {
+			if m["login"] != "ada" {
 				t.Fatalf("%v", m)
 			}
 		} else {
@@ -462,10 +462,10 @@ func TestRateLimits(t *testing.T) {
 
 func TestConfigValidation(t *testing.T) {
 	env := map[string]string{"RIGFILE_REGISTRY_PUBLIC_URL": "https://registry.example.test/", "RIGFILE_REGISTRY_DATABASE_URL": "postgres://x", "RIGFILE_REGISTRY_BLOB": "fs:/tmp/b",
-		"RIGFILE_REGISTRY_GITHUB_CLIENT_ID": "id", "RIGFILE_REGISTRY_GITHUB_CLIENT_SECRET": "sec", "RIGFILE_REGISTRY_ADMINS": "Jia, other ,"}
+		"RIGFILE_REGISTRY_GITHUB_CLIENT_ID": "id", "RIGFILE_REGISTRY_GITHUB_CLIENT_SECRET": "sec", "RIGFILE_REGISTRY_ADMINS": "Ada, other ,"}
 	get := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 	c, err := registry.ConfigFromEnv(get(env), nil)
-	if err != nil || c.PublicURL != "https://registry.example.test" || len(c.Admins) != 2 || !c.IsAdmin("JIA") || c.IsAdmin("nobody") || !c.Secure() {
+	if err != nil || c.PublicURL != "https://registry.example.test" || len(c.Admins) != 2 || !c.IsAdmin("ADA") || c.IsAdmin("nobody") || !c.Secure() {
 		t.Fatalf("%+v %v", c, err)
 	}
 	for k, v := range map[string]string{"RIGFILE_REGISTRY_PUBLIC_URL": "http://registry.example.test", "RIGFILE_REGISTRY_DATABASE_URL": "", "RIGFILE_REGISTRY_BLOB": "",

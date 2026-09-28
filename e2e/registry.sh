@@ -22,8 +22,8 @@ curl -fsSI "http://127.0.0.1:$PORT/" > "$tmp/h.txt"
 has "Content-Security-Policy: default-src 'none'" "$tmp/h.txt"; has "X-Content-Type-Options: nosniff" "$tmp/h.txt"
 
 echo "== accounts (operator tool)"
-$compose exec -T registry rigfile-registry admin create-user --login jia --github-id 1001 >/dev/null || fail "create-user"
-TOK=$($compose exec -T registry rigfile-registry admin token --login jia | tr -d '\r\n')
+$compose exec -T registry rigfile-registry admin create-user --login ada --github-id 1001 >/dev/null || fail "create-user"
+TOK=$($compose exec -T registry rigfile-registry admin token --login ada | tr -d '\r\n')
 case "$TOK" in rgf_*) ;; *) fail "no token" ;; esac
 
 go build -o "$tmp/rigfile" ./cmd/rigfile
@@ -37,7 +37,7 @@ machine() { # machine NAME -> sets HOME for a fresh machine with a private passp
 }
 mkrig() { # mkrig DIR VERSION
   mkdir -p "$1/instructions" "$1/commands"
-  printf 'apiVersion: rigfile.dev/v1\nname: jia/e2e-rig\nversion: %s\ndescription: E2E rig\ninstructions:\n  - {id: style, file: instructions/style.md}\ncommands:\n  - {path: commands/hi.md}\n' "$2" > "$1/rigfile.yaml"
+  printf 'apiVersion: rigfile.dev/v1\nname: ada/e2e-rig\nversion: %s\ndescription: E2E rig\ninstructions:\n  - {id: style, file: instructions/style.md}\ncommands:\n  - {path: commands/hi.md}\n' "$2" > "$1/rigfile.yaml"
   printf '# Style\n- be terse\n' > "$1/instructions/style.md"; printf 'say hi\n' > "$1/commands/hi.md"
 }
 
@@ -46,11 +46,11 @@ machine publisher
 printf '%s\n' "$TOK" | "$tmp/rigfile" secrets set registry/127_0_0_1_$PORT/token >/dev/null 2>&1 || fail "cannot store the token"
 mkrig "$tmp/rig1" 1.0.0
 "$tmp/rigfile" publish "$tmp/rig1" --to-registry --ack-personal > "$tmp/out.txt" 2>&1 || { cat "$tmp/out.txt" >&2; fail "publish"; }
-has "published jia/e2e-rig@1.0.0" "$tmp/out.txt"; has "is private" "$tmp/out.txt"
+has "published ada/e2e-rig@1.0.0" "$tmp/out.txt"; has "is private" "$tmp/out.txt"
 
 echo "== another machine cannot see the private rig"
 machine reader
-if "$tmp/rigfile" pull jia/e2e-rig --plan-only --no-git > "$tmp/out.txt" 2>&1; then fail "a private rig was pulled anonymously"; fi
+if "$tmp/rigfile" pull ada/e2e-rig --plan-only --no-git > "$tmp/out.txt" 2>&1; then fail "a private rig was pulled anonymously"; fi
 
 echo "== publish 1.0.1 publicly, pull it"
 machine publisher
@@ -58,14 +58,14 @@ mkrig "$tmp/rig2" 1.0.1
 "$tmp/rigfile" publish "$tmp/rig2" --to-registry --public --ack-personal > "$tmp/out.txt" 2>&1 || { cat "$tmp/out.txt" >&2; fail "public publish"; }
 has "is public" "$tmp/out.txt"
 machine reader
-"$tmp/rigfile" pull jia/e2e-rig --plan-only --no-git > "$tmp/out.txt" 2>&1 || { cat "$tmp/out.txt" >&2; fail "pull plan"; }
+"$tmp/rigfile" pull ada/e2e-rig --plan-only --no-git > "$tmp/out.txt" 2>&1 || { cat "$tmp/out.txt" >&2; fail "pull plan"; }
 has "Source: rigfile+" "$tmp/out.txt"; has "you did not write" "$tmp/out.txt"
-"$tmp/rigfile" pull jia/e2e-rig --yes --no-git > "$tmp/out.txt" 2>&1 || { cat "$tmp/out.txt" >&2; fail "pull"; }
+"$tmp/rigfile" pull ada/e2e-rig --yes --no-git > "$tmp/out.txt" 2>&1 || { cat "$tmp/out.txt" >&2; fail "pull"; }
 [ -f "$HOME/.claude/commands/hi.md" ] || fail "the pulled rig was not applied"
 
 echo "== the public page renders"
-curl -fsS "http://127.0.0.1:$PORT/r/jia/e2e-rig" > "$tmp/page.html"
-has "jia/e2e-rig" "$tmp/page.html"; has "rigfile pull jia/e2e-rig" "$tmp/page.html"
+curl -fsS "http://127.0.0.1:$PORT/r/ada/e2e-rig" > "$tmp/page.html"
+has "ada/e2e-rig" "$tmp/page.html"; has "rigfile pull ada/e2e-rig" "$tmp/page.html"
 curl -fsS "http://127.0.0.1:$PORT/v1/search?q=e2e" | grep -q '"e2e-rig"' || fail "search"
 
 echo "== immutability and update"

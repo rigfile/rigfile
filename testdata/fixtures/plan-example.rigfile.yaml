@@ -2,13 +2,13 @@
 # against schema/rigfile.v1.json. ALL VALUES ARE ILLUSTRATIVE. No real secrets. The MCP package
 # name below is a placeholder, not a real package.
 apiVersion: rigfile.dev/v1
-name: jiaxu/data-science
+name: adams/data-science
 version: 1.2.0
 description: Python/data-science rig with trading MCP, job-search skills, strict git hygiene
 license: MIT
 from:
   - rigfile/base-secure@^1
-  - jiaxu/python-dev@^2
+  - adams/python-dev@^2
 
 targets:
   include: [claude-code, codex, cursor, gemini-cli]

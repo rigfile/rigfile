@@ -33,7 +33,7 @@ func TestTokenGoesOnlyToTheRegistryAndRedirectsStayOnHost(t *testing.T) {
 		seen = append(seen, "reg:"+r.Header.Get("Authorization"))
 		switch r.URL.Path {
 		case "/v1/me":
-			_, _ = io.WriteString(w, `{"login":"jia"}`)
+			_, _ = io.WriteString(w, `{"login":"ada"}`)
 		case "/v1/rigs/o/n":
 			http.Redirect(w, r, other.URL+"/steal", http.StatusFound)
 		case "/v1/rigs/o/same":
@@ -42,7 +42,7 @@ func TestTokenGoesOnlyToTheRegistryAndRedirectsStayOnHost(t *testing.T) {
 	}))
 	defer reg.Close()
 	c := &Client{Base: reg.URL, Token: func() string { return "rgf_secret" }}
-	if login, err := c.Me(context.Background()); err != nil || login != "jia" {
+	if login, err := c.Me(context.Background()); err != nil || login != "ada" {
 		t.Fatalf("%v", err)
 	}
 	if _, err := c.Rig(context.Background(), "o", "n"); err == nil || !strings.Contains(err.Error(), "refusing a redirect") {

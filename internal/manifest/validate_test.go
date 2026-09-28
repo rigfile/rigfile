@@ -121,10 +121,10 @@ func TestMutations(t *testing.T) {
 			set(t, d, "secret://gh/token", "mcp_servers", "github", "bearer_token")
 		}, false},
 		{"hard-coded mac home in permission", func(t *testing.T, d map[string]any) {
-			appendTo(t, d, map[string]any{"read": "/Users/jia/.ssh/**"}, "permissions", "deny")
+			appendTo(t, d, map[string]any{"read": "/Users/ada/.ssh/**"}, "permissions", "deny")
 		}, true},
 		{"windows path in permission", func(t *testing.T, d map[string]any) {
-			appendTo(t, d, map[string]any{"read": `C:\Users\jia\.ssh\**`}, "permissions", "deny")
+			appendTo(t, d, map[string]any{"read": `C:\Users\ada\.ssh\**`}, "permissions", "deny")
 		}, true},
 		{"absolute path in rig file ref", func(t *testing.T, d map[string]any) {
 			set(t, d, "/etc/passwd", "instructions", 0, "file")
@@ -166,7 +166,7 @@ func TestMutations(t *testing.T) {
 			d["x-notes"] = map[string]any{"a": 1}
 		}, false},
 		{"bad rig name (uppercase)", func(t *testing.T, d map[string]any) {
-			d["name"] = "Jiaxu/Data-Science"
+			d["name"] = "Adams/Data-Science"
 		}, true},
 		{"hook with builtin/script per-OS run (valid)", func(t *testing.T, d map[string]any) {
 			appendTo(t, d, map[string]any{"id": "x", "event": "stop", "run": map[string]any{"windows": "builtin:notify", "linux": "hooks/n.sh"}}, "hooks")

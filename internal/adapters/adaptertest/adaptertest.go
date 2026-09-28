@@ -28,7 +28,7 @@ var UpdateGolden = flag.Bool("update-golden", false, "rewrite golden files")
 
 // RigYAML is the canonical fixture rig: every category, with a secret-bearing MCP server and a remote one.
 const RigYAML = `apiVersion: rigfile.dev/v1
-name: jiaxu/demo
+name: adams/demo
 version: 1.0.0
 instructions:
   - {id: coding-style, file: instructions/style.md}

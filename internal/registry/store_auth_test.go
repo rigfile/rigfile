@@ -35,25 +35,25 @@ func mkUser(t *testing.T, st *registry.Store, id int64, login string) *registry.
 func TestUsersFollowTheGitHubIDAndDisabledAccountsCannotSignIn(t *testing.T) {
 	st, _ := newStore(t)
 	ctx := context.Background()
-	u := mkUser(t, st, 42, "Jia-X")
-	if u.Login != "jia-x" {
+	u := mkUser(t, st, 42, "Ada-X")
+	if u.Login != "ada-x" {
 		t.Fatalf("logins are lowercased: %q", u.Login)
 	}
 	// a GitHub rename keeps the same account
-	u2 := mkUser(t, st, 42, "jia-renamed")
-	if u2.ID != u.ID || u2.Login != "jia-renamed" {
+	u2 := mkUser(t, st, 42, "ada-renamed")
+	if u2.ID != u.ID || u2.Login != "ada-renamed" {
 		t.Fatalf("%+v", u2)
 	}
 	if _, err := st.UpsertUser(ctx, registry.GitHubUser{ID: 43, Login: "bad_login"}, false); err == nil {
 		t.Fatal("a login the namespace cannot hold must be refused")
 	}
-	if err := st.SetDisabled(ctx, "jia-renamed", true); err != nil {
+	if err := st.SetDisabled(ctx, "ada-renamed", true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.UpsertUser(ctx, registry.GitHubUser{ID: 42, Login: "jia-renamed"}, false); !errors.Is(err, registry.ErrDisabled) {
+	if _, err := st.UpsertUser(ctx, registry.GitHubUser{ID: 42, Login: "ada-renamed"}, false); !errors.Is(err, registry.ErrDisabled) {
 		t.Fatalf("%v", err)
 	}
-	if _, err := st.UserByLogin(ctx, "jia-renamed"); !errors.Is(err, registry.ErrNotFound) {
+	if _, err := st.UserByLogin(ctx, "ada-renamed"); !errors.Is(err, registry.ErrNotFound) {
 		t.Fatal("a disabled user is not found")
 	}
 	if err := st.SetDisabled(ctx, "nobody", true); !errors.Is(err, registry.ErrNotFound) {
@@ -64,7 +64,7 @@ func TestUsersFollowTheGitHubIDAndDisabledAccountsCannotSignIn(t *testing.T) {
 func TestSessionsExpireAndAreStoredHashed(t *testing.T) {
 	st, clk := newStore(t)
 	ctx := context.Background()
-	u := mkUser(t, st, 1, "jia")
+	u := mkUser(t, st, 1, "ada")
 	cookie, csrf, err := st.CreateSession(ctx, u.ID, time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestSessionsExpireAndAreStoredHashed(t *testing.T) {
 		t.Fatal("a deleted session must not resolve")
 	}
 	c3, _, _ := st.CreateSession(ctx, u.ID, time.Hour)
-	_ = st.SetDisabled(ctx, "jia", true)
+	_ = st.SetDisabled(ctx, "ada", true)
 	if _, _, err := st.SessionUser(ctx, c3); !errors.Is(err, registry.ErrNotFound) {
 		t.Fatal("a disabled account's session must stop working")
 	}
@@ -104,7 +104,7 @@ func TestSessionsExpireAndAreStoredHashed(t *testing.T) {
 func TestTokensAreHashedExpireAndRevoke(t *testing.T) {
 	st, clk := newStore(t)
 	ctx := context.Background()
-	u := mkUser(t, st, 1, "jia")
+	u := mkUser(t, st, 1, "ada")
 	tok, err := st.CreateToken(ctx, u.ID, "cli", 30*24*time.Hour)
 	if err != nil || !strings.HasPrefix(tok, "rgf_") || len(tok) < 40 {
 		t.Fatalf("%q %v", tok, err)
@@ -114,7 +114,7 @@ func TestTokensAreHashedExpireAndRevoke(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT token_hash FROM api_tokens`).Scan(&stored); err != nil || bytes.Contains(stored, []byte(tok)) || len(stored) != 32 {
 		t.Fatalf("stored hash %d bytes, err %v", len(stored), err)
 	}
-	if got, err := st.TokenUser(ctx, tok); err != nil || got.Login != "jia" {
+	if got, err := st.TokenUser(ctx, tok); err != nil || got.Login != "ada" {
 		t.Fatalf("%v", err)
 	}
 	for _, bad := range []string{"", "rgf_", "rgf_nope", tok + "x", strings.TrimPrefix(tok, "rgf_"), strings.Repeat("rgf_", 100)} {
@@ -137,7 +137,7 @@ func TestTokensAreHashedExpireAndRevoke(t *testing.T) {
 	}
 	// a disabled account's tokens stop working
 	tok3, _ := st.CreateToken(ctx, u.ID, "cli", time.Hour)
-	_ = st.SetDisabled(ctx, "jia", true)
+	_ = st.SetDisabled(ctx, "ada", true)
 	if _, err := st.TokenUser(ctx, tok3); !errors.Is(err, registry.ErrNotFound) {
 		t.Fatal("disabled account")
 	}
@@ -146,7 +146,7 @@ func TestTokensAreHashedExpireAndRevoke(t *testing.T) {
 func TestDeviceFlow(t *testing.T) {
 	st, clk := newStore(t)
 	ctx := context.Background()
-	u := mkUser(t, st, 1, "jia")
+	u := mkUser(t, st, 1, "ada")
 
 	dc, uc, err := st.CreateDevice(ctx, 15*time.Minute, 5)
 	if err != nil || len(uc) != 9 || uc[4] != '-' {

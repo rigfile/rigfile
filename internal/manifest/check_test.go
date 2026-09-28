@@ -26,7 +26,7 @@ func rig(t *testing.T, files map[string]string) string {
 
 const skillMD = "---\nname: demo\ndescription: A demo skill\n---\nbody\n"
 
-const base = "apiVersion: rigfile.dev/v1\nname: jiaxu/demo\nversion: 1.0.0\n"
+const base = "apiVersion: rigfile.dev/v1\nname: adams/demo\nversion: 1.0.0\n"
 
 func load(t *testing.T, files map[string]string) *Loaded {
 	t.Helper()
@@ -59,7 +59,7 @@ func TestLoadDecodesEverything(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := l.M
-	if m.Name != "jiaxu/data-science" || len(m.Skills) != 2 || m.Skills[0].Key() != "job-pipeline" || m.Skills[1].Key() != "pdf" {
+	if m.Name != "adams/data-science" || len(m.Skills) != 2 || m.Skills[0].Key() != "job-pipeline" || m.Skills[1].Key() != "pdf" {
 		t.Fatalf("skills/keys: %+v", m.Skills)
 	}
 	if m.Agents[0].Key() != "code-reviewer" || m.Commands[0].Key() != "ship" || m.Instructions[0].Key() != "user/coding-style" {

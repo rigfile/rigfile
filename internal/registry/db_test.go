@@ -19,24 +19,24 @@ func TestMigrationsApplyOnceAndConstraintsHold(t *testing.T) {
 	if err := db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 5 {
 		t.Fatalf("migrations recorded: %d %v", n, err)
 	}
-	if _, err := db.Exec(`INSERT INTO users (github_id, login) VALUES (1, 'Jia')`); err == nil {
+	if _, err := db.Exec(`INSERT INTO users (github_id, login) VALUES (1, 'Ada')`); err == nil {
 		t.Fatal("a login must be lowercase")
 	}
-	if _, err := db.Exec(`INSERT INTO users (github_id, login) VALUES (1, 'jia')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO users (github_id, login) VALUES (1, 'ada')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`INSERT INTO users (github_id, login) VALUES (1, 'other')`); err == nil {
 		t.Fatal("a GitHub id is unique")
 	}
 	var uid int64
-	_ = db.QueryRow(`SELECT id FROM users WHERE login='jia'`).Scan(&uid)
-	if _, err := db.Exec(`INSERT INTO rigs (owner, name, created_by) VALUES ('jia', 'Bad Name', $1)`, uid); err == nil {
+	_ = db.QueryRow(`SELECT id FROM users WHERE login='ada'`).Scan(&uid)
+	if _, err := db.Exec(`INSERT INTO rigs (owner, name, created_by) VALUES ('ada', 'Bad Name', $1)`, uid); err == nil {
 		t.Fatal("rig names are validated by the database too")
 	}
-	if _, err := db.Exec(`INSERT INTO rigs (owner, name, created_by) VALUES ('jia', 'demo', $1)`, uid); err != nil {
+	if _, err := db.Exec(`INSERT INTO rigs (owner, name, created_by) VALUES ('ada', 'demo', $1)`, uid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO rigs (owner, name, created_by) VALUES ('jia', 'demo', $1)`, uid); err == nil {
+	if _, err := db.Exec(`INSERT INTO rigs (owner, name, created_by) VALUES ('ada', 'demo', $1)`, uid); err == nil {
 		t.Fatal("owner/name is unique")
 	}
 	var rid int64

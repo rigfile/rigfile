@@ -139,7 +139,7 @@ func TestSyncScansTracksSafelyAndRefusesCredentialPaths(t *testing.T) {
 	rig := plainRig(t, "private:\n  - memory/\n")
 	put(t, rig, "memory/me.md", "personal\n", 0o644)
 	put(t, rig, "instructions/other.md", "public\n", 0o644)
-	if r := a.run("", "sync", "track", filepath.Join(rig, "memory", "me.md"), "--rig", rig); r.code != 0 || !strings.Contains(r.out, "as rig/jiaxu/plain/memory/me.md") {
+	if r := a.run("", "sync", "track", filepath.Join(rig, "memory", "me.md"), "--rig", rig); r.code != 0 || !strings.Contains(r.out, "as rig/adams/plain/memory/me.md") {
 		t.Fatalf("%+v", r)
 	}
 	if r := a.run("", "sync", "track", filepath.Join(rig, "instructions", "other.md"), "--rig", rig); r.code != 1 || !strings.Contains(r.err, "not listed under `private:`") {

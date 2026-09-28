@@ -155,7 +155,7 @@ func put(t *testing.T, root, rel, content string, mode os.FileMode) {
 }
 
 const rigYAML = `apiVersion: rigfile.dev/v1
-name: jiaxu/demo
+name: adams/demo
 version: 1.0.0
 instructions:
   - {id: coding-style, file: instructions/style.md}
@@ -220,7 +220,7 @@ func TestPlanShowsTheReviewScreenAndWritesNothing(t *testing.T) {
 	if r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
-	for _, want := range []string{"Rig: jiaxu/demo@1.0.0", "Target: claude-code", "INSTRUCTIONS", "SKILLS", "AGENTS", "MCP SERVERS", "HOOKS", "PERMISSIONS",
+	for _, want := range []string{"Rig: adams/demo@1.0.0", "Target: claude-code", "INSTRUCTIONS", "SKILLS", "AGENTS", "MCP SERVERS", "HOOKS", "PERMISSIONS",
 		"⚠ executes code", "SECRET NEEDED  alpaca/api_key", "get it: https://example.test/keys", "LOGIN NEEDED   claude-code", "No rigfile.lock yet", "change(s)"} {
 		if !strings.Contains(r.out, want) {
 			t.Errorf("plan output missing %q:\n%s", want, r.out)
@@ -513,7 +513,7 @@ func TestRollbackListAndUsage(t *testing.T) {
 	}
 	rig := newRig(t)
 	m.run("", "apply", rig, "--yes")
-	if r := m.run("", "rollback", "--list"); r.code != 0 || !strings.Contains(r.out, "apply jiaxu/demo@1.0.0") {
+	if r := m.run("", "rollback", "--list"); r.code != 0 || !strings.Contains(r.out, "apply adams/demo@1.0.0") {
 		t.Fatalf("%+v", r)
 	}
 	if r := m.run("", "rollback", "../etc"); r.code != 1 {
@@ -587,7 +587,7 @@ func TestInitCapturesAndTheResultAppliesCleanly(t *testing.T) {
 	before := mustRead(t, filepath.Join(cd, "settings.json"))
 
 	out := filepath.Join(t.TempDir(), "rig")
-	r := src.run("", "init", "--out", out, "--name", "jia/captured")
+	r := src.run("", "init", "--out", out, "--name", "ada/captured")
 	if r.code != 0 || !strings.Contains(r.out, "Captured (") || !strings.Contains(r.out, "Secrets: values NOT captured") || !strings.Contains(r.out, "Next:") {
 		t.Fatalf("%+v", r)
 	}
@@ -630,7 +630,7 @@ func TestInitCapturesAndTheResultAppliesCleanly(t *testing.T) {
 }
 
 const toolsRigYAML = `apiVersion: rigfile.dev/v1
-name: jiaxu/tools
+name: adams/tools
 version: 1.0.0
 tools:
   common: [nonsense-tool]
@@ -751,8 +751,8 @@ func TestUnwritableRigDirFailsBeforeAnythingIsWritten(t *testing.T) {
 	}
 }
 
-func TestJiaRigFixture(t *testing.T) {
-	const fx = "../../testdata/fixtures/jia-rig"
+func TestSampleRigFixture(t *testing.T) {
+	const fx = "../../testdata/fixtures/sample-rig"
 	// hygiene: no machine paths, no secret-shaped text, no credential file names
 	_ = filepath.WalkDir(fx, func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -772,11 +772,11 @@ func TestJiaRigFixture(t *testing.T) {
 
 	m := newMachine(t)
 	r := m.run("", "validate", fx)
-	if r.code != 0 || !strings.Contains(r.err+r.out, "alpaca") || !strings.Contains(r.err+r.out, "not pinned") {
-		t.Fatalf("want valid with the unpinned-alpaca warning: %+v", r)
+	if r.code != 0 || !strings.Contains(r.err+r.out, "weather") || !strings.Contains(r.err+r.out, "not pinned") {
+		t.Fatalf("want valid with the unpinned-weather warning: %+v", r)
 	}
 	r = m.run("", "plan", fx)
-	for _, want := range []string{"ios-app-store-launch", "commit-push-pr", "alpaca", "Bash(git push*)", "SECRET NEEDED  alpaca/alpaca_api_key"} {
+	for _, want := range []string{"release-checklist", "open-pr", "weather", "Bash(git push*)", "SECRET NEEDED  weather/api_key"} {
 		if r.code != 0 || !strings.Contains(r.out, want) {
 			t.Fatalf("plan missing %q:\n%s", want, r.out)
 		}
@@ -886,7 +886,7 @@ func TestHookWriteGuardAndRedactCommands(t *testing.T) {
 }
 
 const plainRigYAML = `apiVersion: rigfile.dev/v1
-name: jiaxu/plain
+name: adams/plain
 version: 1.0.0
 commands:
   - {path: commands/hi.md}
@@ -906,7 +906,7 @@ func TestBaseSecureIsAppliedToEveryRig(t *testing.T) {
 	rig := plainRig(t, "")
 
 	r := m.run("", "plan", rig, "--no-git")
-	for _, want := range []string{"rigfile/base-secure → jiaxu/plain", "security-baseline", "Read(~/.ssh/**)", "Bash(git*--no-verify*)", "Bash(git push*)",
+	for _, want := range []string{"rigfile/base-secure → adams/plain", "security-baseline", "Read(~/.ssh/**)", "Bash(git*--no-verify*)", "Bash(git push*)",
 		"base-secure-guard", "base-secure-write-guard", "base-secure-redact", "disableBypassPermissionsMode", "⚠ executes code"} {
 		if r.code != 0 || !strings.Contains(r.out, want) {
 			t.Fatalf("plan missing %q:\n%s", want, r.out)
@@ -1137,7 +1137,7 @@ func TestDoctorVerifiesBaseSecureAndFixReappliesTheRig(t *testing.T) {
 	}
 	// --fix re-applies the recorded rig (the plan is shown; "a" approves)
 	r = m.run("a\n", "doctor", "--fix")
-	if !strings.Contains(r.out, "re-applying jiaxu/plain") || !strings.Contains(r.out, "applied") {
+	if !strings.Contains(r.out, "re-applying adams/plain") || !strings.Contains(r.out, "applied") {
 		t.Fatalf("%+v", r)
 	}
 	if !strings.Contains(string(mustRead(t, sp)), `"Read(~/.ssh/**)"`) {

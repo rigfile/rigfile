@@ -66,7 +66,7 @@ func TestCaptureEverythingAndRoundTrip(t *testing.T) {
   "http": {"type": "http", "url": "http://insecure.test"}
 }}`)
 
-	c, err := Capture(CaptureOptions{ClaudeDir: cd, ClaudeJSON: filepath.Join(home, ".claude.json"), Home: home, Name: "jia/captured"})
+	c, err := Capture(CaptureOptions{ClaudeDir: cd, ClaudeJSON: filepath.Join(home, ".claude.json"), Home: home, Name: "ada/captured"})
 	if err != nil {
 		t.Fatal(err)
 	}

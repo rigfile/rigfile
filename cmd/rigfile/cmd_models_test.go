@@ -246,7 +246,7 @@ func TestInitCapturesARunningOllamaModelPinnedByDigest(t *testing.T) {
 		e.detectModels = func() []models.Detected {
 			return []models.Detected{{Engine: "ollama", Version: "0.34.4", Model: "qwen3:8b", Digest: "500a1f067a9f", Port: 11434}}
 		}
-	}, "init", "--out", out, "--name", "jia/captured")
+	}, "init", "--out", out, "--name", "ada/captured")
 	if code != 0 || !strings.Contains(buf.String(), "qwen3:8b") || !strings.Contains(buf.String(), "only the network port was read") {
 		t.Fatalf("%d\n%s\n%s", code, buf.String(), errb.String())
 	}

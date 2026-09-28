@@ -96,21 +96,21 @@ func TestTemplatesHaveNoInlineStyles(t *testing.T) {
 
 func TestRegistryReadmeNamesThisRegistry(t *testing.T) {
 	const url = "https://rigs.example.test"
-	current := "# jia/demo\n\n```sh\nrigfile pull jia/demo --registry <registry-url>\n```\n"
-	if got := registryReadme(current, "jia/demo", url+"/"); !strings.Contains(got, "rigfile pull jia/demo --registry "+url+"\n") || strings.Contains(got, "<registry-url>") {
+	current := "# ada/demo\n\n```sh\nrigfile pull ada/demo --registry <registry-url>\n```\n"
+	if got := registryReadme(current, "ada/demo", url+"/"); !strings.Contains(got, "rigfile pull ada/demo --registry "+url+"\n") || strings.Contains(got, "<registry-url>") {
 		t.Errorf("placeholder not filled in:\n%s", got)
 	}
-	legacy := "# jia/demo\n\n```sh\nrigfile pull github.com/jia/demo     # fetch, show the plan, apply on approval\n```\n"
-	if got := registryReadme(legacy, "jia/demo", url); strings.Contains(got, "github.com/jia/demo") || !strings.Contains(got, "rigfile pull jia/demo --registry "+url) {
+	legacy := "# ada/demo\n\n```sh\nrigfile pull github.com/ada/demo     # fetch, show the plan, apply on approval\n```\n"
+	if got := registryReadme(legacy, "ada/demo", url); strings.Contains(got, "github.com/ada/demo") || !strings.Contains(got, "rigfile pull ada/demo --registry "+url) {
 		t.Errorf("an already-published README still points at github.com:\n%s", got)
 	}
 }
 
 func TestWithoutTitleDropsOnlyTheMatchingHeading(t *testing.T) {
-	if got := withoutTitle("# jia/demo\n\nhello\n", "jia/demo"); strings.Contains(got, "# jia/demo") || !strings.Contains(got, "hello") {
+	if got := withoutTitle("# ada/demo\n\nhello\n", "ada/demo"); strings.Contains(got, "# ada/demo") || !strings.Contains(got, "hello") {
 		t.Errorf("heading not dropped: %q", got)
 	}
-	if got := withoutTitle("# Something else\nhello", "jia/demo"); !strings.HasPrefix(got, "# Something else") {
+	if got := withoutTitle("# Something else\nhello", "ada/demo"); !strings.HasPrefix(got, "# Something else") {
 		t.Errorf("an unrelated heading was dropped: %q", got)
 	}
 }

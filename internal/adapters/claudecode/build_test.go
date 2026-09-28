@@ -57,7 +57,7 @@ func put(t *testing.T, root, rel, content string, mode os.FileMode) {
 }
 
 const rigYAML = `apiVersion: rigfile.dev/v1
-name: jiaxu/demo
+name: adams/demo
 version: 1.0.0
 instructions:
   - {id: coding-style, file: instructions/style.md}

@@ -36,7 +36,7 @@ func TestParseOpRow(t *testing.T) {
 }
 
 func TestTranscriptEscapesEverything(t *testing.T) {
-	text := "Rig: jia/demo@1.0.0\n" + realOpRow("SKILLS", "+", `<script>alert(1)</script>`) + "\nNOTE          <img onerror=x>"
+	text := "Rig: ada/demo@1.0.0\n" + realOpRow("SKILLS", "+", `<script>alert(1)</script>`) + "\nNOTE          <img onerror=x>"
 	got := string(transcript(text))
 	if strings.Contains(got, "<script>") || strings.Contains(got, "onerror=x>") {
 		t.Fatalf("raw markup leaked through: %s", got)

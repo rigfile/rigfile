@@ -126,7 +126,7 @@
     },
 
     "rigRef": {
-      "description": "A layer: owner/name with an optional version or range (jiaxu/python-dev@^2, rigfile/base-secure@1.0.0), or a remote git source pinned by the lockfile (github.com/owner/repo@v1.2.0, gitlab.com/group/project@tag//subdir).",
+      "description": "A layer: owner/name with an optional version or range (adams/python-dev@^2, rigfile/base-secure@1.0.0), or a remote git source pinned by the lockfile (github.com/owner/repo@v1.2.0, gitlab.com/group/project@tag//subdir).",
       "type": "string",
       "anyOf": [
         { "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38})/[a-z0-9](?:[a-z0-9._-]{0,62})(?:@(?:[\\^~]?(?:0|[1-9][0-9]*)(?:\\.(?:0|[1-9][0-9]*)){0,2}(?:-[0-9A-Za-z.-]+)?))?$" },

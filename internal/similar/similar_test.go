@@ -39,7 +39,7 @@ func kinds(ms []Match) map[string]string {
 
 func TestSimilarNames(t *testing.T) {
 	popular := []Candidate{
-		{Owner: "jiaxu", Name: "data-science", Stars: 340, Verified: true},
+		{Owner: "adams", Name: "data-science", Stars: 340, Verified: true},
 		{Owner: "acme", Name: "python-dev", Stars: 20},
 		{Owner: "zed", Name: "web-tools", Stars: 0},
 		{Owner: "me", Name: "my-own", Stars: 3},
@@ -48,12 +48,12 @@ func TestSimilarNames(t *testing.T) {
 		owner, name string
 		want        map[string]string
 	}{
-		{"evil", "data-sciense", map[string]string{"jiaxu/data-science": Close}},
-		{"evil", "datascience", map[string]string{"jiaxu/data-science": Lookalike}},
-		{"evil", "data_science", map[string]string{"jiaxu/data-science": Lookalike}},
-		{"evil", "d4ta-science", map[string]string{"jiaxu/data-science": Lookalike}},
-		{"evil", "data-science-official", map[string]string{"jiaxu/data-science": Affix}},
-		{"evil", "data-science", map[string]string{"jiaxu/data-science": "same-name"}},
+		{"evil", "data-sciense", map[string]string{"adams/data-science": Close}},
+		{"evil", "datascience", map[string]string{"adams/data-science": Lookalike}},
+		{"evil", "data_science", map[string]string{"adams/data-science": Lookalike}},
+		{"evil", "d4ta-science", map[string]string{"adams/data-science": Lookalike}},
+		{"evil", "data-science-official", map[string]string{"adams/data-science": Affix}},
+		{"evil", "data-science", map[string]string{"adams/data-science": "same-name"}},
 		{"evil", "python-dev", map[string]string{"acme/python-dev": "same-name"}},
 		{"evil", "pythom-dev", map[string]string{"acme/python-dev": Close}},
 		{"me", "my-own", map[string]string{}},         // your own rigs never match

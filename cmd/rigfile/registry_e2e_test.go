@@ -101,23 +101,23 @@ func approveWhenAsked(t *testing.T, store *registry.Store, login string) {
 func TestRegistryEndToEndPublishThenPullOnAnotherMachine(t *testing.T) {
 	regURL, store := startRegistry(t)
 	ctx := context.Background()
-	if _, err := store.UpsertUser(ctx, registry.GitHubUser{ID: 1, Login: "jia"}, false); err != nil {
+	if _, err := store.UpsertUser(ctx, registry.GitHubUser{ID: 1, Login: "ada"}, false); err != nil {
 		t.Fatal(err)
 	}
 	a := registryMachine(t, regURL) // the publisher's machine
 	b := registryMachine(t, regURL) // someone else's machine
 
 	// not signed in: publishing says so
-	if r := a.run("", "publish", regRig(t, "jia", "shared", "1.0.0", ""), "--to-registry", "--ack-personal"); r.code != 1 || !strings.Contains(r.err, "rigfile login") {
+	if r := a.run("", "publish", regRig(t, "ada", "shared", "1.0.0", ""), "--to-registry", "--ack-personal"); r.code != 1 || !strings.Contains(r.err, "rigfile login") {
 		t.Fatalf("%+v", r)
 	}
 	// sign in with the device flow; "the person" approves in the browser
-	approveWhenAsked(t, store, "jia")
+	approveWhenAsked(t, store, "ada")
 	r := a.run("", "login")
-	if r.code != 0 || !strings.Contains(r.out, "signed in to "+regURL+" as jia") || !strings.Contains(r.out, "-") {
+	if r.code != 0 || !strings.Contains(r.out, "signed in to "+regURL+" as ada") || !strings.Contains(r.out, "-") {
 		t.Fatalf("%+v", r)
 	}
-	if r = a.run("", "whoami"); r.code != 0 || !strings.Contains(r.out, "jia") {
+	if r = a.run("", "whoami"); r.code != 0 || !strings.Contains(r.out, "ada") {
 		t.Fatalf("%+v", r)
 	}
 	if strings.Contains(r.out+r.err, "rgf_") {
@@ -125,13 +125,13 @@ func TestRegistryEndToEndPublishThenPullOnAnotherMachine(t *testing.T) {
 	}
 
 	// publish (private by default): scanned by the registry, then published
-	rig := regRig(t, "jia", "shared", "1.0.0", "")
+	rig := regRig(t, "ada", "shared", "1.0.0", "")
 	r = a.run("", "publish", rig, "--to-registry", "--ack-personal")
-	if r.code != 0 || !strings.Contains(r.out, "published jia/shared@1.0.0") || !strings.Contains(r.out, "is private") {
+	if r.code != 0 || !strings.Contains(r.out, "published ada/shared@1.0.0") || !strings.Contains(r.out, "is private") {
 		t.Fatalf("%+v", r)
 	}
 	// a stranger cannot pull a private rig, and cannot tell it exists
-	if r = b.run("", "pull", "jia/shared", "--plan-only", "--no-git"); r.code != 1 || !strings.Contains(r.err, "no ") {
+	if r = b.run("", "pull", "ada/shared", "--plan-only", "--no-git"); r.code != 1 || !strings.Contains(r.err, "no ") {
 		t.Fatalf("%+v", r)
 	}
 	// the same version cannot be published twice
@@ -139,15 +139,15 @@ func TestRegistryEndToEndPublishThenPullOnAnotherMachine(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	// a new version, made public
-	rig2 := regRig(t, "jia", "shared", "1.0.1", "")
+	rig2 := regRig(t, "ada", "shared", "1.0.1", "")
 	if r = a.run("", "publish", rig2, "--to-registry", "--public", "--ack-personal"); r.code != 0 || !strings.Contains(r.out, "is public") {
 		t.Fatalf("%+v", r)
 	}
 
 	// the other machine pulls it: banner, plan, apply
-	r = b.run("", "pull", "jia/shared", "--plan-only", "--no-git")
-	for _, want := range []string{"Source: rigfile+" + regURL + "/jia/shared", "the Rigfile registry", "you did not write", "Rig: jia/shared@1.0.1",
-		"Trust: jia/shared@1.0.1 by jia", "0 star(s)", "Trust: not signed", "ANALYSIS  no suspicious patterns"} {
+	r = b.run("", "pull", "ada/shared", "--plan-only", "--no-git")
+	for _, want := range []string{"Source: rigfile+" + regURL + "/ada/shared", "the Rigfile registry", "you did not write", "Rig: ada/shared@1.0.1",
+		"Trust: ada/shared@1.0.1 by ada", "0 star(s)", "Trust: not signed", "ANALYSIS  no suspicious patterns"} {
 		if r.code != 0 || !strings.Contains(r.out, want) {
 			t.Fatalf("missing %q:\n%+v", want, r)
 		}
@@ -155,26 +155,26 @@ func TestRegistryEndToEndPublishThenPullOnAnotherMachine(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(b.home, ".claude")); !os.IsNotExist(err) {
 		t.Fatal("plan-only wrote to the machine")
 	}
-	if r = b.run("", "pull", "jia/shared@^1.0", "--yes", "--no-git"); r.code != 0 || !strings.Contains(r.out, "applied") {
+	if r = b.run("", "pull", "ada/shared@^1.0", "--yes", "--no-git"); r.code != 0 || !strings.Contains(r.out, "applied") {
 		t.Fatalf("%+v", r)
 	}
 	if _, err := os.Stat(filepath.Join(b.home, ".claude", "commands", "hi.md")); err != nil {
 		t.Fatal("the pulled rig was not applied")
 	}
 
-	// a rig can inherit a registry rig: `from: [jia/shared@^1]` resolves through the registry and is pinned in the lock
-	top := regRig(t, "bob", "top", "1.0.0", "from: [jia/shared@^1]\n")
+	// a rig can inherit a registry rig: `from: [ada/shared@^1]` resolves through the registry and is pinned in the lock
+	top := regRig(t, "bob", "top", "1.0.0", "from: [ada/shared@^1]\n")
 	c := registryMachine(t, regURL)
 	if r = c.run("", "apply", top, "--yes", "--no-git"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
 	lock := string(mustRead(t, filepath.Join(top, "rigfile.lock")))
-	if !strings.Contains(lock, `"source": "rigfile+`+regURL+`/jia/shared@^1"`) || !strings.Contains(lock, `"commit"`) {
+	if !strings.Contains(lock, `"source": "rigfile+`+regURL+`/ada/shared@^1"`) || !strings.Contains(lock, `"commit"`) {
 		t.Fatalf("the registry layer must be pinned in the lock:\n%s", lock)
 	}
 
 	// an update: the publisher ships 1.1.0, the other machine follows
-	if r = a.run("", "publish", regRig(t, "jia", "shared", "1.1.0", ""), "--to-registry", "--ack-personal"); r.code != 0 {
+	if r = a.run("", "publish", regRig(t, "ada", "shared", "1.1.0", ""), "--to-registry", "--ack-personal"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
 	if r = b.run("", "update", "--plan-only", "--no-git"); r.code != 0 || !strings.Contains(r.out, "Update: ") || !strings.Contains(r.out, "1.1.0") {
@@ -234,7 +234,7 @@ func writeFakeBundle(t *testing.T, path, issuer, subject string, tarball []byte)
 func TestSignedRigsAreVerifiedOnThePullingMachineAndSignerChangesAreRefused(t *testing.T) {
 	regURL, store := startRegistry(t)
 	ctx := context.Background()
-	u, err := store.UpsertUser(ctx, registry.GitHubUser{ID: 1, Login: "jia"}, false)
+	u, err := store.UpsertUser(ctx, registry.GitHubUser{ID: 1, Login: "ada"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,10 +248,10 @@ func TestSignedRigsAreVerifiedOnThePullingMachineAndSignerChangesAreRefused(t *t
 		t.Fatalf("%+v", r)
 	}
 	dir := t.TempDir()
-	workflow := "https://github.com/jia/rigs/.github/workflows/release.yml@refs/tags/v1.0.0"
+	workflow := "https://github.com/ada/rigs/.github/workflows/release.yml@refs/tags/v1.0.0"
 
 	publishSigned := func(version, subject string) {
-		rig := regRig(t, "jia", "signed", version, "")
+		rig := regRig(t, "ada", "signed", version, "")
 		tarPath := filepath.Join(dir, "rig-"+version+".tgz")
 		if r := a.run("", "publish", rig, "--write-tarball", tarPath, "--ack-personal"); r.code != 0 || !strings.Contains(r.out, "cosign sign-blob") {
 			t.Fatalf("%+v", r)
@@ -263,14 +263,14 @@ func TestSignedRigsAreVerifiedOnThePullingMachineAndSignerChangesAreRefused(t *t
 		if version == "1.0.0" {
 			args = append(args, "--public")
 		}
-		if r := a.run("", args...); r.code != 0 || !strings.Contains(r.out, "published jia/signed@"+version) {
+		if r := a.run("", args...); r.code != 0 || !strings.Contains(r.out, "published ada/signed@"+version) {
 			t.Fatalf("%+v", r)
 		}
 	}
 	publishSigned("1.0.0", workflow)
 
 	// a signature that does not match what is uploaded is refused by the registry
-	rig := regRig(t, "jia", "signed", "1.0.5", "")
+	rig := regRig(t, "ada", "signed", "1.0.5", "")
 	bad := filepath.Join(dir, "bad.json")
 	writeFakeBundle(t, bad, sigverify.IssuerGitHubActions, workflow, []byte("other bytes"))
 	if r := a.run("", "publish", rig, "--to-registry", "--sign-bundle", bad, "--ack-personal"); r.code != 1 || !strings.Contains(r.err, "signature does not verify") {
@@ -278,21 +278,21 @@ func TestSignedRigsAreVerifiedOnThePullingMachineAndSignerChangesAreRefused(t *t
 	}
 
 	// the puller verifies on their own machine and shows who signed
-	r := b.run("", "pull", "jia/signed", "--plan-only", "--no-git", "--require-signature")
+	r := b.run("", "pull", "ada/signed", "--plan-only", "--no-git", "--require-signature")
 	if r.code != 0 || !strings.Contains(r.out, "Signature: verified on this machine; signed by the publisher's own GitHub Actions identity") || !strings.Contains(r.out, "release.yml") {
 		t.Fatalf("%+v", r)
 	}
-	if r = b.run("", "pull", "jia/signed", "--yes", "--no-git", "--require-signature"); r.code != 0 {
+	if r = b.run("", "pull", "ada/signed", "--yes", "--no-git", "--require-signature"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
 	// an unsigned version is refused by --require-signature, and shown as unsigned otherwise
-	if r = a.run("", "publish", regRig(t, "jia", "unsigned", "1.0.0", ""), "--to-registry", "--public", "--ack-personal"); r.code != 0 {
+	if r = a.run("", "publish", regRig(t, "ada", "unsigned", "1.0.0", ""), "--to-registry", "--public", "--ack-personal"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
-	if r = b.run("", "pull", "jia/unsigned", "--plan-only", "--no-git", "--require-signature"); r.code != 1 || !strings.Contains(r.err, "--require-signature") {
+	if r = b.run("", "pull", "ada/unsigned", "--plan-only", "--no-git", "--require-signature"); r.code != 1 || !strings.Contains(r.err, "--require-signature") {
 		t.Fatalf("%+v", r)
 	}
-	if r = b.run("", "pull", "jia/unsigned", "--plan-only", "--no-git"); r.code != 0 || !strings.Contains(r.out, "Signature: none") {
+	if r = b.run("", "pull", "ada/unsigned", "--plan-only", "--no-git"); r.code != 0 || !strings.Contains(r.out, "Signature: none") {
 		t.Fatalf("%+v", r)
 	}
 	// the next version is signed by a DIFFERENT identity: `update` refuses until the person accepts the change
@@ -307,51 +307,51 @@ func TestSignedRigsAreVerifiedOnThePullingMachineAndSignerChangesAreRefused(t *t
 
 func TestRegistryCollectionsForksAndChangesFromTheCLI(t *testing.T) {
 	regURL, store := startRegistry(t)
-	if _, err := store.UpsertUser(context.Background(), registry.GitHubUser{ID: 1, Login: "jia"}, false); err != nil {
+	if _, err := store.UpsertUser(context.Background(), registry.GitHubUser{ID: 1, Login: "ada"}, false); err != nil {
 		t.Fatal(err)
 	}
 	a := registryMachine(t, regURL)
-	approveWhenAsked(t, store, "jia")
+	approveWhenAsked(t, store, "ada")
 	if r := a.run("", "login"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
-	if r := a.run("", "publish", regRig(t, "jia", "shared", "1.0.0", ""), "--to-registry", "--public", "--ack-personal"); r.code != 0 {
+	if r := a.run("", "publish", regRig(t, "ada", "shared", "1.0.0", ""), "--to-registry", "--public", "--ack-personal"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
 	extra := "mcp_servers:\n  search:\n    command: npx\n    args: [\"-y\", \"search-mcp@1.0.0\"]\n"
-	if r := a.run("", "publish", regRig(t, "jia", "shared", "1.1.0", extra), "--to-registry", "--ack-personal"); r.code != 0 {
+	if r := a.run("", "publish", regRig(t, "ada", "shared", "1.1.0", extra), "--to-registry", "--ack-personal"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
 
 	// what changed between two registry versions, on the pulling side
-	r := a.run("", "changes", "jia/shared@1.0.0", "jia/shared@1.1.0")
+	r := a.run("", "changes", "ada/shared@1.0.0", "ada/shared@1.1.0")
 	if r.code != 0 || !strings.Contains(r.out, "Look at these before you accept") || !strings.Contains(r.out, "adds an MCP server that runs: npx -y search-mcp@1.0.0") {
 		t.Fatalf("%+v", r)
 	}
 
 	// collections
-	if r := a.run("", "collection", "create", "starters", "--title", "Starter rigs", "--description", "where to begin"); r.code != 0 || !strings.Contains(r.out, "Created jia/starters (public)") {
+	if r := a.run("", "collection", "create", "starters", "--title", "Starter rigs", "--description", "where to begin"); r.code != 0 || !strings.Contains(r.out, "Created ada/starters (public)") {
 		t.Fatalf("%+v", r)
 	}
-	if r := a.run("", "collection", "add", "starters", "jia/shared", "--note", "a small one"); r.code != 0 {
+	if r := a.run("", "collection", "add", "starters", "ada/shared", "--note", "a small one"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
-	if r := a.run("", "collection", "show", "jia/starters"); r.code != 0 || !strings.Contains(r.out, "Starter rigs") || !strings.Contains(r.out, "jia/shared@1.1.0   a small one") {
+	if r := a.run("", "collection", "show", "ada/starters"); r.code != 0 || !strings.Contains(r.out, "Starter rigs") || !strings.Contains(r.out, "ada/shared@1.1.0   a small one") {
 		t.Fatalf("%+v", r)
 	}
-	if r := a.run("", "collection", "list"); r.code != 0 || !strings.Contains(r.out, "jia/starters") {
+	if r := a.run("", "collection", "list"); r.code != 0 || !strings.Contains(r.out, "ada/starters") {
 		t.Fatalf("%+v", r)
 	}
-	if r := a.run("", "collection", "add", "starters", "jia/nothing"); r.code != 1 || !strings.Contains(r.err, "no such") {
+	if r := a.run("", "collection", "add", "starters", "ada/nothing"); r.code != 1 || !strings.Contains(r.err, "no such") {
 		t.Fatalf("%+v", r)
 	}
-	if r := a.run("", "collection", "rm", "starters", "jia/shared"); r.code != 0 {
+	if r := a.run("", "collection", "rm", "starters", "ada/shared"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
 	if r := a.run("", "collection", "delete", "starters"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
-	if r := a.run("", "collection", "show", "jia/starters"); r.code != 1 {
+	if r := a.run("", "collection", "show", "ada/starters"); r.code != 1 {
 		t.Fatalf("%+v", r)
 	}
 	for _, args := range [][]string{{"collection"}, {"collection", "create"}, {"collection", "add", "x"}, {"collection", "nope"}} {
@@ -362,11 +362,11 @@ func TestRegistryCollectionsForksAndChangesFromTheCLI(t *testing.T) {
 
 	// fork a registry rig, and extend one
 	out := filepath.Join(t.TempDir(), "mine")
-	if r := a.run("", "fork", "jia/shared@1.0.0", "--name", "me/mine", "--out", out); r.code != 0 || !strings.Contains(r.out, "forked from jia/shared@1.0.0") {
+	if r := a.run("", "fork", "ada/shared@1.0.0", "--name", "me/mine", "--out", out); r.code != 0 || !strings.Contains(r.out, "forked from ada/shared@1.0.0") {
 		t.Fatalf("%+v", r)
 	}
 	ext := filepath.Join(t.TempDir(), "ext")
-	if r := a.run("", "fork", "jia/shared@1.0.0", "--name", "me/ext", "--out", ext, "--extend"); r.code != 0 || !strings.Contains(string(mustRead(t, filepath.Join(ext, "rigfile.yaml"))), "from:\n  - jia/shared@^1.0") {
+	if r := a.run("", "fork", "ada/shared@1.0.0", "--name", "me/ext", "--out", ext, "--extend"); r.code != 0 || !strings.Contains(string(mustRead(t, filepath.Join(ext, "rigfile.yaml"))), "from:\n  - ada/shared@^1.0") {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -374,7 +374,7 @@ func TestRegistryCollectionsForksAndChangesFromTheCLI(t *testing.T) {
 func TestRegistryOrganisationsFromTheCLI(t *testing.T) {
 	regURL, store := startRegistry(t)
 	ctx := context.Background()
-	for i, l := range []string{"jia", "bob"} {
+	for i, l := range []string{"ada", "bob"} {
 		if _, err := store.UpsertUser(ctx, registry.GitHubUser{ID: int64(i + 1), Login: l}, false); err != nil {
 			t.Fatal(err)
 		}
@@ -383,7 +383,7 @@ func TestRegistryOrganisationsFromTheCLI(t *testing.T) {
 	for _, x := range []struct {
 		m     *machine
 		login string
-	}{{a, "jia"}, {b, "bob"}} {
+	}{{a, "ada"}, {b, "bob"}} {
 		approveWhenAsked(t, store, x.login)
 		if r := x.m.run("", "login"); r.code != 0 {
 			t.Fatalf("%s: %+v", x.login, r)
@@ -412,7 +412,7 @@ func TestRegistryOrganisationsFromTheCLI(t *testing.T) {
 	if r := b.run("", "publish", rig, "--to-registry", "--ack-personal"); r.code != 0 || !strings.Contains(r.out, "published acme/tool@1.0.0") {
 		t.Fatalf("a member publishes under the organisation: %+v", r)
 	}
-	if r := a.run("", "org", "members", "acme"); r.code != 0 || !strings.Contains(r.out, "jia  (owner)") || !strings.Contains(r.out, "bob  (member)") {
+	if r := a.run("", "org", "members", "acme"); r.code != 0 || !strings.Contains(r.out, "ada  (owner)") || !strings.Contains(r.out, "bob  (member)") {
 		t.Fatalf("%+v", r)
 	}
 	if r := b.run("", "org", "rm", "acme", "bob"); r.code != 0 {

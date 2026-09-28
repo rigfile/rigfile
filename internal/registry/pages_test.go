@@ -36,63 +36,63 @@ func getPage(t *testing.T, e *env, cl *http.Client, path string) (int, string) {
 
 func TestPagesShowPublicRigsAndKeepPrivateOnesPrivate(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1001)
+	_, tok := e.userToken("ada", 1001)
 	c := e.as(tok)
-	files := goodRig("jia", "shared", "1.0.0")
+	files := goodRig("ada", "shared", "1.0.0")
 	files["README.md"] = "# Shared\n\nSome **bold** text and a [link](https://example.org/x).\n"
-	files["rigfile.yaml"] = manifestYAML("jia", "shared", "1.0.0", "targets:\n  include: [claude-code, codex]\nsecrets:\n  demo/key: {description: Demo key}\nlogins:\n  - {provider: github}\n")
-	publishPublic(t, e, c, "jia", "shared", "1.0.0", files)
-	if s, _ := c.upload("jia", "hidden", rigTar(t, goodRig("jia", "hidden", "1.0.0"))); s != 202 {
+	files["rigfile.yaml"] = manifestYAML("ada", "shared", "1.0.0", "targets:\n  include: [claude-code, codex]\nsecrets:\n  demo/key: {description: Demo key}\nlogins:\n  - {provider: github}\n")
+	publishPublic(t, e, c, "ada", "shared", "1.0.0", files)
+	if s, _ := c.upload("ada", "hidden", rigTar(t, goodRig("ada", "hidden", "1.0.0"))); s != 202 {
 		t.Fatal(s)
 	}
 	e.scanAll()
 
 	code, page := getPage(t, e, nil, "/")
-	if code != 200 || !strings.Contains(page, "jia/shared") || strings.Contains(page, "jia/hidden") || !strings.Contains(page, "rigfile pull owner/name --registry "+e.srv.URL) {
+	if code != 200 || !strings.Contains(page, "ada/shared") || strings.Contains(page, "ada/hidden") || !strings.Contains(page, "rigfile pull owner/name --registry "+e.srv.URL) {
 		t.Fatalf("home: %d\n%s", code, page)
 	}
-	if _, page = getPage(t, e, nil, "/search?q=shar"); !strings.Contains(page, "jia/shared") {
+	if _, page = getPage(t, e, nil, "/search?q=shar"); !strings.Contains(page, "ada/shared") {
 		t.Fatalf("search:\n%s", page)
 	}
 	if _, page = getPage(t, e, nil, "/search?q=zzz"); !strings.Contains(page, "Nothing matches") {
 		t.Fatalf("empty search:\n%s", page)
 	}
-	code, page = getPage(t, e, nil, "/r/jia/shared")
-	for _, want := range []string{"jia/shared", "<strong>bold</strong>", `rel="`, "rigfile pull jia/shared --registry " + e.srv.URL, "apiVersion: rigfile.dev/v1", "instructions/style.md", "claude-code", "demo/key", "github", "Report this rig", "sha256"} {
+	code, page = getPage(t, e, nil, "/r/ada/shared")
+	for _, want := range []string{"ada/shared", "<strong>bold</strong>", `rel="`, "rigfile pull ada/shared --registry " + e.srv.URL, "apiVersion: rigfile.dev/v1", "instructions/style.md", "claude-code", "demo/key", "github", "Report this rig", "sha256"} {
 		if code != 200 || !strings.Contains(page, want) {
 			t.Fatalf("rig page missing %q (code %d):\n%s", want, code, page)
 		}
 	}
 	// a file view and the raw text
-	code, page = getPage(t, e, nil, "/r/jia/shared/v/1.0.0/files/instructions/style.md")
+	code, page = getPage(t, e, nil, "/r/ada/shared/v/1.0.0/files/instructions/style.md")
 	if code != 200 || !strings.Contains(page, "be terse") {
 		t.Fatalf("file view: %d\n%s", code, page)
 	}
-	resp, _ := e.client().Get(e.url("/r/jia/shared/v/1.0.0/raw/instructions/style.md"))
+	resp, _ := e.client().Get(e.url("/r/ada/shared/v/1.0.0/raw/instructions/style.md"))
 	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") || resp.Header.Get("X-Content-Type-Options") != "nosniff" || !strings.Contains(resp.Header.Get("Content-Security-Policy"), "sandbox") {
 		t.Fatalf("raw file headers: %v", resp.Header)
 	}
 	body(t, resp)
 	// files that are not in the index, traversal attempts, and unknown versions are 404
-	for _, p := range []string{"/r/jia/shared/v/1.0.0/files/nothing.md", "/r/jia/shared/v/1.0.0/files/../../etc/passwd", "/r/jia/shared/v/9.9.9", "/r/jia/shared/v/1.0.0/raw/%2e%2e/x"} {
+	for _, p := range []string{"/r/ada/shared/v/1.0.0/files/nothing.md", "/r/ada/shared/v/1.0.0/files/../../etc/passwd", "/r/ada/shared/v/9.9.9", "/r/ada/shared/v/1.0.0/raw/%2e%2e/x"} {
 		if code, _ := getPage(t, e, nil, p); code != 404 && code != 400 && code != 301 && code != 307 { // the mux itself cleans ".." and redirects
 			t.Errorf("%s: %d", p, code)
 		}
 	}
 	// the private rig: 404 for everyone but its owner
-	if code, _ := getPage(t, e, nil, "/r/jia/hidden"); code != 404 {
+	if code, _ := getPage(t, e, nil, "/r/ada/hidden"); code != 404 {
 		t.Fatalf("anonymous sees a private rig: %d", code)
 	}
 	owner := e.signIn("/")
-	code, page = getPage(t, e, owner, "/r/jia/hidden")
+	code, page = getPage(t, e, owner, "/r/ada/hidden")
 	if code != 200 || !strings.Contains(page, "private") || !strings.Contains(page, "Make public") {
 		t.Fatalf("the owner sees the private rig: %d\n%s", code, page)
 	}
 	// the profile lists only what the viewer may see
-	if _, page = getPage(t, e, nil, "/u/jia"); !strings.Contains(page, "jia/shared") || strings.Contains(page, "jia/hidden") {
+	if _, page = getPage(t, e, nil, "/u/ada"); !strings.Contains(page, "ada/shared") || strings.Contains(page, "ada/hidden") {
 		t.Fatalf("profile for a stranger:\n%s", page)
 	}
-	if _, page = getPage(t, e, owner, "/u/jia"); !strings.Contains(page, "jia/hidden") {
+	if _, page = getPage(t, e, owner, "/u/ada"); !strings.Contains(page, "ada/hidden") {
 		t.Fatalf("profile for the owner:\n%s", page)
 	}
 	if code, _ := getPage(t, e, nil, "/u/nobody"); code != 404 {
@@ -119,32 +119,32 @@ func postForm(t *testing.T, e *env, cl *http.Client, path string, vals url.Value
 
 func TestStarAndVisibilityFormsNeedTheSessionCSRFAndOrigin(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1001)
+	_, tok := e.userToken("ada", 1001)
 	c := e.as(tok)
-	publishPublic(t, e, c, "jia", "shared", "1.0.0", goodRig("jia", "shared", "1.0.0"))
+	publishPublic(t, e, c, "ada", "shared", "1.0.0", goodRig("ada", "shared", "1.0.0"))
 	cl := e.signIn("/")
-	_, page := getPage(t, e, cl, "/r/jia/shared")
+	_, page := getPage(t, e, cl, "/r/ada/shared")
 	csrf := csrfFrom(t, page)
 
-	if code, _ := postForm(t, e, cl, "/r/jia/shared/star", url.Values{"action": {"star"}}, e.srv.URL); code != 403 {
+	if code, _ := postForm(t, e, cl, "/r/ada/shared/star", url.Values{"action": {"star"}}, e.srv.URL); code != 403 {
 		t.Fatalf("no csrf token: %d", code)
 	}
-	if code, _ := postForm(t, e, cl, "/r/jia/shared/star", url.Values{"action": {"star"}, "csrf": {csrf}}, "https://evil.example"); code != 403 {
+	if code, _ := postForm(t, e, cl, "/r/ada/shared/star", url.Values{"action": {"star"}, "csrf": {csrf}}, "https://evil.example"); code != 403 {
 		t.Fatalf("foreign origin: %d", code)
 	}
-	if code, _ := postForm(t, e, e.client(), "/r/jia/shared/star", url.Values{"action": {"star"}, "csrf": {csrf}}, e.srv.URL); code != 401 {
+	if code, _ := postForm(t, e, e.client(), "/r/ada/shared/star", url.Values{"action": {"star"}, "csrf": {csrf}}, e.srv.URL); code != 401 {
 		t.Fatalf("no session: %d", code)
 	}
-	if code, _ := postForm(t, e, cl, "/r/jia/shared/star", url.Values{"action": {"star"}, "csrf": {csrf}}, e.srv.URL); code != http.StatusSeeOther {
+	if code, _ := postForm(t, e, cl, "/r/ada/shared/star", url.Values{"action": {"star"}, "csrf": {csrf}}, e.srv.URL); code != http.StatusSeeOther {
 		t.Fatalf("a valid star: %d", code)
 	}
-	if _, page = getPage(t, e, cl, "/r/jia/shared"); !strings.Contains(page, "Unstar") || !strings.Contains(page, "(1)") {
+	if _, page = getPage(t, e, cl, "/r/ada/shared"); !strings.Contains(page, "Unstar") || !strings.Contains(page, "(1)") {
 		t.Fatalf("after starring:\n%s", page)
 	}
-	if code, _ := postForm(t, e, cl, "/r/jia/shared/visibility", url.Values{"visibility": {"private"}, "csrf": {csrf}}, e.srv.URL); code != http.StatusSeeOther {
+	if code, _ := postForm(t, e, cl, "/r/ada/shared/visibility", url.Values{"visibility": {"private"}, "csrf": {csrf}}, e.srv.URL); code != http.StatusSeeOther {
 		t.Fatalf("owner makes it private: %d", code)
 	}
-	if code, _ := getPage(t, e, nil, "/r/jia/shared"); code != 404 {
+	if code, _ := getPage(t, e, nil, "/r/ada/shared"); code != 404 {
 		t.Fatal("now private")
 	}
 	// another signed-in user cannot change it
@@ -152,27 +152,27 @@ func TestStarAndVisibilityFormsNeedTheSessionCSRFAndOrigin(t *testing.T) {
 	e.clk.add(time.Minute)
 	bob := e.signIn("/")
 	_, bpage := getPage(t, e, bob, "/")
-	if code, out := postForm(t, e, bob, "/r/jia/shared/visibility", url.Values{"visibility": {"public"}, "csrf": {csrfFrom(t, bpage)}}, e.srv.URL); code != 404 {
+	if code, out := postForm(t, e, bob, "/r/ada/shared/visibility", url.Values{"visibility": {"public"}, "csrf": {csrfFrom(t, bpage)}}, e.srv.URL); code != 404 {
 		t.Fatalf("a stranger changing visibility of a private rig: %d %s", code, out)
 	}
 }
 
 func TestPagesEscapeHostileContent(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1001)
+	_, tok := e.userToken("ada", 1001)
 	c := e.as(tok)
-	files := goodRig("jia", "evil", "1.0.0")
+	files := goodRig("ada", "evil", "1.0.0")
 	files["README.md"] = "# Hi\n\n<script>alert('readme')</script>\n\n<img src=x onerror=alert(1)>\n\n<iframe src=\"https://evil.example\"></iframe>\n\n" +
 		"[click](javascript:alert(2)) and [data](data:text/html;base64,PHNjcmlwdD4=) and ![p](javascript:alert(3))\n\n" +
 		"<a href=\"javascript:alert(4)\" onclick=\"alert(5)\">raw anchor</a>\n\n[ok](https://example.org)\n\n`<script>inline</script>`\n"
 	files["instructions/style.md"] = "</pre></code><script>alert('file')</script>\n"
 	files[`instructions/a"><script>alert(9)</script>.md`] = "hostile file name"
-	files["rigfile.yaml"] = manifestYAML("jia", "evil", "1.0.0", "") + "# </pre><script>alert('manifest')</script>\n"
+	files["rigfile.yaml"] = manifestYAML("ada", "evil", "1.0.0", "") + "# </pre><script>alert('manifest')</script>\n"
 	// the description comes from the manifest too
 	files["rigfile.yaml"] = strings.Replace(files["rigfile.yaml"], "description: A test rig", "description: <script>alert('desc')</script>", 1)
-	publishPublic(t, e, c, "jia", "evil", "1.0.0", files)
+	publishPublic(t, e, c, "ada", "evil", "1.0.0", files)
 
-	pages := []string{"/", "/search?q=evil", "/u/jia", "/r/jia/evil", "/r/jia/evil/v/1.0.0", "/r/jia/evil/v/1.0.0/files/instructions/style.md"}
+	pages := []string{"/", "/search?q=evil", "/u/ada", "/r/ada/evil", "/r/ada/evil/v/1.0.0", "/r/ada/evil/v/1.0.0/files/instructions/style.md"}
 	scriptTag := regexp.MustCompile(`(?i)<script`)
 	for _, p := range pages {
 		code, page := getPage(t, e, nil, p)
@@ -189,7 +189,7 @@ func TestPagesEscapeHostileContent(t *testing.T) {
 			}
 		}
 	}
-	_, page := getPage(t, e, nil, "/r/jia/evil")
+	_, page := getPage(t, e, nil, "/r/ada/evil")
 	if !strings.Contains(page, "&lt;script&gt;") { // the manifest and description are shown, escaped
 		t.Errorf("hostile text must be visible as text, escaped")
 	}
@@ -197,7 +197,7 @@ func TestPagesEscapeHostileContent(t *testing.T) {
 		t.Errorf("safe links stay, with rel attributes:\n%s", page)
 	}
 	// the raw view is plain text with a locked-down policy, whatever the content
-	resp, _ := e.client().Get(e.url("/r/jia/evil/v/1.0.0/raw/instructions/style.md"))
+	resp, _ := e.client().Get(e.url("/r/ada/evil/v/1.0.0/raw/instructions/style.md"))
 	b := body(t, resp)
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/plain") || !strings.Contains(b, "<script>") {
 		t.Fatalf("raw: %v %q", resp.Header, b)
@@ -206,27 +206,27 @@ func TestPagesEscapeHostileContent(t *testing.T) {
 
 func TestOwnerSeesPendingAndRejectedVersionsOthersDoNot(t *testing.T) {
 	e := newEnv(t, nil)
-	_, tok := e.userToken("jia", 1001)
+	_, tok := e.userToken("ada", 1001)
 	c := e.as(tok)
-	publishPublic(t, e, c, "jia", "demo", "1.0.0", goodRig("jia", "demo", "1.0.0"))
-	bad := goodRig("jia", "demo", "1.1.0")
+	publishPublic(t, e, c, "ada", "demo", "1.0.0", goodRig("ada", "demo", "1.0.0"))
+	bad := goodRig("ada", "demo", "1.1.0")
 	bad["instructions/style.md"] = "token = \"" + fakeSecret() + "\"\n"
-	if s, _ := c.upload("jia", "demo", rigTar(t, bad)); s != 202 {
+	if s, _ := c.upload("ada", "demo", rigTar(t, bad)); s != 202 {
 		t.Fatal(s)
 	}
 	e.scanAll()
 	owner := e.signIn("/")
-	code, page := getPage(t, e, owner, "/r/jia/demo/v/1.1.0")
+	code, page := getPage(t, e, owner, "/r/ada/demo/v/1.1.0")
 	if code != 200 || !strings.Contains(page, "rejected") || !strings.Contains(page, "secret") {
 		t.Fatalf("owner: %d\n%s", code, page)
 	}
 	if strings.Contains(page, fakeSecret()) {
 		t.Fatal("the page leaked the secret")
 	}
-	if code, _ := getPage(t, e, nil, "/r/jia/demo/v/1.1.0"); code != 404 {
+	if code, _ := getPage(t, e, nil, "/r/ada/demo/v/1.1.0"); code != 404 {
 		t.Fatalf("anonymous sees a rejected version: %d", code)
 	}
-	if _, page = getPage(t, e, nil, "/r/jia/demo"); strings.Contains(page, "1.1.0") {
+	if _, page = getPage(t, e, nil, "/r/ada/demo"); strings.Contains(page, "1.1.0") {
 		t.Fatal("the public page lists a rejected version")
 	}
 	_ = registry.CompareVersions

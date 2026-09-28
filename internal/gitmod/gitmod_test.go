@@ -161,7 +161,7 @@ func TestFreshMachineInstallsHooksConfigAndIgnore(t *testing.T) {
 func TestExistingUserSetupIsChainedNotClobberedAndRollbackRestoresIt(t *testing.T) {
 	m := newMachine(t)
 	prevHooks := filepath.Join(m.home, ".config", "git", "hooks")
-	userConf := "[user]\n\tname = Jia\n[core]\n\thooksPath = " + prevHooks + "\n\teditor = vim\n"
+	userConf := "[user]\n\tname = Ada\n[core]\n\thooksPath = " + prevHooks + "\n\teditor = vim\n"
 	m.write(".gitconfig", userConf)
 	m.write(".config/git/hooks/pre-commit", "#!/bin/sh\nexit 0\n")
 	userIgnore := "# mine\n*.log\n"

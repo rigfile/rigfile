@@ -11,7 +11,7 @@ import (
 )
 
 const rigYAML = `apiVersion: rigfile.dev/v1
-name: jiaxu/demo
+name: adams/demo
 version: 1.0.0
 description: A demo rig
 instructions:
@@ -40,7 +40,7 @@ func fakeToken() string { return "gh" + "p_" + "wJ4kP9xQm2Rt7VbN5cLd8HyZaE3sUfG6
 
 func prep(t *testing.T, files map[string][]byte, mut func(*Input)) *Prepared {
 	t.Helper()
-	in := Input{Files: files, Home: "/Users/jia", User: "jia", Host: "jias-mbp"}
+	in := Input{Files: files, Home: "/Users/ada", User: "ada", Host: "adas-mbp"}
 	if mut != nil {
 		mut(&in)
 	}
@@ -60,7 +60,7 @@ func TestACleanRigPublishesWithReadmeAndScanProof(t *testing.T) {
 		t.Fatalf("%+v", p.Proof)
 	}
 	rd := string(p.Files["README.md"])
-	for _, want := range []string{"# jiaxu/demo", "rigfile pull github.com/jiaxu/demo", "rigfile pull jiaxu/demo --registry " + RegistryURLPlaceholder, "alpaca-mcp@1.4.2", "alpaca/api_key", "https://example.test/keys", "base-secure"} {
+	for _, want := range []string{"# adams/demo", "rigfile pull github.com/adams/demo", "rigfile pull adams/demo --registry " + RegistryURLPlaceholder, "alpaca-mcp@1.4.2", "alpaca/api_key", "https://example.test/keys", "base-secure"} {
 		if !strings.Contains(rd, want) {
 			t.Errorf("README missing %q:\n%s", want, rd)
 		}
@@ -113,11 +113,11 @@ func TestASecretBlocksPublishingAndTheValueIsNeverReported(t *testing.T) {
 
 func TestHomePathsAreRewrittenAndPersonalInformationNeedsAcknowledgement(t *testing.T) {
 	files := cleanFiles()
-	files["instructions/style.md"] = []byte("Projects live in /Users/jia/code/app and C:\\Users\\jia\\code, or /home/bob/x.\n" +
-		"Ask jia@gmail.com or +1 415 555 0134 (jias-mbp). Docs: user@example.com, git@github.com:o/r.git.\n")
+	files["instructions/style.md"] = []byte("Projects live in /Users/ada/code/app and C:\\Users\\ada\\code, or /home/bob/x.\n" +
+		"Ask ada@bytebuilderslab.app or +1 415 555 0134 (adas-mbp). Docs: user@example.com, git@github.com:o/r.git.\n")
 	p := prep(t, files, nil)
 	text := string(p.Files["instructions/style.md"])
-	if strings.Contains(text, "/Users/jia") || strings.Contains(text, `C:\Users`) || strings.Contains(text, "/home/bob") || !strings.Contains(text, "~/code/app") {
+	if strings.Contains(text, "/Users/ada") || strings.Contains(text, `C:\Users`) || strings.Contains(text, "/home/bob") || !strings.Contains(text, "~/code/app") {
 		t.Fatalf("home paths not rewritten: %q", text)
 	}
 	if len(p.Rewritten) == 0 {
@@ -143,7 +143,7 @@ func TestHomePathsAreRewrittenAndPersonalInformationNeedsAcknowledgement(t *test
 	}
 	// the OS user name as a word is flagged, but not inside another word
 	files = cleanFiles()
-	files["instructions/style.md"] = []byte("hello jia\nJiaxu and jiang are other words\n")
+	files["instructions/style.md"] = []byte("hello ada\nAdams and adamo are other words\n")
 	p = prep(t, files, nil)
 	n := 0
 	for _, f := range p.Personal {
@@ -160,12 +160,12 @@ func TestAnInvalidRigIsRejected(t *testing.T) {
 	files := cleanFiles()
 	delete(files, "skills/pdf/SKILL.md")
 	delete(files, "skills/pdf/scripts/x.sh")
-	p, err := Prepare(Input{Files: files, Home: "/Users/jia", AckPersonal: true})
+	p, err := Prepare(Input{Files: files, Home: "/Users/ada", AckPersonal: true})
 	if err != nil || len(p.Blocked()) == 0 {
 		t.Fatalf("a rig that references a missing skill must not publish: %v", err)
 	}
 	files = cleanFiles()
-	files["rigfile.yaml"] = []byte(strings.Replace(rigYAML, "jiaxu/demo", "rigfile/evil", 1))
+	files["rigfile.yaml"] = []byte(strings.Replace(rigYAML, "adams/demo", "rigfile/evil", 1))
 	if _, err := Prepare(Input{Files: files}); err == nil || !strings.Contains(err.Error(), "reserved") {
 		t.Fatalf("%v", err)
 	}
@@ -232,7 +232,7 @@ func TestEveryCorpusSecretBlocksPublishing(t *testing.T) {
 		n++
 		files := cleanFiles()
 		files["skills/pdf/"+strings.TrimPrefix(s.Path, "/")] = []byte(s.Content)
-		p, err := Prepare(Input{Files: files, Home: "/Users/jia", AckPersonal: true, Scanner: scf})
+		p, err := Prepare(Input{Files: files, Home: "/Users/ada", AckPersonal: true, Scanner: scf})
 		if err != nil {
 			t.Fatalf("%s: %v", s.ID, err)
 		}

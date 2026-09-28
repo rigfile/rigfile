@@ -8,7 +8,7 @@ import (
 )
 
 const publishRigYAML = `apiVersion: rigfile.dev/v1
-name: jiaxu/shared
+name: adams/shared
 version: 1.0.0
 description: Shared rig
 instructions:
@@ -35,7 +35,7 @@ func TestPublishFromARigDirectoryWritesACleanRepoAndItCanBePulledBack(t *testing
 	m := pullMachine(t, env)
 	out := filepath.Join(t.TempDir(), "repo")
 	r := m.run("", "publish", publishRig(t), "--to-git", out, "--git-init")
-	if r.code != 0 || !strings.Contains(r.out, "scan proof: 0 finding(s)") || !strings.Contains(r.out, "rigfile pull github.com/jiaxu/shared") {
+	if r.code != 0 || !strings.Contains(r.out, "scan proof: 0 finding(s)") || !strings.Contains(r.out, "rigfile pull github.com/adams/shared") {
 		t.Fatalf("%+v", r)
 	}
 	for _, f := range []string{"rigfile.yaml", "README.md", ".gitignore", "skills/pdf/SKILL.md", "instructions/style.md", ".git"} {
@@ -82,13 +82,13 @@ func TestPublishCaptureUsesTheChecklistAndPersonalInfoNeedsAck(t *testing.T) {
 	m := newMachine(t)
 	m.tty = true
 	cd := filepath.Join(m.home, ".claude")
-	put(t, cd, "CLAUDE.md", "# Me\nContact jia.x@gmail.com\n", 0o644)
+	put(t, cd, "CLAUDE.md", "# Me\nContact ada.x@bytebuilderslab.app\n", 0o644)
 	put(t, cd, "skills/pdf/SKILL.md", "---\nname: pdf\ndescription: PDFs\n---\nbody\n", 0o644)
 	put(t, cd, "agents/reviewer.md", "---\nname: reviewer\ndescription: r\n---\nx\n", 0o644)
 
 	// scripted keys: the checklist starts with CLAUDE.md unticked, so plain Enter leaves it out
 	out := filepath.Join(t.TempDir(), "repo")
-	r := m.run("\r", "publish", "--name", "jiaxu/mine", "--to-git", out)
+	r := m.run("\r", "publish", "--name", "adams/mine", "--to-git", out)
 	if r.code != 0 || !strings.Contains(r.out, "Choose what to publish") || !strings.Contains(r.out, "[ ] claude-md") {
 		t.Fatalf("%+v", r)
 	}
@@ -101,20 +101,20 @@ func TestPublishCaptureUsesTheChecklistAndPersonalInfoNeedsAck(t *testing.T) {
 
 	// --all includes CLAUDE.md: its e-mail address blocks until acknowledged
 	out2 := filepath.Join(t.TempDir(), "repo2")
-	r = m.run("", "publish", "--name", "jiaxu/mine", "--to-git", out2, "--all")
+	r = m.run("", "publish", "--name", "adams/mine", "--to-git", out2, "--all")
 	if r.code != 1 || !strings.Contains(r.out, "PERSONAL") || !strings.Contains(r.err, "--ack-personal") {
 		t.Fatalf("%+v", r)
 	}
 	if strings.Contains(r.out, "gmail.com") {
 		t.Fatal("the e-mail address was printed in full")
 	}
-	if r = m.run("", "publish", "--name", "jiaxu/mine", "--to-git", out2, "--all", "--ack-personal"); r.code != 0 {
+	if r = m.run("", "publish", "--name", "adams/mine", "--to-git", out2, "--all", "--ack-personal"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
 
 	// cancelling writes nothing
 	out3 := filepath.Join(t.TempDir(), "repo3")
-	if r = m.run("q", "publish", "--name", "jiaxu/mine", "--to-git", out3); r.code != 1 || !strings.Contains(r.out, "cancelled") {
+	if r = m.run("q", "publish", "--name", "adams/mine", "--to-git", out3); r.code != 1 || !strings.Contains(r.out, "cancelled") {
 		t.Fatalf("%+v", r)
 	}
 	if _, err := os.Stat(out3); !os.IsNotExist(err) {
@@ -122,7 +122,7 @@ func TestPublishCaptureUsesTheChecklistAndPersonalInfoNeedsAck(t *testing.T) {
 	}
 	// without a terminal the checklist cannot run
 	m.tty = false
-	if r = m.run("", "publish", "--name", "jiaxu/mine", "--to-git", filepath.Join(t.TempDir(), "x")); r.code != 1 || !strings.Contains(r.err, "--all") {
+	if r = m.run("", "publish", "--name", "adams/mine", "--to-git", filepath.Join(t.TempDir(), "x")); r.code != 1 || !strings.Contains(r.err, "--all") {
 		t.Fatalf("%+v", r)
 	}
 }

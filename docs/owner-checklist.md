@@ -2,6 +2,24 @@
 
 One list, drawn from the per-stage owner-check documents (linked in each row). Nothing here can be done by me: it needs an account, money, a real machine, a person, or a decision. Written 2026-09-26 on branch `integration`.
 
+## Go-live checklist (2026-09-27)
+
+Decided 2026-09-27: **the GitHub repository stays private for now**, and the registry site stays up as it is (its GitHub links and `git clone` step only work once the repo is public).
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Git history audit | **done**: gitleaks over all 158 commits on every branch, no secrets; all commit authors use the GitHub no-reply address; the owner's name in test data replaced by a made-up user (`ada`), and the fixture built from the owner's real setup replaced by the synthetic `testdata/fixtures/sample-rig` (old commits keep the old values; history not rewritten) |
+| 2 | Real `README.md` (the current one is the Stage 0 Python scaffold text) | open |
+| 3 | Push `main`; make `main` the default branch (it is `stage-0-spec`, which has no Go code) | waits for release |
+| 4 | Make the repo public; enable private vulnerability reporting; delete or tag the merged `stage-*` branches | waits for release |
+| 5 | Fill the contact placeholders in the legal pages and `SECURITY.md` | open |
+| 6 | Legal stance (beta with draft banner, or lawyer first); a privacy policy page | open |
+| 7 | Registry: scale to one machine (the rate limiter is per process); auto-stop or always on | open |
+| 8 | Monitoring and who reads reports | open |
+| 9 | Written restore procedure | open |
+| 10 | Deploy and live smoke test | open |
+| 11 | First signed release; reserve npm/PyPI names; external security review; Windows check | after launch |
+
 ## 0. Unblock and merge (do first)
 
 | # | Step | Notes |

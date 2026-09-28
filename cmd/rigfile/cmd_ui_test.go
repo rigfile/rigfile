@@ -52,7 +52,7 @@ func TestUIShowsThePlanStoresDeclaredSecretsAndApplies(t *testing.T) {
 		t.Fatalf("%d", resp.StatusCode)
 	}
 	code, page := get("/")
-	for _, want := range []string{"Rig: jiaxu/plain", "Secret: svc/key", "not set yet", "commands/hi.md"} {
+	for _, want := range []string{"Rig: adams/plain", "Secret: svc/key", "not set yet", "commands/hi.md"} {
 		if code != 200 || !strings.Contains(portable(page), want) { // plan paths use the OS separator
 			t.Fatalf("missing %q:\n%s", want, page)
 		}

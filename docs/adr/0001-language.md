@@ -2,7 +2,7 @@
 
 - **Status:** **Accepted 2026-09-25** by the owner (RIGFILE_PLAN.md §17 Q3). The Stage 1 spike (§7, `docs/spike-report.md`) passed and the owner confirmed **go** on 2026-09-25; the Python fallback is no longer in play unless a later ADR reopens it.
 - **Date:** 2026-09-25
-- **Deciders:** Jia (owner). Drafted by Claude Code.
+- **Deciders:** the owner. Drafted by Claude Code.
 - **Options:** Go, Python, TypeScript
 - **Decision:** Go, with a 2–3 day spike at the start of Stage 1 that has the owner review real Go code, and an explicit fallback (Python, one-dir bundle) if that review is too painful. See §7.
 

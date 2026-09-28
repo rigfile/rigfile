@@ -1,0 +1,37 @@
+# A made-up rig in the shape `rigfile init` produces. Secret VALUES are never captured: the two weather
+# secrets are references only. The MCP package is deliberately unpinned (see README.md).
+apiVersion: rigfile.dev/v1
+name: ada/sample-rig
+version: 0.1.0
+description: Sample rig in the shape of a real capture (weather MCP server deliberately unpinned)
+skills:
+    - path: skills/release-checklist
+commands:
+    - path: commands/open-pr.md
+mcp_servers:
+    weather:
+        command: uvx
+        args:
+            - example-weather-mcp
+        env:
+            WEATHER_API_KEY: secret://weather/api_key
+            WEATHER_API_SECRET: secret://weather/api_secret
+permissions:
+    deny:
+        - bash: git push*
+        - bash: rm -rf*
+        - bash: curl * | bash
+    allow:
+        - bash: git add*
+        - bash: git commit*
+        - bash: git status
+        - bash: git log*
+        - bash: git diff*
+        - bash: python scripts/*
+        - bash: ls*
+        - bash: mkdir*
+secrets:
+    weather/api_key:
+        description: WEATHER_API_KEY of the weather MCP server
+    weather/api_secret:
+        description: WEATHER_API_SECRET of the weather MCP server

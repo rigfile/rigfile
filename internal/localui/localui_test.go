@@ -23,8 +23,8 @@ func newFixture(t *testing.T) (*Server, *fake, string) {
 	t.Helper()
 	f := &fake{stored: map[string]string{}}
 	s := &Server{B: Backend{
-		Title: "jia/demo 1.0.0",
-		Plan:  func() (string, error) { return "Rig: jia/demo@1.0.0\n  + skills/x <script>alert(1)</script>", nil },
+		Title: "ada/demo 1.0.0",
+		Plan:  func() (string, error) { return "Rig: ada/demo@1.0.0\n  + skills/x <script>alert(1)</script>", nil },
 		Needs: func() ([]Need, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
@@ -93,7 +93,7 @@ func TestLandingSwapsTheTokenForACookieAndEscapesEverything(t *testing.T) {
 	}
 	resp, _ = b.Get("http://" + s.addr + "/")
 	page := read(t, resp)
-	if resp.StatusCode != 200 || !strings.Contains(page, "jia/demo 1.0.0") || strings.Contains(page, "<script>alert(1)") || !strings.Contains(page, "&lt;script&gt;alert(1)") {
+	if resp.StatusCode != 200 || !strings.Contains(page, "ada/demo 1.0.0") || strings.Contains(page, "<script>alert(1)") || !strings.Contains(page, "&lt;script&gt;alert(1)") {
 		t.Fatalf("the plan must be shown escaped: %s", page)
 	}
 	for _, want := range []string{"Secret: alpaca/key", "not set yet", "Sign in: github", "rigfile logins", "type=\"password\""} {

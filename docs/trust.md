@@ -61,7 +61,7 @@ For a new rig `owner/name` (and for every pull), compare against existing **publ
 - flag when the normalised name equals another's, or the Damerau-Levenshtein distance is ≤ 1 (≤ 2 for names of 8+ characters), or one is the other plus a common suffix/prefix (`-official`, `-pro`, `-v2`, `-secure`);
 - weight by the other rig's stars: a match is only "notable" if the other rig has stars or a verified publisher.
 
-Result: `similar_to: [owner/name]` on the version, shown to the publisher in the upload response, on the rig page, and on the CLI pull screen ("similar to jiaxu/data-science, which is verified and has 340 stars"). A **new public rig confusably equal (after normalisation) to a verified or popular rig** is `held`.
+Result: `similar_to: [owner/name]` on the version, shown to the publisher in the upload response, on the rig page, and on the CLI pull screen ("similar to adams/data-science, which is verified and has 340 stars"). A **new public rig confusably equal (after normalisation) to a verified or popular rig** is `held`.
 
 ## 5. Verified publishers, popularity, policy
 

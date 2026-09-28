@@ -35,7 +35,7 @@ Built and tested 2026-09-25: manifest validation, marker-splice editing, JSON la
 
 ## Stage 1 — build result (branch `stage-1`)
 
-Milestones M1–M9 in `docs/stage-1-plan.md` are all done: manifest/merge/layers, lock/state/rollback, Claude Code adapter (all seven categories), CLI (`init validate plan apply diff rollback lock doctor secrets exec hook`), tools installer, secrets completion, CI workflow, container E2E (Ubuntu + Fedora pass), and the owner's rig fixture (`testdata/fixtures/jia-rig/`). `go test -race ./...` is green on macOS; Windows cross-builds and vets.
+Milestones M1–M9 in `docs/stage-1-plan.md` are all done: manifest/merge/layers, lock/state/rollback, Claude Code adapter (all seven categories), CLI (`init validate plan apply diff rollback lock doctor secrets exec hook`), tools installer, secrets completion, CI workflow, container E2E (Ubuntu + Fedora pass), and the owner's rig fixture (`testdata/fixtures/sample-rig/`). `go test -race ./...` is green on macOS; Windows cross-builds and vets.
 
 **Needs the owner before sign-off (I could not do these):**
 1. ~~Push `stage-1` and confirm the first CI run is green~~ **Done 2026-09-25:** pushed; CI run 36199282279 on `d616a15` passed all five jobs (test ubuntu, test macos, windows cross-build, e2e ubuntu+fedora containers, gitleaks). The macOS runner uses the encrypted-file secret backend, not the real Keychain (item 2).

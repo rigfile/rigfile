@@ -8,7 +8,7 @@ import (
 	"github.com/sigstore/sigstore-go/pkg/verify"
 )
 
-const workflow = "https://github.com/jia/rigs/.github/workflows/release.yml@refs/tags/v1.0.0"
+const workflow = "https://github.com/ada/rigs/.github/workflows/release.yml@refs/tags/v1.0.0"
 
 func virtual(t *testing.T) *ca.VirtualSigstore {
 	old := sctThreshold
@@ -35,7 +35,7 @@ func TestVerifyBundleAcceptsAGenuineSignatureAndReportsTheIdentity(t *testing.T)
 	if res.Issuer != IssuerGitHubActions || res.Subject != workflow {
 		t.Fatalf("%+v", res)
 	}
-	if !PublisherIdentity(res.Issuer, res.Subject, "jia") {
+	if !PublisherIdentity(res.Issuer, res.Subject, "ada") {
 		t.Fatal("the publisher's own workflow is the publisher")
 	}
 }
@@ -67,14 +67,14 @@ func TestPublisherIdentity(t *testing.T) {
 		issuer, subject, login string
 		want                   bool
 	}{
-		{IssuerGitHubActions, workflow, "jia", true},
-		{IssuerGitHubActions, "https://github.com/jia/other-repo/.github/workflows/ci.yml@refs/heads/main", "jia", true},
+		{IssuerGitHubActions, workflow, "ada", true},
+		{IssuerGitHubActions, "https://github.com/ada/other-repo/.github/workflows/ci.yml@refs/heads/main", "ada", true},
 		{IssuerGitHubActions, workflow, "bob", false},                                                                // someone else's repository
-		{IssuerGitHubActions, "https://github.com/jia-evil/rigs/.github/workflows/r.yml@refs/tags/v1", "jia", false}, // prefix trick
-		{IssuerGitHubActions, "https://github.com/jia/rigs/.github/workflows/r.yml@refs/pull/9/merge", "jia", false}, // not a branch or tag
-		{IssuerGitHubActions, "https://evil.example/jia/rigs/.github/workflows/r.yml@refs/tags/v1", "jia", false},
-		{IssuerGitHubOAuth, "jia@example.org", "jia", false}, // a person's e-mail login is not proof
-		{"https://accounts.google.com", "jia@example.org", "jia", false},
+		{IssuerGitHubActions, "https://github.com/ada-evil/rigs/.github/workflows/r.yml@refs/tags/v1", "ada", false}, // prefix trick
+		{IssuerGitHubActions, "https://github.com/ada/rigs/.github/workflows/r.yml@refs/pull/9/merge", "ada", false}, // not a branch or tag
+		{IssuerGitHubActions, "https://evil.example/ada/rigs/.github/workflows/r.yml@refs/tags/v1", "ada", false},
+		{IssuerGitHubOAuth, "ada@example.org", "ada", false}, // a person's e-mail login is not proof
+		{"https://accounts.google.com", "ada@example.org", "ada", false},
 		{IssuerGitHubActions, workflow, "", false},
 		{IssuerGitHubActions, workflow, "ji.a", false},
 	} {

@@ -17,11 +17,11 @@ func putJSON(c *client, method, path string, v any) int {
 
 func TestOrganisations(t *testing.T) {
 	e := newEnv(t, nil)
-	_, jia := e.userToken("jia", 1)
+	_, ada := e.userToken("ada", 1)
 	_, bob := e.userToken("bob", 2)
 	_, eve := e.userToken("eve", 3)
 	_, carol := e.userToken("carol", 4)
-	J, B, E, C, anon := e.as(jia), e.as(bob), e.as(eve), e.as(carol), e.as("")
+	J, B, E, C, anon := e.as(ada), e.as(bob), e.as(eve), e.as(carol), e.as("")
 	step := func() { e.clk.add(time.Minute) } // API rate limits
 
 	// ---- namespaces are shared between people and organisations
@@ -122,13 +122,13 @@ func TestOrganisations(t *testing.T) {
 	// a collection never shows it to outsiders
 	step()
 	putJSON(J, "POST", "/v1/collections", map[string]string{"slug": "mine", "title": "Mine"})
-	if s := putJSON(J, "PUT", "/v1/collections/jia/mine/items", map[string]string{"rig": "acme/tool"}); s != 204 {
+	if s := putJSON(J, "PUT", "/v1/collections/ada/mine/items", map[string]string{"rig": "acme/tool"}); s != 204 {
 		t.Fatalf("a member can collect the organisation's rig: %d", s)
 	}
-	if _, b := E.get("/v1/collections/jia/mine"); strings.Contains(string(b), "acme") {
+	if _, b := E.get("/v1/collections/ada/mine"); strings.Contains(string(b), "acme") {
 		t.Fatalf("collections must not reveal private organisation rigs: %s", b)
 	}
-	if _, b := J.get("/v1/collections/jia/mine"); !strings.Contains(string(b), `"name":"tool"`) {
+	if _, b := J.get("/v1/collections/ada/mine"); !strings.Contains(string(b), `"name":"tool"`) {
 		t.Fatalf("%s", b)
 	}
 	if s := putJSON(E, "PUT", "/v1/collections/eve/none/items", map[string]string{"rig": "acme/tool"}); s != 404 {
@@ -158,7 +158,7 @@ func TestOrganisations(t *testing.T) {
 	if _, b := anon.get("/u/acme"); !strings.Contains(string(b), "organisation") || !strings.Contains(string(b), "acme/tool") || strings.Contains(string(b), "Members") {
 		t.Fatalf("the organisation page lists its public rigs and hides its members from outsiders: %s", b)
 	}
-	e.gh.user["id"] = 1 // the web sign-in is jia
+	e.gh.user["id"] = 1 // the web sign-in is ada
 	web := e.signIn("/")
 	resp, err := web.Get(e.url("/u/acme"))
 	if err != nil {
@@ -181,13 +181,13 @@ func TestOrganisations(t *testing.T) {
 	if s := putJSON(C, "PUT", "/v1/orgs/acme/members/bob", map[string]string{"role": "admin"}); s != 403 {
 		t.Fatalf("an admin cannot appoint admins: %d", s)
 	}
-	if s, _, _ := C.do("DELETE", "/v1/orgs/acme/members/jia", nil, ""); s != 403 {
+	if s, _, _ := C.do("DELETE", "/v1/orgs/acme/members/ada", nil, ""); s != 403 {
 		t.Fatalf("an admin cannot remove an owner: %d", s)
 	}
-	if s, _, _ := J.do("DELETE", "/v1/orgs/acme/members/jia", nil, ""); s != 409 {
+	if s, _, _ := J.do("DELETE", "/v1/orgs/acme/members/ada", nil, ""); s != 409 {
 		t.Fatalf("the last owner cannot leave: %d", s)
 	}
-	if s := putJSON(J, "PUT", "/v1/orgs/acme/members/jia", map[string]string{"role": "admin"}); s != 409 {
+	if s := putJSON(J, "PUT", "/v1/orgs/acme/members/ada", map[string]string{"role": "admin"}); s != 409 {
 		t.Fatalf("the last owner cannot be demoted: %d", s)
 	}
 
@@ -207,14 +207,14 @@ func TestOrganisations(t *testing.T) {
 
 	// ---- personal rigs are unaffected
 	step()
-	if s, _ := J.upload("jia", "solo", rigTar(t, goodRig("jia", "solo", "1.0.0"))); s != 202 {
+	if s, _ := J.upload("ada", "solo", rigTar(t, goodRig("ada", "solo", "1.0.0"))); s != 202 {
 		t.Fatal(s)
 	}
 	e.scanAll()
-	if s, _ := E.get("/v1/rigs/jia/solo"); s != 404 {
+	if s, _ := E.get("/v1/rigs/ada/solo"); s != 404 {
 		t.Fatalf("a personal private rig stays private: %d", s)
 	}
-	if s, _ := J.get("/v1/rigs/jia/solo"); s != 200 {
+	if s, _ := J.get("/v1/rigs/ada/solo"); s != 200 {
 		t.Fatal(s)
 	}
 }
@@ -243,8 +243,8 @@ func TestNamespaceRaceHasOneWinner(t *testing.T) {
 
 func TestDisabledOrganisationVanishes(t *testing.T) {
 	e := newEnv(t, nil)
-	_, jia := e.userToken("jia", 1)
-	J, anon := e.as(jia), e.as("")
+	_, ada := e.userToken("ada", 1)
+	J, anon := e.as(ada), e.as("")
 	putJSON(J, "POST", "/v1/orgs", map[string]string{"login": "acme"})
 	if s, _ := J.upload("acme", "tool", rigTar(t, goodRig("acme", "tool", "1.0.0"))); s != 202 {
 		t.Fatal(s)

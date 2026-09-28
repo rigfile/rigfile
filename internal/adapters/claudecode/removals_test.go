@@ -13,7 +13,7 @@ import (
 
 // slimRigYAML is the demo rig with almost everything removed.
 const slimRigYAML = `apiVersion: rigfile.dev/v1
-name: jiaxu/demo
+name: adams/demo
 version: 1.1.0
 permissions:
   deny: [{read: '~/.ssh/**'}]
