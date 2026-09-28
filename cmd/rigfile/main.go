@@ -61,6 +61,7 @@ type env struct {
 	detectModels func() []models.Detected                                // tests: replaces looking for a running Ollama
 	hardware     *platform.Hardware                                      // tests: replaces hardware detection
 	exe          string                                                  // tests: the path installed into service files ("" = this binary)
+	ghUser       func(ctx context.Context) (string, error)               // tests: replaces `gh api user -q .login`
 }
 
 func (e env) look(name string) (string, error) {
@@ -160,7 +161,7 @@ func usage(w io.Writer) {
   pull <source> [--plan-only]        fetch a rig from github.com/o/r[@ref][//dir] (or gitlab.com, https/ssh git URL), review, apply
   update [--plan-only]               re-resolve the source of the last pulled rig and show what changed
   login | logout | whoami            sign in to a Rigfile registry (device flow; token kept in your keychain)
-  publish [--to-github owner] [--to-registry [--public]]   scrub your setup (or a rig dir); create+push a GitHub repo and/or publish to the registry
+  publish [<rig-dir>] [--dry-run] [--to-registry]   scrub and publish to GitHub (default) and/or the registry
   logins [--provider name]           walk through the logins the applied rig needs
   sync init|join|approve|finish|track|status|push|pull   end-to-end encrypted sync of your own private files between your machines
   models list|pull|status|serve|url|run|rm   local models: choose per machine, verified download, service, agents

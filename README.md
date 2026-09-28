@@ -30,7 +30,7 @@ rigfile plan rig                        # see exactly what applying would change
 rigfile apply rig                       # apply it, with a backup first
 rigfile secrets set alpaca/api_key      # store a secret the rig references (never printed)
 
-rigfile publish rig --to-github you      # scrubs it, then creates+pushes github.com/you/my-rig (needs `gh auth login`)
+rigfile publish rig                     # scrubs it, then creates+pushes github.com/<your gh login>/my-rig (signs you in if needed)
 rigfile pull github.com/you/my-rig       # someone else's rig, reviewed before anything runs
 rigfile rollback                        # undo the last run
 ```

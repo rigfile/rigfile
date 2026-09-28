@@ -88,14 +88,17 @@ rigfile rollback --force > $out;                                                
 [ ! -e "$HOME/.agents/skills/pdf" ] || fail "Codex skill not rolled back"
 echo "== publish a rig to GitHub (faked: no container has real GitHub auth), then pull it back from git"
 export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.test GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.test
-# A fake `gh` standing in for the real one `publish --to-github` shells out to: it understands only the exact
-# `repo create <owner>/<name> --private|--public --source=DIR --remote=R --push` shape and, instead of a real
-# GitHub API call, bare-clones --source to a well-known local path -- exactly what a real push leaves behind,
-# so `pull file://...` below exercises the real fetch path against it.
+# A fake `gh` standing in for the real one `publish` shells out to. `publish` always checks `gh auth status`
+# first (never re-logs-in when already signed in) -- this fake claims to be already signed in, so `gh auth login`
+# is never reached. It otherwise understands only the exact `repo create <owner>/<name> --private|--public
+# --source=DIR --remote=R --push` shape and, instead of a real GitHub API call, bare-clones --source to a
+# well-known local path -- exactly what a real push leaves behind, so `pull file://...` below exercises the real
+# fetch path against it.
 mkdir -p /tmp/fakebin /tmp/gh-remotes
 cat > /tmp/fakebin/gh <<'FAKEGH'
 #!/bin/sh
 set -eu
+if [ "$1" = auth ] && [ "$2" = status ]; then exit 0; fi
 [ "$1" = repo ] && [ "$2" = create ] || { echo "fake gh: unsupported: $*" >&2; exit 1; }
 ownername=$3; shift 3
 src=""

@@ -50,10 +50,10 @@ rigfile secrets set alpaca/api_key
 ## 4. Share it
 
 ```sh
-rigfile publish rig --to-github your-login
+rigfile publish rig
 ```
 
-Before anything is written, `publish` rewrites your home-directory paths, blocks the output if it finds a secret, lists personal information for you to review (`--ack-personal` once you have), and checks that every package is pinned to an exact version. `--to-github` takes just your GitHub login or org — the repo name comes from the rig's own `name:` — then creates and pushes the repository with `gh` (needs `gh auth login` first). Private by default; add `--public` to let anyone pull it.
+This pushes to GitHub — it is not a dry run. `publish` rewrites your home-directory paths, blocks the output if it finds a secret, lists personal information for you to review (`--ack-personal` once you have), and checks that every package is pinned to an exact version; then it creates and pushes a repository named after the rig (`rig/rigfile.yaml`'s `name:`) under your `gh`-authenticated login, running `gh auth login` for you first if you're not signed in yet. Private by default; add `--public` to let anyone pull it. Want a different owner (an org, say)? `rigfile publish rig --to-github acme`. Just want to see the report without publishing anything? `rigfile publish rig --dry-run`.
 
 ```sh
 rigfile pull github.com/your-login/my-rig          # how anyone else gets it

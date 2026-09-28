@@ -25,29 +25,36 @@ import (
 )
 
 // cmdPublish writes a clean, scrubbed rig repository (docs/sharing.md §6): from a rig directory, or from a capture of
-// this machine's tool setup with a checklist to choose what goes in. Writing to the registry or to GitHub is a
-// separate, explicit step after that (--to-registry, --to-github): nothing leaves the machine by default.
+// this machine's tool setup with a checklist to choose what goes in. GitHub is the default destination: plain
+// `publish <dir>` creates and pushes a repository under the caller's own gh-authenticated login. --dry-run (or
+// --write-tarball alone) stops before that; --to-registry alone replaces it, or add --to-github to do both.
 func cmdPublish(args []string, e env) int {
 	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
 	fs.SetOutput(e.err)
-	toGitHub := fs.String("to-github", "", "GitHub owner or org to publish under (private unless --public); creates and pushes github.com/<owner>/<rig-name> with `gh`, which needs `gh auth login`")
+	toGitHub := fs.String("to-github", "", "GitHub owner or org to publish under (default: your `gh`-authenticated login). This is the default destination: plain `publish <dir>` creates and pushes github.com/<owner>/<rig-name> with `gh`, signing you in first if needed")
 	name := fs.String("name", "", "rig name, owner/name (required when capturing this machine)")
 	from := fs.String("from", "claude-code", "tool to capture when no rig directory is given: "+strings.Join(targets.Names(), ", "))
 	dir := fs.String("dir", "", "config directory of the tool given by --from (default: its usual location)")
 	claudeDir := fs.String("claude-dir", "", "Claude Code config directory (default ~/.claude or $CLAUDE_CONFIG_DIR)")
 	all := fs.Bool("all", false, "include everything that was captured (no checklist)")
 	ack := fs.Bool("ack-personal", false, "you reviewed the personal-information list and accept it")
-	toReg := fs.Bool("to-registry", false, "publish to the Rigfile registry (private unless --public); needs `rigfile login`")
-	public := fs.Bool("public", false, "with --to-registry or --to-github: make the rig public")
+	toReg := fs.Bool("to-registry", false, "publish to the Rigfile registry (private unless --public); needs `rigfile login`. Combine with --to-github to publish to both")
+	public := fs.Bool("public", false, "with --to-registry or GitHub: make the rig public")
 	regFlag := fs.String("registry", "", "registry address (default $RIGFILE_REGISTRY)")
-	tarFile := fs.String("write-tarball", "", "write the exact tarball that would be published to this file (to sign it with cosign), then continue")
+	tarFile := fs.String("write-tarball", "", "write the exact tarball that would be published to this file (to sign it with cosign); publishes nowhere unless another flag says to")
+	dryRun := fs.Bool("dry-run", false, "show what publishing would do and publish nowhere")
 	signBundle := fs.String("sign-bundle", "", "with --to-registry: a Sigstore bundle for the rig's tarball (sign the file written by --write-tarball with `cosign sign-blob --bundle`); the registry and pullers verify it")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
 		return 2
 	}
-	if (*toGitHub == "" && !*toReg && *tarFile == "") || len(pos) > 1 || (*public && !*toReg && *toGitHub == "") || (*signBundle != "" && !*toReg) {
-		fmt.Fprintln(e.err, "usage: rigfile publish [<rig-dir>] [--to-github owner] [--to-registry [--public]] [--name owner/name] [--from target] [--all] [--ack-personal]")
+	// --dry-run overrides everything else: publish nowhere, no matter what other flags say. Otherwise, GitHub
+	// (under the caller's own gh-authenticated login, unless --to-github names one) is the default destination
+	// whenever nothing else was explicitly asked for -- plain `publish <dir>` is not a dry run.
+	doRegistry := *toReg && !*dryRun
+	wantGitHub := !*dryRun && (*toGitHub != "" || (!*toReg && *tarFile == ""))
+	if len(pos) > 1 || (*public && !*toReg && !wantGitHub) || (*signBundle != "" && !*toReg) {
+		fmt.Fprintln(e.err, "usage: rigfile publish [<rig-dir>] [--to-github [owner]] [--to-registry [--public]] [--write-tarball file] [--dry-run] [--name owner/name] [--from target] [--all] [--ack-personal]")
 		return 2
 	}
 	if strings.Contains(*toGitHub, "/") {
@@ -55,7 +62,7 @@ func cmdPublish(args []string, e env) int {
 		return 2
 	}
 	var regBase string
-	if *toReg {
+	if doRegistry {
 		b, err := registryBase(e, *regFlag)
 		if err != nil {
 			fmt.Fprintln(e.err, "rigfile:", err)
@@ -140,24 +147,47 @@ func cmdPublish(args []string, e env) int {
 		fmt.Fprintf(e.out, "\nwrote %s (%d bytes). Sign it: cosign sign-blob --bundle bundle.json %s\n", *tarFile, len(tb), *tarFile)
 	}
 	fmt.Fprintf(e.out, "\nscan proof: %d finding(s) in %d file(s)\n", p.Proof.Findings, p.Proof.Files)
-	if *toGitHub == "" && !*toReg {
+	if !doRegistry && !wantGitHub {
 		return 0
 	}
-	if *toReg {
+	if doRegistry {
 		if code := publishToRegistry(e, p, regBase, *public, *signBundle); code != 0 {
 			return code
 		}
 	}
-	if *toGitHub == "" {
+	if !wantGitHub {
 		return 0
 	}
 	return publishToGitHub(e, p, *toGitHub, *public)
 }
 
-// publishToGitHub writes the prepared rig into a scratch directory, commits it, and uses `gh` (already how `rigfile
-// logins` signs in to GitHub) to create and push a repository for it in one step: `gh repo create --source --push`.
-// owner is just the GitHub owner/org; the repo name is the rig's own name, so the two are never out of step.
+// publishToGitHub writes the prepared rig into a scratch directory, commits it, and uses `gh` to create and push a
+// repository for it in one step: `gh repo create --source --push`. owner is just the GitHub owner/org; "" means
+// the caller's own gh-authenticated login, checked (and, only if needed, signed in) first, the same `gh auth
+// status`/`gh auth login` pair `rigfile logins` uses, just checked before logging in rather than unconditionally.
+// The repo name is always the rig's own name, so it and the owner can never disagree.
 func publishToGitHub(e env, p *publish.Prepared, owner string, public bool) int {
+	run := e.runCmd
+	if run == nil {
+		run = login.SystemRun
+	}
+	gh := login.Providers["github"]
+	if err := run(context.Background(), gh.Check); err != nil {
+		fmt.Fprintln(e.out, "\nnot signed in to GitHub; running:", strings.Join(gh.Login, " "))
+		if err := run(context.Background(), gh.Login); err != nil {
+			fmt.Fprintln(e.err, "rigfile: gh auth login:", err)
+			return 1
+		}
+	}
+	if owner == "" {
+		u, err := ghLogin(e)
+		if err != nil {
+			fmt.Fprintln(e.err, "rigfile: could not determine your GitHub login:", err)
+			fmt.Fprintln(e.err, "rigfile: pass --to-github <owner> to name it yourself")
+			return 1
+		}
+		owner = u
+	}
 	_, repoName, _ := strings.Cut(p.Manifest.Name, "/")
 	tmp, err := os.MkdirTemp("", "rigfile-publish-*")
 	if err != nil {
@@ -178,19 +208,26 @@ func publishToGitHub(e env, p *publish.Prepared, owner string, public bool) int 
 		vis = "--public"
 	}
 	argv := []string{"gh", "repo", "create", owner + "/" + repoName, vis, "--source=" + tmp, "--remote=origin", "--push"}
-	run := e.runCmd
-	if run == nil {
-		run = login.SystemRun
-	}
 	fmt.Fprintf(e.out, "\ncreating and pushing %s/%s ...\n", owner, repoName)
 	if err := run(context.Background(), argv); err != nil {
 		fmt.Fprintln(e.err, "rigfile: gh repo create:", err)
-		fmt.Fprintln(e.err, "rigfile: is `gh` installed and signed in? try `gh auth login`, or `rigfile logins --provider github`")
 		return 1
 	}
 	fmt.Fprintf(e.out, "pushed to https://github.com/%s/%s\n", owner, repoName)
 	fmt.Fprintf(e.out, "Others pull it with: rigfile pull github.com/%s/%s\n", owner, repoName)
 	return 0
+}
+
+// ghLogin is the authenticated `gh` user's login, for a --to-github with no owner given.
+func ghLogin(e env) (string, error) {
+	if e.ghUser != nil {
+		return e.ghUser(context.Background())
+	}
+	out, err := exec.CommandContext(context.Background(), "gh", "api", "user", "-q", ".login").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func printPublishReport(e env, p *publish.Prepared) {

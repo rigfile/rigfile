@@ -49,7 +49,7 @@ A rig is text plus a manifest. Applying one can put **instructions** in front of
 - Unpinned refs (branch or none) print a warning and are pinned by the commit in the lock.
 - Nothing from the rig executes during `pull` before approval: no script is run to "prepare" it, no `postinstall`.
 
-## 6. Publish (`rigfile publish --to-github <owner>`) (tests: `internal/publish`)
+## 6. Publish (`rigfile publish [<dir>]`; GitHub is the default destination) (tests: `internal/publish`)
 
 Pipeline, in this order; any failing stage stops before anything is written:
 
@@ -61,7 +61,7 @@ Pipeline, in this order; any failing stage stops before anything is written:
    - **rig hygiene**: `manifest.Check` must pass with zero errors; MCP packages must be version-pinned; no absolute machine paths remain.
 4. **Write** into a scratch directory: `rigfile.yaml`, the referenced files only, a generated `README.md` (what is inside, how to pull it, what secrets/logins it needs), and a `.gitignore`. Nothing is copied wholesale from a config directory.
 5. **Prove**: the output tree is scanned again from disk; publishing fails if that scan finds anything (`scan proof: 0 findings, N files` is printed).
-6. **`--to-github <owner>`**: `git init` and one commit through the user's own hooks, then `gh repo create <owner>/<repo-name> --private|--public --source=<dir> --remote=origin --push` (the repo name is the published rig's own `name:`, not a separate argument — `gh`, already how `rigfile logins` signs in to GitHub, does the actual network call). The scratch directory is removed afterward. `--write-tarball <file>` writes the same scrubbed archive without publishing anywhere, for a manual push to a different host or for signing before `--to-registry`.
+6. **GitHub, the default destination** (suppressed only by an explicit `--to-registry` without `--to-github`, `--write-tarball` alone, or `--dry-run`): `gh auth status` first (the same command `rigfile logins` checks with); on failure, `gh auth login` (interactive) before continuing — a signed-in caller sees neither. `--to-github <owner>` names the owner explicitly; otherwise it comes from `gh api user -q .login`. Then `git init` and one commit through the user's own hooks, and `gh repo create <owner>/<repo-name> --private|--public --source=<dir> --remote=origin --push` (the repo name is the published rig's own `name:`, not a separate argument). The scratch directory is removed afterward. `--write-tarball <file>` writes the same scrubbed archive without publishing anywhere, for a manual push to a different host or for signing before `--to-registry`.
 
 ## 7. What Stage 4 does not defend against
 

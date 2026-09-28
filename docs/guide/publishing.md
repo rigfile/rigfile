@@ -1,6 +1,6 @@
 # Publishing and sharing
 
-You can share a rig two ways: publish it to **GitHub** (the primary, recommended way — creates and pushes the repository for you), or to **a Rigfile registry** (optional: search and version-range layering, and needs one to be running). Both go through the same safety pipeline first.
+**`rigfile publish <dir>` pushes to GitHub by default** — it is not a dry run. You can also publish to **a Rigfile registry** instead or as well (optional: search and version-range layering, and needs one to be running). Both go through the same safety pipeline first.
 
 ## What `publish` does before anything leaves your machine
 
@@ -12,22 +12,30 @@ You can share a rig two ways: publish it to **GitHub** (the primary, recommended
 
 If personal information was found, re-run with `--ack-personal` once you have checked the list.
 
-Run `rigfile publish my-rig` with no destination to do all of this as a **dry run**: it reports what it found and publishes nothing.
+Add `--dry-run` to do all of this and stop — reports what it found, publishes nowhere. Good for checking a rig is clean before you actually share it.
 
-## To GitHub (recommended)
+## To GitHub (the default)
 
 ```sh
-rigfile publish my-rig --to-github your-login
+rigfile publish my-rig
 ```
 
-`--to-github` takes just the owner or org — the repo name comes from the rig's own `name:` (`owner/my-rig` publishes as `<your-login>/my-rig`, whatever the manifest's own owner prefix says, so a rig captured with the default `local/...` name still ends up in the right place). This scrubs and validates the rig, writes it to a scratch directory, commits it, and runs `gh repo create --source --push` — private by default, `--public` to make it public. It needs [`gh`](https://cli.github.com/), signed in (`gh auth login`, or `rigfile logins --provider github`). Others pull it with:
+That's it. The repo name comes from the rig's own `name:` (`owner/my-rig` publishes as `<owner>/my-rig`), and the owner is your `gh`-authenticated login — if you're not signed in, `publish` runs `gh auth login` for you first; if you already are, there's nothing else to do. It needs [`gh`](https://cli.github.com/) installed. Under the hood: scrub and validate as above, write to a scratch directory, commit, `gh repo create --source --push` — private by default, add `--public` to make it public.
+
+To publish under a different owner or org than your own login (or to be explicit about it), name one:
+
+```sh
+rigfile publish my-rig --to-github acme
+```
+
+Others pull it with:
 
 ```sh
 rigfile pull github.com/your-login/my-rig
 rigfile pull github.com/your-login/my-rig@v1.2.0
 ```
 
-Want a different host, or to review the files before anything is pushed anywhere? `rigfile publish my-rig --write-tarball rig.tgz` (below) gives you the exact scrubbed archive as a dry run; unpack it, push it yourself to whatever you like.
+Want a different host, or to review the files before anything is pushed anywhere? `rigfile publish my-rig --write-tarball rig.tgz` gives you the exact scrubbed archive without publishing anywhere (an explicit destination-ish flag like this, or `--dry-run`, is the only thing that turns off the GitHub default); unpack it, push it yourself to whatever you like.
 
 ## To the registry (optional)
 
@@ -49,7 +57,7 @@ rigfile publish my-rig --to-registry --registry https://your-registry.example
 A rig published to the registry can carry a Sigstore signature over its archive:
 
 ```sh
-rigfile publish my-rig --write-tarball rig.tgz          # dry run that writes the exact archive
+rigfile publish my-rig --write-tarball rig.tgz          # writes the exact archive, publishes nowhere
 cosign sign-blob --bundle rig.sigstore.json rig.tgz
 rigfile publish my-rig --to-registry --sign-bundle rig.sigstore.json
 ```
@@ -65,7 +73,7 @@ A published version can be *yanked* by its publisher (or an organisation member)
 Without a rig directory, `publish` captures your current setup and publishes it in one step. It shows a checklist of what it found so you can leave things out (`--all` takes everything):
 
 ```sh
-rigfile publish --name you/my-setup --to-github your-login
+rigfile publish --name you/my-setup
 ```
 
-Use `--from codex` (or another tool) to capture something other than Claude Code, and `--to-registry --registry https://your-registry.example` instead if you'd rather publish there.
+Use `--from codex` (or another tool) to capture something other than Claude Code, and `--to-registry --registry https://your-registry.example` instead if you'd rather publish there (or `--dry-run` to just see the checklist and report).

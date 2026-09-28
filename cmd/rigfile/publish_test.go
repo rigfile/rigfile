@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,6 +106,85 @@ func TestPublishToGitHubRejectsOwnerSlashName(t *testing.T) {
 	r := m.run("", "publish", publishRig(t), "--to-github", "acme/shared")
 	if r.code != 2 || !strings.Contains(r.err, "just the owner") {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// TestPublishBareDefaultsToGitHub is the main behaviour change: no flags at all still means "push to GitHub", not
+// a dry run. The owner comes from the authenticated `gh` user (ghUser), not from a flag.
+func TestPublishBareDefaultsToGitHub(t *testing.T) {
+	m := newMachine(t)
+	var argv []string
+	var out, errb bytes.Buffer
+	code := runWith(m, &out, &errb, func(e *env) {
+		e.runCmd = func(_ context.Context, a []string) error { argv = a; return nil } // "gh auth status" succeeds
+		e.ghUser = func(context.Context) (string, error) { return "digitaldreamer3462", nil }
+	}, "publish", publishRig(t))
+	r := result{code, portable(out.String()), portable(errb.String())}
+	if r.code != 0 || !strings.Contains(r.out, "pushed to https://github.com/digitaldreamer3462/shared") {
+		t.Fatalf("%+v", r)
+	}
+	if len(argv) < 4 || argv[0] != "gh" || argv[1] != "repo" || argv[2] != "create" || argv[3] != "digitaldreamer3462/shared" {
+		t.Fatalf("gh argv: %v", argv)
+	}
+}
+
+// TestPublishSignsInWhenNotAlreadyAuthenticated: gh auth status fails first, so gh auth login runs before gh repo
+// create -- and only then, matching what the user asked for ("if github is already logged in, nothing to do").
+func TestPublishSignsInWhenNotAlreadyAuthenticated(t *testing.T) {
+	m := newMachine(t)
+	var calls [][]string
+	var out, errb bytes.Buffer
+	code := runWith(m, &out, &errb, func(e *env) {
+		checked := false
+		e.runCmd = func(_ context.Context, a []string) error {
+			calls = append(calls, a)
+			if len(a) >= 2 && a[1] == "auth" && a[2] == "status" && !checked {
+				checked = true
+				return errors.New("not logged in") // first check: not signed in
+			}
+			return nil
+		}
+		e.ghUser = func(context.Context) (string, error) { return "acme", nil }
+	}, "publish", publishRig(t))
+	r := result{code, portable(out.String()), portable(errb.String())}
+	if r.code != 0 || !strings.Contains(r.out, "running: gh auth login") || !strings.Contains(r.out, "pushed to https://github.com/acme/shared") {
+		t.Fatalf("%+v", r)
+	}
+	var kinds []string
+	for _, c := range calls {
+		kinds = append(kinds, strings.Join(c, " "))
+	}
+	if len(calls) != 3 || calls[0][1] != "auth" || calls[0][2] != "status" || calls[1][1] != "auth" || calls[1][2] != "login" || calls[2][2] != "create" {
+		t.Fatalf("expected status, login, create in order; got: %v", kinds)
+	}
+}
+
+// TestPublishDryRunPublishesNowhere: the escape hatch back to the old "just show me" behaviour.
+func TestPublishDryRunPublishesNowhere(t *testing.T) {
+	m := newMachine(t)
+	r := m.run("", "publish", publishRig(t), "--dry-run")
+	if r.code != 0 || !strings.Contains(r.out, "scan proof: 0 finding(s)") || strings.Contains(r.out, "pushed to") {
+		t.Fatalf("%+v", r)
+	}
+	if len(m.ran) != 0 {
+		t.Fatalf("--dry-run ran something: %v", m.ran)
+	}
+}
+
+// TestPublishWriteTarballAloneDoesNotAlsoPushToGitHub: an explicit destination-ish flag suppresses the GitHub
+// default, same as --dry-run.
+func TestPublishWriteTarballAloneDoesNotAlsoPushToGitHub(t *testing.T) {
+	m := newMachine(t)
+	out := filepath.Join(t.TempDir(), "rig.tgz")
+	r := m.run("", "publish", publishRig(t), "--write-tarball", out)
+	if r.code != 0 || !strings.Contains(r.out, "wrote "+out) || strings.Contains(r.out, "pushed to") {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatal("tarball was not written")
+	}
+	if len(m.ran) != 0 {
+		t.Fatalf("--write-tarball alone ran something: %v", m.ran)
 	}
 }
 
