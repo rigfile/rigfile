@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"path"
 	"strings"
+
+	"github.com/rigfile/rigfile/internal/publish"
 )
 
 func (s *Server) pageRoutes(mux *http.ServeMux) {
@@ -177,7 +179,7 @@ func (s *Server) pageRig(w http.ResponseWriter, r *http.Request) {
 	}
 	if page.Version != nil {
 		page.Files, _ = s.Store.VersionFiles(r.Context(), page.Version.ID)
-		page.Readme = renderMarkdown(withoutTitle(page.Version.Readme, page.Rig.Owner+"/"+page.Rig.Name))
+		page.Readme = renderMarkdown(registryReadme(page.Version.Readme, page.Rig.Owner+"/"+page.Rig.Name, s.Cfg.PublicURL))
 		page.Layers = page.Version.Layers
 		page.Install = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + " --registry " + s.Cfg.PublicURL
 		page.Trust, _ = s.Store.Trust(r.Context(), page.Rig, page.Version)
@@ -303,6 +305,16 @@ func (s *Server) pageVisibility(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Redirect(w, r, "/r/"+url.PathEscape(r.PathValue("owner"))+"/"+url.PathEscape(r.PathValue("name")), http.StatusSeeOther)
 	}
+}
+
+// registryReadme prepares a generated README for this registry's page (display only: the stored archive and its
+// signature are untouched). It drops the duplicate title, fills in this registry's address, and fixes READMEs
+// published before the generator named the registry, whose only pull line pointed at github.com.
+func registryReadme(readme, ref, publicURL string) string {
+	base := strings.TrimRight(publicURL, "/")
+	out := strings.ReplaceAll(withoutTitle(readme, ref), publish.RegistryURLPlaceholder, base)
+	return strings.ReplaceAll(out, "rigfile pull github.com/"+ref+"     # fetch, show the plan, apply on approval",
+		"rigfile pull "+ref+" --registry "+base+"     # fetch, show the plan, apply on approval")
 }
 
 // withoutTitle drops a README's leading "# owner/name" heading: the page header already shows it (publish generates

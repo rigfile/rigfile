@@ -8,6 +8,9 @@ import (
 	"github.com/rigfile/rigfile/internal/manifest"
 )
 
+// RegistryURLPlaceholder stands for the registry's address in a generated README.
+const RegistryURLPlaceholder = "<registry-url>"
+
 // readme describes what is inside a published rig, how to pull it, and what it will ask for. It is generated from
 // the manifest so it cannot claim more than the rig contains.
 func readme(m *manifest.Manifest) string {
@@ -16,8 +19,12 @@ func readme(m *manifest.Manifest) string {
 	if m.Description != "" {
 		fmt.Fprintf(&b, "%s\n\n", m.Description)
 	}
-	owner, name, _ := strings.Cut(m.Name, "/")
-	fmt.Fprintf(&b, "A [Rigfile](https://github.com/rigfile/rigfile) rig, version %s.\n\n## Use it\n\n```sh\nrigfile pull github.com/%s/%s     # fetch, show the plan, apply on approval\n```\n\n", m.Version, owner, name)
+	// The README goes into the archive before the destination is known (a --write-tarball dry run must produce the
+	// same bytes as the signed upload), so it names both ways to pull. RegistryURLPlaceholder is replaced by the
+	// registry's own address when a registry shows the README.
+	fmt.Fprintf(&b, "A [Rigfile](https://github.com/rigfile/rigfile) rig, version %s.\n\n## Use it\n\n", m.Version)
+	fmt.Fprintf(&b, "From the Rigfile registry it is published on:\n\n```sh\nrigfile pull %s --registry %s\n```\n\n", m.Name, RegistryURLPlaceholder)
+	fmt.Fprintf(&b, "From a git repository that holds it (for example on GitHub):\n\n```sh\nrigfile pull github.com/%s\n```\n\n", m.Name)
 	b.WriteString("**Review before you approve.** A rig can install hooks and scripts and register MCP servers; those run on your machine. `rigfile pull` shows every one of them first and changes nothing until you approve.\n\n## What is inside\n\n")
 	list := func(title string, items []string) {
 		if len(items) == 0 {

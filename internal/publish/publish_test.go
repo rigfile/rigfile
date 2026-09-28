@@ -60,7 +60,7 @@ func TestACleanRigPublishesWithReadmeAndScanProof(t *testing.T) {
 		t.Fatalf("%+v", p.Proof)
 	}
 	rd := string(p.Files["README.md"])
-	for _, want := range []string{"# jiaxu/demo", "rigfile pull github.com/jiaxu/demo", "alpaca-mcp@1.4.2", "alpaca/api_key", "https://example.test/keys", "base-secure"} {
+	for _, want := range []string{"# jiaxu/demo", "rigfile pull github.com/jiaxu/demo", "rigfile pull jiaxu/demo --registry " + RegistryURLPlaceholder, "alpaca-mcp@1.4.2", "alpaca/api_key", "https://example.test/keys", "base-secure"} {
 		if !strings.Contains(rd, want) {
 			t.Errorf("README missing %q:\n%s", want, rd)
 		}
