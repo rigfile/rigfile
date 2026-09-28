@@ -9,7 +9,7 @@ Decided 2026-09-27: **the GitHub repository stays private for now**, and the reg
 | # | Item | Status |
 |---|---|---|
 | 1 | Git history audit | **done**: gitleaks over all 158 commits on every branch, no secrets; all commit authors use the GitHub no-reply address; the owner's name in test data replaced by a made-up user (`ada`), and the fixture built from the owner's real setup replaced by the synthetic `testdata/fixtures/sample-rig` (old commits keep the old values; history not rewritten) |
-| 2 | Real `README.md` (the current one is the Stage 0 Python scaffold text) | open |
+| 2 | Real `README.md` | **done**: new README; the old Python scaffold and a stray empty `main` file deleted |
 | 3 | Push `main`; make `main` the default branch (it is `stage-0-spec`, which has no Go code) | waits for release |
 | 4 | Make the repo public; enable private vulnerability reporting; delete or tag the merged `stage-*` branches | waits for release |
 | 5 | Fill the contact placeholders in the legal pages and `SECURITY.md` | open |

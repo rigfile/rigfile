@@ -61,7 +61,7 @@ Working rules for Stage 1 are in `CLAUDE.md` (small PRs, threat note for securit
 
 ## Notes
 
-- A Python scaffold (`pyproject.toml`, `src/rigfile`, `tests/`, `README.md`) existed before Stage 0 and was committed by the owner as `42bd6bc "stage 0"` (branch `stage-0-spec`, also pushed to `origin`). With Go chosen it is not the product; keep as dev tooling or delete: the owner's call. It is not part of the Stage 0 deliverables.
+- ~~A Python scaffold (`pyproject.toml`, `src/rigfile`, `tests/`) that predated Stage 0~~ — **deleted 2026-09-27** (owner decision) with a real `README.md`; recoverable from history (`42bd6bc`).
 - `origin/HEAD` currently points at `stage-0-spec` (first branch pushed). Local `main` is created from it at sign-off; pushing `main` and making it GitHub's default branch is left to the owner.
 - Global secret-scanning git hooks (gitleaks) are installed on the owner's machine outside this repo (`~/.config/git/hooks`); they run on commits and pushes here. This is a stopgap until base-secure (Stage 2).
 
