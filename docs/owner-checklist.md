@@ -25,6 +25,11 @@ owner). Steps, all owner-only:
 None of this touches the code: `internal/registry` and `deploy/docker-compose.yml` still work locally
 (verified live, `e4dd3c0`) and can be redeployed to a fresh Fly/Neon/R2 setup at any time.
 
+**Confirmed 2026-09-28** (owner, after the Fly/Neon/R2 teardown): keep all of it in the codebase as is --
+`internal/registry`, `cmd/rigfile-registry`, the website (`web/templates`, `web/docs`, `web/static`, `web/legal`),
+`Dockerfile.registry`, `deploy/`, `fly.toml`. Not dead code: a real, tested feature that simply is not hosted
+right now. No deletion planned; revisit only if that changes.
+
 ## Go-live checklist (2026-09-27) -- superseded by the decision above; kept for what it recorded
 
 Decided 2026-09-27: **the GitHub repository stays private for now**, and the registry site stays up as it is (its GitHub links and `git clone` step only work once the repo is public).
