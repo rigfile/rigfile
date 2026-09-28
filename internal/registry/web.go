@@ -2,7 +2,9 @@ package registry
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -15,6 +17,17 @@ var templateFS embed.FS
 
 //go:embed web/static
 var staticFS embed.FS
+
+// staticVersion busts the browser cache when static assets change: the long Cache-Control on staticHandler is
+// only safe because callers append ?v=staticVersion, so the URL itself changes whenever the content does.
+var staticVersion = func() string {
+	b, err := staticFS.ReadFile("web/static/style.css")
+	if err != nil {
+		return "0"
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:10]
+}()
 
 // Page is what every template receives. Dynamic text is only ever emitted through html/template's escaping.
 type Page struct {
@@ -39,7 +52,13 @@ func staticHandler() http.Handler {
 	sub, _ := fs.Sub(staticFS, "web/static")
 	h := http.StripPrefix("/static/", http.FileServer(http.FS(sub)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		if r.URL.Query().Get("v") != "" {
+			// only a version-stamped request (?v=staticVersion, from our own templates) is safe to cache
+			// indefinitely: the URL changes whenever the content does, so a stale copy can never be served.
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+		}
 		h.ServeHTTP(w, r)
 	})
 }
@@ -74,4 +93,6 @@ func (s *Server) message(w http.ResponseWriter, r *http.Request, status int, tit
 	s.render(w, r, status, "message.html", Page{Title: title, Lines: lines})
 }
 
-func templateFuncs() template.FuncMap { return template.FuncMap{"join": strings.Join} }
+func templateFuncs() template.FuncMap {
+	return template.FuncMap{"join": strings.Join, "staticVersion": func() string { return staticVersion }}
+}

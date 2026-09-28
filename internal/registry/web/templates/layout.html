@@ -1,7 +1,7 @@
 {{define "head"}}<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{if .Title}}{{.Title}} · {{end}}Rigfile registry</title>
-<link rel="stylesheet" href="/static/style.css"></head><body>
+<link rel="stylesheet" href="/static/style.css?v={{staticVersion}}"></head><body>
 <header class="top"><div class="wrap">
 <a class="brand" href="/"><span class="mark">R</span>Rigfile</a>
 <form class="search" action="/search" method="get"><input type="search" name="q" placeholder="Search rigs" value="{{.Query}}" aria-label="Search rigs"><button type="submit">Search</button></form>

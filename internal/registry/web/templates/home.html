@@ -2,6 +2,22 @@
 <h1>Share how you set up your AI tools</h1>
 <p class="muted">Rigfile rigs bundle instructions, skills, MCP servers, hooks and permissions for Claude Code, Codex, Gemini CLI and Cursor. Pull one with a single command; secrets never travel with a rig.</p>
 <div class="hero-cmd"><pre><code>rigfile pull owner/name --registry {{.Data.RegistryURL}}</code></pre></div>
+
+<h2>Quickstart</h2>
+<p class="muted">No packaged builds yet &mdash; build the CLI from source (needs Go).</p>
+<ol class="steps">
+<li><p>Get the CLI.</p>
+<pre><code>git clone https://github.com/rigfile/rigfile
+cd rigfile &amp;&amp; go build -o rigfile ./cmd/rigfile</code></pre></li>
+<li><p>Capture your current Claude Code setup into a rig (read-only &mdash; nothing changes yet).</p>
+<pre><code>./rigfile init</code></pre></li>
+<li><p>Review the plan, then apply it. Nothing runs until you approve.</p>
+<pre><code>./rigfile plan rig
+./rigfile apply rig</code></pre></li>
+<li><p>Share it &mdash; private by default, or add <code>--public</code>.</p>
+<pre><code>./rigfile publish rig --to-registry --registry {{.Data.RegistryURL}}</code></pre></li>
+</ol>
+
 <h2>Popular rigs</h2>
 {{template "rigs" .Data}}
 {{template "foot" .}}

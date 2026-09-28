@@ -227,6 +227,19 @@ pre code { background: none; border: 0; padding: 0; }
 @media (prefers-color-scheme: dark) { .hero-cmd pre { background: #010409; border-color: var(--line); } }
 .hero-cmd code { color: #d1f7c4; background: none; }
 
+/* ---------- numbered step lists (quickstart) ---------- */
+ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 16px 0; }
+ol.steps > li { counter-increment: step; position: relative; padding-left: 40px; margin: 18px 0; }
+ol.steps > li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--bg-inset); color: var(--fg); font-weight: 600; font-size: 13px;
+}
+ol.steps > li p { margin: 0 0 6px; }
+ol.steps > li pre { margin: 0; max-width: 560px; }
+
 /* ---------- tables ---------- */
 table {
   border-collapse: collapse; width: 100%; font-size: 14px;
