@@ -11,17 +11,27 @@
 <div class="muted">They must have signed in to this registry once.</div>{{end}}</div>{{end}}
 {{if .Data.Collections}}<h2>Collections</h2><ul>{{range .Data.Collections}}<li><a href="/c/{{.Owner}}/{{.Slug}}">{{.Title}}</a>{{if eq .Visibility "private"}} <span class="tag">private</span>{{end}}</li>{{end}}</ul>{{end}}
 {{if .Data.Own}}<div class="card"><strong>New collection</strong>
+<p class="muted">A curated, ordered list of rigs &mdash; yours, other people's, or a mix &mdash; grouped for discovery (like "starter rigs" or "rigs for data work"). Public by default, or keep it to yourself.</p>
 <form method="post" action="/manage/collections"><input type="hidden" name="csrf" value="{{.CSRF}}">
 <div><label>Title <input type="text" name="title" maxlength="80" required></label></div>
 <div><label>Address <input type="text" name="slug" maxlength="63" pattern="[a-z0-9][a-z0-9-]*" placeholder="starter-rigs" required></label></div>
 <div><label>Description <input type="text" name="description" maxlength="500"></label></div>
 <div><label><input type="checkbox" name="private" value="1"> Only I can see it</label></div>
-<button type="submit">Create</button></form></div>
+<button type="submit">Create</button></form>
+<p class="muted">Same thing from the CLI:</p>
+<pre><code>rigfile collection create starter-rigs --title "Starter rigs"
+rigfile collection add starter-rigs owner/name
+rigfile collection show {{.Data.Login}}/starter-rigs</code></pre></div>
 <div class="card"><strong>New organisation</strong>
+<p class="muted">A shared namespace several people publish under (like a GitHub org), instead of everyone's individual account &mdash; rigs are named <code>org/rig</code>. Every member can publish and yank; owners and admins manage members and decide visibility.</p>
 <form method="post" action="/manage/orgs"><input type="hidden" name="csrf" value="{{.CSRF}}">
 <div><label>Name <input type="text" name="login" maxlength="39" pattern="[a-z0-9][a-z0-9-]*" placeholder="acme" required></label></div>
 <div><label>Display name <input type="text" name="name" maxlength="80"></label></div>
 <button type="submit">Create</button></form>
-<div class="muted">You become its owner. Publish under it as <code>name/rig</code>.</div></div>{{end}}
+<div class="muted">You become its owner. Publish under it as <code>name/rig</code>.</div>
+<p class="muted">Same thing from the CLI:</p>
+<pre><code>rigfile org create acme --title "Acme"
+rigfile org add acme their-login --role member
+rigfile publish my-rig --to-registry --name acme/my-rig</code></pre></div>{{end}}
 {{if .Data.Rigs}}<h2>Rigs</h2>{{template "rigs" .Data}}{{else}}<p class="muted">No rigs to show.</p>{{end}}
 {{template "foot" .}}
