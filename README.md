@@ -7,7 +7,7 @@
 - **A safety floor under every rig.** `rigfile/base-secure` (credential deny rules, a command guard, secret redaction, git secret scanning) is always applied and cannot be removed.
 - **Undo anything.** Every apply is backed up; `rigfile rollback` restores it.
 
-Documentation: **https://rigfile.bytebuilderslab.app/docs**.
+Documentation: **[docs/guide](docs/guide/README.md)**.
 
 > Status: early. macOS and Linux are tested end to end on real machines; Windows is built but not yet verified on a real machine. No packaged releases yet: build from source.
 
@@ -35,23 +35,23 @@ rigfile pull github.com/you/my-rig-repo                  # someone else's rig, r
 rigfile rollback                        # undo the last run
 ```
 
-There's also an optional hosted registry (search, version-range layering with `from:`, trust facts) — see [Registry: an optional layer](#registry-an-optional-layer) below.
+There's also an optional registry server (search, version-range layering with `from:`, trust facts) — see [Registry: an optional layer](#registry-an-optional-layer) below.
 
-Every command: `rigfile --help`, or the [CLI reference](https://rigfile.bytebuilderslab.app/docs/cli).
+Every command: `rigfile --help`, or the [CLI reference](docs/guide/cli.md).
 
 ## Registry: an optional layer
 
-`git` distribution is the primary, recommended way to share rigs: it needs no new account, no new service to trust, and works with hosts people already use. Rigfile also runs a registry at **https://rigfile.bytebuilderslab.app** for what git alone doesn't give you: cross-rig search, `from:` layers pinned to a semver range (`^1.2`) rather than a fixed ref, and publisher/trust facts (first-seen date, stars, verified badge). It's real and working, not required, and not the default in these docs.
+`git` distribution is the primary, recommended way to share rigs: it needs no new account, no new service to trust, and works with hosts people already use. Rigfile also ships a registry server (`cmd/rigfile-registry`, `internal/registry`) for what git alone doesn't give you: cross-rig search, `from:` layers pinned to a semver range (`^1.2`) rather than a fixed ref, and publisher/trust facts (first-seen date, stars, verified badge). It's real, tested and self-hostable (`Dockerfile.registry`, `deploy/docker-compose.yml`) — not required, and no instance is publicly hosted right now.
 
 ```sh
-rigfile login --registry https://rigfile.bytebuilderslab.app
-rigfile publish rig --to-registry --registry https://rigfile.bytebuilderslab.app   # private until you add --public
-rigfile pull owner/name --registry https://rigfile.bytebuilderslab.app
+rigfile login --registry https://your-registry.example
+rigfile publish rig --to-registry --registry https://your-registry.example   # private until you add --public
+rigfile pull owner/name --registry https://your-registry.example
 ```
 
 ## Documentation
 
-- User docs (getting started, writing a rig, secrets, publishing, pulling safely, manifest and CLI reference, supported tools, security model, FAQ): [the website](https://rigfile.bytebuilderslab.app/docs), built from `internal/registry/web/docs/`.
+- User docs (getting started, writing a rig, secrets, publishing, pulling safely, manifest and CLI reference, supported tools, security model, FAQ): [**docs/guide**](docs/guide/README.md), plain Markdown, meant to be read here on GitHub. The same content also ships as a website a self-hosted registry serves at `/docs` (`internal/registry/web/docs/`); keep both in sync if you edit one.
 - Design and specs: `docs/` (merge semantics, `base-secure`, trust and supply chain, the registry, the secret broker, private sync, per-tool research in `docs/targets/`) and the ADRs in `docs/adr/`.
 - Master plan: `RIGFILE_PLAN.md`; current state: `docs/STATUS.md`.
 
