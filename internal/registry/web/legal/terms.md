@@ -2,7 +2,7 @@
 
 ## 1. What this service is
 
-[OPERATOR NAME] ("we") runs this registry so that people can publish and download **rigs**: bundles of configuration (instructions, skills, MCP server definitions, hooks, permissions) for AI coding tools. Using the registry means you accept these terms.
+Byte Builders Lab ("we") runs this registry so that people can publish and download **rigs**: bundles of configuration (instructions, skills, MCP server definitions, hooks, permissions) for AI coding tools. Using the registry means you accept these terms.
 
 ## 2. Accounts
 
@@ -36,4 +36,4 @@ The service is provided "as is". To the extent the law allows, we are not liable
 
 ## 9. Contact
 
-[OPERATOR CONTACT EMAIL]
+bytebuilderslab@gmail.com

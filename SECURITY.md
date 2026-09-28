@@ -4,12 +4,12 @@
 
 Please report vulnerabilities in Rigfile (the CLI, base-secure, the registry service, the release and installer tooling) **privately**, not in a public issue.
 
-- Email: [SECURITY CONTACT EMAIL: to be set by the owner before the first public release]
-- Or use GitHub's private vulnerability reporting on the repository, if enabled: [REPOSITORY]/security/advisories/new
+- Email: bytebuilderslab@gmail.com
+- Or use GitHub's private vulnerability reporting on the repository, if enabled: https://github.com/rigfile/rigfile/security/advisories/new
 
 Include what you found, how to reproduce it, and what you think the impact is. Please do not access other people's data, degrade the service, or test against accounts you do not own.
 
-We aim to acknowledge a report within [2 business days], tell you our assessment within [7 days], and fix serious issues promptly. We will credit you in the advisory if you want that. [LAWYER: safe-harbour statement for good-faith research.]
+We aim to acknowledge a report within 3 business days, tell you our assessment within 10 days, and fix serious issues promptly. We will credit you in the advisory if you want that. [LAWYER: safe-harbour statement for good-faith research.]
 
 ## What is in scope
 

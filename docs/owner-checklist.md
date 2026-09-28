@@ -12,7 +12,7 @@ Decided 2026-09-27: **the GitHub repository stays private for now**, and the reg
 | 2 | Real `README.md` | **done**: new README; the old Python scaffold and a stray empty `main` file deleted |
 | 3 | Push `main`; make `main` the default branch (it is `stage-0-spec`, which has no Go code) | waits for release |
 | 4 | Make the repo public; enable private vulnerability reporting; delete or tag the merged `stage-*` branches | waits for release |
-| 5 | Fill the contact placeholders in the legal pages and `SECURITY.md` | open |
+| 5 | Contact placeholders | **done**: operator "Byte Builders Lab", bytebuilderslab@gmail.com for contact, security and legal notices; reports read within 5 business days; security: acknowledge in 3 business days, assessment in 10 days |
 | 6 | Legal stance (beta with draft banner, or lawyer first); a privacy policy page | open |
 | 7 | Registry: scale to one machine (the rate limiter is per process); auto-stop or always on | open |
 | 8 | Monitoring and who reads reports | open |

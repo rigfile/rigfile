@@ -46,4 +46,4 @@ How much of this each tool enforces is on [Supported tools](/docs/tools): fully 
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for a security problem. Report it privately as described in the project's [security policy](https://github.com/rigfile/rigfile/blob/main/SECURITY.md). Malicious rigs are not vulnerabilities in Rigfile: report those with **Report this rig** on the rig's page.
+Please do not open a public issue for a security problem. Email **bytebuilderslab@gmail.com** (we aim to acknowledge within 3 business days and give our assessment within 10 days); the project's [security policy](https://github.com/rigfile/rigfile/blob/main/SECURITY.md) has the details. Malicious rigs are not vulnerabilities in Rigfile: report those with **Report this rig** on the rig's page.
