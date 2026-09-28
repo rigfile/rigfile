@@ -2,7 +2,30 @@
 
 One list, drawn from the per-stage owner-check documents (linked in each row). Nothing here can be done by me: it needs an account, money, a real machine, a person, or a decision. Written 2026-09-26 on branch `integration`.
 
-## Go-live checklist (2026-09-27)
+## Strategic change (2026-09-28): git is now the primary path, the registry is optional
+
+Decided: git-based sharing (`publish --to-git`, `pull github.com/owner/repo`) is the primary, documented way to
+share rigs -- it already works fully, needs no new account, and borrows GitHub's existing trust instead of asking
+people to adopt a brand-new site. README, the live site copy and the docs were rewritten to lead with it
+(`e4dd3c0`). The registry stays real and working, repositioned as optional (search, `from:` version-range layering).
+
+**The live registry is currently down and not scheduled to come back on its own:** Fly's free trial ended
+(`fly status`/`fly scale`/`fly apps destroy` all now refuse with "trial has ended, please add a credit card");
+`https://rigfile.bytebuilderslab.app/healthz` is unreachable. Owner decided (2026-09-28) on a **full teardown**
+rather than paying to keep it up. I could not do any of it myself: Fly blocks every API call without a card on
+file (including destroy), and I never held R2 credentials in this session (only `fly secrets set` did, run by the
+owner). Steps, all owner-only:
+
+- **Fly**: delete the app from the dashboard (Settings -> Delete app avoids the card prompt `flyctl` hit), or
+  `fly apps destroy rigfile --yes` once the trial/card prompt is resolved.
+- **Neon**: project Settings -> Delete project (also removes backups).
+- **Cloudflare R2**: empty the bucket (Delete all objects), delete the bucket, revoke the R2 API token.
+- **GitHub OAuth App** (`Ov23licYmVqaKBqv1rNb`, org `rigfile`): free to leave, or delete for a clean slate.
+
+None of this touches the code: `internal/registry` and `deploy/docker-compose.yml` still work locally
+(verified live, `e4dd3c0`) and can be redeployed to a fresh Fly/Neon/R2 setup at any time.
+
+## Go-live checklist (2026-09-27) -- superseded by the decision above; kept for what it recorded
 
 Decided 2026-09-27: **the GitHub repository stays private for now**, and the registry site stays up as it is (its GitHub links and `git clone` step only work once the repo is public).
 

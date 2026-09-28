@@ -140,7 +140,17 @@ Incident during the build: my first host-side E2E script ran the real CLI and tr
 
 **UI redesign (`main`, 2026-09-27):** the registry's pages were plain unstyled HTML. Rewrote `internal/registry/web/static/style.css` (design tokens, badges, a GitHub-style repo header, diff highlighting, avatars) and the templates that needed structural changes to use it; no script anywhere (CSP stays `default-src 'none'`). Verified by actually building and running the registry locally (`deploy/docker-compose.yml` against a real Postgres), publishing a real rig with the real CLI, and screenshotting home/rig/profile/diff with headless Chrome — caught and fixed one real usability bug that way (a sidebar `<pre>` command was clipped) and one real pre-existing CSP bug unrelated to the redesign (`device.html`'s OTP code used an inline `style=` attribute, which `style-src 'self'` silently drops).
 
-### Registry: live deployment (`main`, 2026-09-27)
+### Registry: down, teardown pending owner action (`main`, 2026-09-28)
+
+The deployment below is no longer live: Fly's free trial ended (every `flyctl` command, including `apps destroy`,
+now refuses with "trial has ended, please add a credit card"), and `/healthz` is unreachable. Strategic decision
+the same day: git-based sharing (already fully built) is now the primary, documented way to share rigs; the
+registry is optional. Owner chose full teardown over paying to keep it running; steps are owner-only (Fly and
+Neon dashboards, R2 dashboard) since I never held R2 credentials and Fly blocks me even from deleting it. See
+`docs/owner-checklist.md` "Strategic change" for the exact steps. The code (`internal/registry`,
+`deploy/docker-compose.yml`) is untouched and still runs locally against a fresh Postgres/bucket if wanted again.
+
+### Registry: live deployment (`main`, 2026-09-27) -- history; the deployment described below no longer runs
 
 Deployed to production: **`https://rigfile.bytebuilderslab.app`** (Fly.io app `rigfile`, two `app` machines, `auto_stop_machines`; Neon Postgres, point-in-time restore up to 30 days; Cloudflare R2 for the blob bucket; DNS is a CNAME at the owner's registrar to the Fly `.fly.dev` hostname, per Fly's own guidance for a subdomain). `/healthz` and TLS both verified. GitHub OAuth App `Ov23licYmVqaKBqv1rNb` (org `rigfile`), secrets set via `fly secrets set` by the owner directly (never pasted to me).
 
