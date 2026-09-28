@@ -202,7 +202,7 @@ func TestPublishWriteTarballAloneDoesNotAlsoPushToGitHub(t *testing.T) {
 	m := newMachine(t)
 	out := filepath.Join(t.TempDir(), "rig.tgz")
 	r := m.run("", "publish", publishRig(t), "--write-tarball", out)
-	if r.code != 0 || !strings.Contains(r.out, "wrote "+out) || strings.Contains(r.out, "pushed to") {
+	if r.code != 0 || !strings.Contains(r.out, "wrote "+portable(out)) || strings.Contains(r.out, "pushed to") {
 		t.Fatalf("%+v", r)
 	}
 	if _, err := os.Stat(out); err != nil {
