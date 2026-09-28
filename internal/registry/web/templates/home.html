@@ -8,7 +8,7 @@
 <a class="btn lg" href="/search">Explore rigs</a>
 </div>
 <div class="hero-cmd"><pre><code>rigfile pull github.com/owner/repo</code></pre></div>
-<p class="muted small">Any git host, no account needed. This site is an optional extra — <a href="/search">search</a> and a few things git alone can't do.</p>
+<p class="muted small">Shares through GitHub — no new account, no new service to trust. This site is an optional extra — <a href="/search">search</a> and a few things GitHub alone can't do.</p>
 </section>
 
 <section class="section">
@@ -17,7 +17,7 @@
 <li><strong>Capture</strong><span>Turn the setup you already have into a rig: <code>rigfile init</code> reads it, changes nothing.</span></li>
 <li><strong>Review</strong><span><code>rigfile plan</code> shows every file, hook, server and permission a rig would change, before anything runs.</span></li>
 <li><strong>Apply</strong><span><code>rigfile apply</code> writes it with a backup first. <code>rigfile rollback</code> undoes any run.</span></li>
-<li><strong>Share</strong><span><code>rigfile publish --to-git</code> scrubs personal paths and blocks secrets, then push it anywhere. Or <code>--to-registry</code> for search and version-range layering.</span></li>
+<li><strong>Share</strong><span><code>rigfile publish --to-github</code> scrubs personal paths, blocks secrets, then creates and pushes the repo for you. Or <code>--to-registry</code> for search and version-range layering.</span></li>
 </ol>
 </section>
 
@@ -50,8 +50,8 @@ cd rigfile &amp;&amp; go build -o rigfile ./cmd/rigfile</code></pre></li>
 <li><p>Review the plan, then apply it. Nothing runs until you approve.</p>
 <pre><code>./rigfile plan rig
 ./rigfile apply rig</code></pre></li>
-<li><p>Share it — push to any git host, no account needed:</p>
-<pre><code>./rigfile publish rig --to-git ../my-rig-repo --git-init</code></pre>
+<li><p>Share it — creates and pushes the repo for you (needs <code>gh auth login</code>):</p>
+<pre><code>./rigfile publish rig --to-github your-login</code></pre>
 <p class="muted small">Or publish here instead, for search and version-range layering (private by default, add <code>--public</code>):</p>
 <pre><code>./rigfile login --registry {{.Data.RegistryURL}}
 ./rigfile publish rig --to-registry --registry {{.Data.RegistryURL}}</code></pre></li>

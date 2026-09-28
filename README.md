@@ -22,7 +22,7 @@ go build -o rigfile ./cmd/rigfile
 
 ## A one-minute tour
 
-Rigs share over plain git — any host, no account needed:
+Rigs share over GitHub — `publish` creates and pushes the repository for you:
 
 ```sh
 rigfile init --name you/my-rig          # capture your current Claude Code setup into ./rig (read-only)
@@ -30,8 +30,8 @@ rigfile plan rig                        # see exactly what applying would change
 rigfile apply rig                       # apply it, with a backup first
 rigfile secrets set alpaca/api_key      # store a secret the rig references (never printed)
 
-rigfile publish rig --to-git ../my-rig-repo --git-init   # then push it anywhere: GitHub, GitLab, your own git host
-rigfile pull github.com/you/my-rig-repo                  # someone else's rig, reviewed before anything runs
+rigfile publish rig --to-github you      # scrubs it, then creates+pushes github.com/you/my-rig (needs `gh auth login`)
+rigfile pull github.com/you/my-rig       # someone else's rig, reviewed before anything runs
 rigfile rollback                        # undo the last run
 ```
 
@@ -41,7 +41,7 @@ Every command: `rigfile --help`, or the [CLI reference](docs/guide/cli.md).
 
 ## Registry: an optional layer
 
-`git` distribution is the primary, recommended way to share rigs: it needs no new account, no new service to trust, and works with hosts people already use. Rigfile also ships a registry server (`cmd/rigfile-registry`, `internal/registry`) for what git alone doesn't give you: cross-rig search, `from:` layers pinned to a semver range (`^1.2`) rather than a fixed ref, and publisher/trust facts (first-seen date, stars, verified badge). It's real, tested and self-hostable (`Dockerfile.registry`, `deploy/docker-compose.yml`) — not required, and no instance is publicly hosted right now.
+Sharing through GitHub is the primary, recommended way: no new account, no new service to trust, just `gh` (already what `rigfile logins` uses to sign in to GitHub) and the account you already have. Rigfile also ships a registry server (`cmd/rigfile-registry`, `internal/registry`) for what git alone doesn't give you: cross-rig search, `from:` layers pinned to a semver range (`^1.2`) rather than a fixed ref, and publisher/trust facts (first-seen date, stars, verified badge). It's real, tested and self-hostable (`Dockerfile.registry`, `deploy/docker-compose.yml`) — not required, and no instance is publicly hosted right now.
 
 ```sh
 rigfile login --registry https://your-registry.example

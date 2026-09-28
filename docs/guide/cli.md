@@ -1,6 +1,6 @@
 # CLI reference
 
-Every `rigfile` command, what it is for, and an example. Run `rigfile <command> --help` for all of a command's flags. Commands that talk to a registry take `--registry <url>`, or read `RIGFILE_REGISTRY` from the environment — `https://your-registry.example` below stands for wherever one is running. Git-based sharing (`pull`, `publish --to-git`) needs no registry at all.
+Every `rigfile` command, what it is for, and an example. Run `rigfile <command> --help` for all of a command's flags. Commands that talk to a registry take `--registry <url>`, or read `RIGFILE_REGISTRY` from the environment — `https://your-registry.example` below stands for wherever one is running. Sharing through GitHub (`pull`, `publish --to-github`) needs no registry at all.
 
 ## Build and apply a rig
 
@@ -110,12 +110,13 @@ rigfile whoami --registry https://your-registry.example
 ```
 
 ### `rigfile publish`
-Scrub, scan and publish a rig to the registry or to a git directory. With no destination it is a dry run.
+Scrub, scan and publish a rig to GitHub or to a registry. With no destination it is a dry run.
 ```sh
 rigfile publish my-rig                                     # dry run
-rigfile publish my-rig --to-registry                       # private
+rigfile publish my-rig --to-github your-login               # creates and pushes github.com/your-login/my-rig
+rigfile publish my-rig --to-github your-login --public
+rigfile publish my-rig --to-registry                        # private
 rigfile publish my-rig --to-registry --public
-rigfile publish my-rig --to-git ../my-rig-repo --git-init
 ```
 
 ### `rigfile pull`

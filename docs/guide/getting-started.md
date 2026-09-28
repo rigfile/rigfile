@@ -2,7 +2,7 @@
 
 This walkthrough takes you from nothing to a published rig in about five minutes: install the CLI, capture the setup you already have, review and apply it, then share it.
 
-Rigs share over plain **git** — push to any host, no account needed. Rigfile also has an optional registry server (`cmd/rigfile-registry`) you or anyone can self-host, for search and a few things git alone can't do; both are shown below, git first. `https://your-registry.example` below stands for wherever a registry is actually running.
+Rigs share over **GitHub** — `publish` creates and pushes the repository for you. Rigfile also has an optional registry server (`cmd/rigfile-registry`) you or anyone can self-host, for search and a few things git alone can't do; both are shown below, GitHub first. `https://your-registry.example` below stands for wherever a registry is actually running.
 
 A **rig** is one `rigfile.yaml` plus the files it points to (instructions, skills, commands, hook scripts). It describes how an AI coding tool is set up: what it is told, which MCP servers it runs, which hooks fire, and what it is allowed to do. See [Concepts](concepts.md) for the full picture.
 
@@ -49,16 +49,14 @@ rigfile secrets set alpaca/api_key
 
 ## 4. Share it
 
-Publish to a git repository and push it anywhere — GitHub, GitLab, your own host:
-
 ```sh
-rigfile publish rig --to-git ../my-rig-repo --git-init
+rigfile publish rig --to-github your-login
 ```
 
-Before anything is written, `publish` rewrites your home-directory paths, blocks the output if it finds a secret, lists personal information for you to review (`--ack-personal` once you have), and checks that every package is pinned to an exact version. Push the directory it creates to a repository (public or private, your call) and you're done.
+Before anything is written, `publish` rewrites your home-directory paths, blocks the output if it finds a secret, lists personal information for you to review (`--ack-personal` once you have), and checks that every package is pinned to an exact version. `--to-github` takes just your GitHub login or org — the repo name comes from the rig's own `name:` — then creates and pushes the repository with `gh` (needs `gh auth login` first). Private by default; add `--public` to let anyone pull it.
 
 ```sh
-rigfile pull github.com/you/my-rig-repo          # how anyone else gets it
+rigfile pull github.com/your-login/my-rig          # how anyone else gets it
 ```
 
 **Optional:** publish to a Rigfile registry instead (or as well), for search and a page with trust facts. Sign in once (a device flow: confirm a short code in your browser), then publish — a rig is private until you add `--public`:
@@ -71,8 +69,8 @@ rigfile publish rig --to-registry --registry https://your-registry.example
 ## 5. Pull someone else's rig
 
 ```sh
-rigfile pull github.com/owner/repo              # a git repository
-rigfile pull owner/name --registry https://your-registry.example   # or from the registry
+rigfile pull github.com/owner/repo                                 # from GitHub
+rigfile pull owner/name --registry https://your-registry.example   # or from a registry
 ```
 
 You see who published it, how old it is, whether it is signed, what static analysis found, and the full plan. Nothing runs until you approve. Read [Pulling a rig safely](pulling.md) before you pull from someone you do not know.

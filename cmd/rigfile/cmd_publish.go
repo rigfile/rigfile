@@ -15,6 +15,7 @@ import (
 
 	"github.com/rigfile/rigfile/internal/adapters/claudecode"
 	"github.com/rigfile/rigfile/internal/capture"
+	"github.com/rigfile/rigfile/internal/login"
 	"github.com/rigfile/rigfile/internal/platform"
 	"github.com/rigfile/rigfile/internal/publish"
 	"github.com/rigfile/rigfile/internal/regclient"
@@ -24,20 +25,20 @@ import (
 )
 
 // cmdPublish writes a clean, scrubbed rig repository (docs/sharing.md §6): from a rig directory, or from a capture of
-// this machine's tool setup with a checklist to choose what goes in. It never uploads anything.
+// this machine's tool setup with a checklist to choose what goes in. Writing to the registry or to GitHub is a
+// separate, explicit step after that (--to-registry, --to-github): nothing leaves the machine by default.
 func cmdPublish(args []string, e env) int {
 	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
 	fs.SetOutput(e.err)
-	toGit := fs.String("to-git", "", "directory to write the clean repository into (must be empty or absent)")
+	toGitHub := fs.String("to-github", "", "GitHub owner or org to publish under (private unless --public); creates and pushes github.com/<owner>/<rig-name> with `gh`, which needs `gh auth login`")
 	name := fs.String("name", "", "rig name, owner/name (required when capturing this machine)")
 	from := fs.String("from", "claude-code", "tool to capture when no rig directory is given: "+strings.Join(targets.Names(), ", "))
 	dir := fs.String("dir", "", "config directory of the tool given by --from (default: its usual location)")
 	claudeDir := fs.String("claude-dir", "", "Claude Code config directory (default ~/.claude or $CLAUDE_CONFIG_DIR)")
 	all := fs.Bool("all", false, "include everything that was captured (no checklist)")
 	ack := fs.Bool("ack-personal", false, "you reviewed the personal-information list and accept it")
-	gitInit := fs.Bool("git-init", false, "run `git init` and make one commit in the output directory")
 	toReg := fs.Bool("to-registry", false, "publish to the Rigfile registry (private unless --public); needs `rigfile login`")
-	public := fs.Bool("public", false, "with --to-registry: make the rig public once the registry scan has published it")
+	public := fs.Bool("public", false, "with --to-registry or --to-github: make the rig public")
 	regFlag := fs.String("registry", "", "registry address (default $RIGFILE_REGISTRY)")
 	tarFile := fs.String("write-tarball", "", "write the exact tarball that would be published to this file (to sign it with cosign), then continue")
 	signBundle := fs.String("sign-bundle", "", "with --to-registry: a Sigstore bundle for the rig's tarball (sign the file written by --write-tarball with `cosign sign-blob --bundle`); the registry and pullers verify it")
@@ -45,8 +46,12 @@ func cmdPublish(args []string, e env) int {
 	if err != nil {
 		return 2
 	}
-	if (*toGit == "" && !*toReg && *tarFile == "") || len(pos) > 1 || (*public && !*toReg) || (*signBundle != "" && !*toReg) {
-		fmt.Fprintln(e.err, "usage: rigfile publish [<rig-dir>] [--to-git <dir>] [--to-registry [--public]] [--name owner/name] [--from target] [--all] [--ack-personal] [--git-init]")
+	if (*toGitHub == "" && !*toReg && *tarFile == "") || len(pos) > 1 || (*public && !*toReg && *toGitHub == "") || (*signBundle != "" && !*toReg) {
+		fmt.Fprintln(e.err, "usage: rigfile publish [<rig-dir>] [--to-github owner] [--to-registry [--public]] [--name owner/name] [--from target] [--all] [--ack-personal]")
+		return 2
+	}
+	if strings.Contains(*toGitHub, "/") {
+		fmt.Fprintln(e.err, "rigfile: --to-github takes just the owner or org, not owner/name (the rig's own name supplies the repo name)")
 		return 2
 	}
 	var regBase string
@@ -82,11 +87,6 @@ func cmdPublish(args []string, e env) int {
 		fmt.Fprintln(e.err, "rigfile: refusing to publish: rigfile/base-secure was skipped on this machine (--i-understand-unsafe-base, since "+st.UnsafeBase.Since+"). Run a normal `rigfile apply` first.")
 		return 1
 	}
-	if ents, err := os.ReadDir(*toGit); *toGit != "" && err == nil && len(ents) > 0 {
-		fmt.Fprintf(e.err, "rigfile: %s already has files; choose an empty directory\n", *toGit)
-		return 1
-	}
-
 	var files map[string][]byte
 	switch {
 	case len(pos) == 1:
@@ -139,16 +139,8 @@ func cmdPublish(args []string, e env) int {
 		}
 		fmt.Fprintf(e.out, "\nwrote %s (%d bytes). Sign it: cosign sign-blob --bundle bundle.json %s\n", *tarFile, len(tb), *tarFile)
 	}
-	if *toGit != "" {
-		if err := p.Write(*toGit); err != nil {
-			fmt.Fprintln(e.err, "rigfile:", err)
-			return 1
-		}
-		fmt.Fprintf(e.out, "\nscan proof: %d finding(s) in %d file(s) written to %s\n", p.Proof.Findings, p.Proof.Files, *toGit)
-	} else {
-		fmt.Fprintf(e.out, "\nscan proof: %d finding(s) in %d file(s)\n", p.Proof.Findings, p.Proof.Files)
-	}
-	if *toGit == "" && !*toReg {
+	fmt.Fprintf(e.out, "\nscan proof: %d finding(s) in %d file(s)\n", p.Proof.Findings, p.Proof.Files)
+	if *toGitHub == "" && !*toReg {
 		return 0
 	}
 	if *toReg {
@@ -156,19 +148,48 @@ func cmdPublish(args []string, e env) int {
 			return code
 		}
 	}
-	if *toGit == "" {
+	if *toGitHub == "" {
 		return 0
 	}
-	if *gitInit {
-		if err := gitInitCommit(*toGit, p.Manifest.Name+"@"+p.Manifest.Version); err != nil {
-			fmt.Fprintln(e.err, "rigfile:", err)
-			return 1
-		}
-		fmt.Fprintln(e.out, "committed; create the remote repository and push it yourself (Rigfile never uploads).")
-	} else {
-		fmt.Fprintf(e.out, "Next: review the files, then `git init && git add -A && git commit` in %s and push it to a public repository.\n", *toGit)
+	return publishToGitHub(e, p, *toGitHub, *public)
+}
+
+// publishToGitHub writes the prepared rig into a scratch directory, commits it, and uses `gh` (already how `rigfile
+// logins` signs in to GitHub) to create and push a repository for it in one step: `gh repo create --source --push`.
+// owner is just the GitHub owner/org; the repo name is the rig's own name, so the two are never out of step.
+func publishToGitHub(e env, p *publish.Prepared, owner string, public bool) int {
+	_, repoName, _ := strings.Cut(p.Manifest.Name, "/")
+	tmp, err := os.MkdirTemp("", "rigfile-publish-*")
+	if err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
 	}
-	fmt.Fprintf(e.out, "Others pull it with: rigfile pull github.com/%s\n", p.Manifest.Name)
+	defer os.RemoveAll(tmp)
+	if err := p.Write(tmp); err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	if err := gitInitCommit(tmp, p.Manifest.Name+"@"+p.Manifest.Version); err != nil {
+		fmt.Fprintln(e.err, "rigfile:", err)
+		return 1
+	}
+	vis := "--private"
+	if public {
+		vis = "--public"
+	}
+	argv := []string{"gh", "repo", "create", owner + "/" + repoName, vis, "--source=" + tmp, "--remote=origin", "--push"}
+	run := e.runCmd
+	if run == nil {
+		run = login.SystemRun
+	}
+	fmt.Fprintf(e.out, "\ncreating and pushing %s/%s ...\n", owner, repoName)
+	if err := run(context.Background(), argv); err != nil {
+		fmt.Fprintln(e.err, "rigfile: gh repo create:", err)
+		fmt.Fprintln(e.err, "rigfile: is `gh` installed and signed in? try `gh auth login`, or `rigfile logins --provider github`")
+		return 1
+	}
+	fmt.Fprintf(e.out, "pushed to https://github.com/%s/%s\n", owner, repoName)
+	fmt.Fprintf(e.out, "Others pull it with: rigfile pull github.com/%s/%s\n", owner, repoName)
 	return 0
 }
 

@@ -7,7 +7,7 @@ account, money, a real machine, a person, or a decision. What I can do myself, I
 only what's left after that.
 
 Current shape of the project, in one paragraph: all 8 build stages (plus 3b, local models) are merged to `main`.
-Git-based sharing (`publish --to-git`, `pull github.com/owner/repo`) is the primary, working way to share a rig,
+Sharing through GitHub (`publish --to-github`, `pull github.com/owner/repo`) is the primary, working way to share a rig,
 decided 2026-09-28. The registry is a real, tested, optional feature, currently **not deployed** (the Fly/Neon/R2
 setup from 2026-09-27 was torn down 2026-09-28 — see `docs/registry.md` §8 for what deploying it again would take).
 The GitHub repository is **private by owner choice**, not yet pushed past `stage-0-spec`-era history.

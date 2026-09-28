@@ -49,7 +49,7 @@ A rig is text plus a manifest. Applying one can put **instructions** in front of
 - Unpinned refs (branch or none) print a warning and are pinned by the commit in the lock.
 - Nothing from the rig executes during `pull` before approval: no script is run to "prepare" it, no `postinstall`.
 
-## 6. Publish (`rigfile publish --to-git <dir>`) (tests: `internal/publish`)
+## 6. Publish (`rigfile publish --to-github <owner>`) (tests: `internal/publish`)
 
 Pipeline, in this order; any failing stage stops before anything is written:
 
@@ -59,8 +59,9 @@ Pipeline, in this order; any failing stage stops before anything is written:
    - **secrets**: every text file and every manifest value goes through the scanner (all rules, decoding depth 2). A finding **blocks** publishing; there is no override for public output. Credential-like env values and headers were already turned into `secret://` references by capture.
    - **personal information**: absolute home paths become `~/`; e-mail addresses, phone numbers, the OS user name and the host name are listed for review and block until each is acknowledged (`--ack-personal`, or ticked in the TUI).
    - **rig hygiene**: `manifest.Check` must pass with zero errors; MCP packages must be version-pinned; no absolute machine paths remain.
-4. **Write** into an empty directory: `rigfile.yaml`, the referenced files only, a generated `README.md` (what is inside, how to pull it, what secrets/logins it needs), and a `.gitignore`. Nothing is copied wholesale from a config directory.
-5. **Prove**: the output tree is scanned again from disk; publishing fails if that scan finds anything (`scan proof: 0 findings, N files` is printed). Optionally `--git-init` runs `git init` and one commit through the user's own hooks.
+4. **Write** into a scratch directory: `rigfile.yaml`, the referenced files only, a generated `README.md` (what is inside, how to pull it, what secrets/logins it needs), and a `.gitignore`. Nothing is copied wholesale from a config directory.
+5. **Prove**: the output tree is scanned again from disk; publishing fails if that scan finds anything (`scan proof: 0 findings, N files` is printed).
+6. **`--to-github <owner>`**: `git init` and one commit through the user's own hooks, then `gh repo create <owner>/<repo-name> --private|--public --source=<dir> --remote=origin --push` (the repo name is the published rig's own `name:`, not a separate argument — `gh`, already how `rigfile logins` signs in to GitHub, does the actual network call). The scratch directory is removed afterward. `--write-tarball <file>` writes the same scrubbed archive without publishing anywhere, for a manual push to a different host or for signing before `--to-registry`.
 
 ## 7. What Stage 4 does not defend against
 

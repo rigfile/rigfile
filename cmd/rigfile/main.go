@@ -160,7 +160,7 @@ func usage(w io.Writer) {
   pull <source> [--plan-only]        fetch a rig from github.com/o/r[@ref][//dir] (or gitlab.com, https/ssh git URL), review, apply
   update [--plan-only]               re-resolve the source of the last pulled rig and show what changed
   login | logout | whoami            sign in to a Rigfile registry (device flow; token kept in your keychain)
-  publish [--to-git DIR] [--to-registry [--public]]   scrub your setup (or a rig dir); write a repo and/or publish to the registry
+  publish [--to-github owner] [--to-registry [--public]]   scrub your setup (or a rig dir); create+push a GitHub repo and/or publish to the registry
   logins [--provider name]           walk through the logins the applied rig needs
   sync init|join|approve|finish|track|status|push|pull   end-to-end encrypted sync of your own private files between your machines
   models list|pull|status|serve|url|run|rm   local models: choose per machine, verified download, service, agents

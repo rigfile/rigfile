@@ -86,16 +86,34 @@ rigfile init --from codex --out /tmp/captured-codex --name e2e/captured > $out |
 grep -q 'FAKE-SECRET' /tmp/captured-codex/rigfile.yaml && fail "captured rig contains a secret"
 rigfile rollback --force > $out;                                                has "rolled back" $out
 [ ! -e "$HOME/.agents/skills/pdf" ] || fail "Codex skill not rolled back"
-echo "== publish a rig as a clean repository, then pull it back from git"
+echo "== publish a rig to GitHub (faked: no container has real GitHub auth), then pull it back from git"
 export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.test GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.test
-rigfile publish /rig --to-git /tmp/published > $out 2>&1 || { cat $out >&2; fail "publish failed"; }
+# A fake `gh` standing in for the real one `publish --to-github` shells out to: it understands only the exact
+# `repo create <owner>/<name> --private|--public --source=DIR --remote=R --push` shape and, instead of a real
+# GitHub API call, bare-clones --source to a well-known local path -- exactly what a real push leaves behind,
+# so `pull file://...` below exercises the real fetch path against it.
+mkdir -p /tmp/fakebin /tmp/gh-remotes
+cat > /tmp/fakebin/gh <<'FAKEGH'
+#!/bin/sh
+set -eu
+[ "$1" = repo ] && [ "$2" = create ] || { echo "fake gh: unsupported: $*" >&2; exit 1; }
+ownername=$3; shift 3
+src=""
+for a in "$@"; do case "$a" in --source=*) src="${a#--source=}";; esac; done
+[ -n "$src" ] || { echo "fake gh: no --source" >&2; exit 1; }
+dest="/tmp/gh-remotes/$ownername.git"
+mkdir -p "$(dirname "$dest")"
+git clone -q --bare "$src" "$dest"
+FAKEGH
+chmod +x /tmp/fakebin/gh
+PATH="/tmp/fakebin:$PATH" rigfile publish /rig --to-github e2e > $out 2>&1 || { cat $out >&2; fail "publish failed"; }
 has "scan proof: 0 finding(s)" $out
-[ -f /tmp/published/README.md ] && [ -f /tmp/published/rigfile.yaml ] || fail "published repo is incomplete"
-( cd /tmp/published && git init -q -b main && git add -A && git commit -q --no-verify -m "publish" ) || fail "cannot commit the published repo"
-rigfile pull file:///tmp/published --plan-only --no-git > $out 2>&1 || { cat $out >&2; fail "pull --plan-only failed"; }
-has "Source: file:///tmp/published" $out; has "you did not write" $out
+has "pushed to https://github.com/e2e/rig" $out
+[ -d /tmp/gh-remotes/e2e/rig.git ] || fail "fake gh was not invoked as expected"
+rigfile pull file:///tmp/gh-remotes/e2e/rig.git --plan-only --no-git > $out 2>&1 || { cat $out >&2; fail "pull --plan-only failed"; }
+has "Source: file:///tmp/gh-remotes/e2e/rig " $out; has "you did not write" $out
 [ ! -e "$HOME/.agents/skills/pdf" ] || fail "plan-only pull wrote to the machine"
-rigfile pull file:///tmp/published --yes --overwrite --no-git > $out 2>&1 || { cat $out >&2; fail "pull failed"; }
+rigfile pull file:///tmp/gh-remotes/e2e/rig.git --yes --overwrite --no-git > $out 2>&1 || { cat $out >&2; fail "pull failed"; }
 has "applied" $out
 rigfile update --plan-only --no-git > $out 2>&1;                                has "is up to date" $out
 rigfile rollback --force > $out;                                                has "rolled back" $out
