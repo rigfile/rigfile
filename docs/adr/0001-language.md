@@ -1,6 +1,6 @@
 # ADR 0001: Implementation language for the Rigfile CLI
 
-- **Status:** **Accepted 2026-09-25** by the owner (RIGFILE_PLAN.md §17 Q3). The Stage 1 spike (§7, `docs/spike-report.md`) passed and the owner confirmed **go** on 2026-09-25; the Python fallback is no longer in play unless a later ADR reopens it.
+- **Status:** **Accepted 2026-09-25** by the owner (RIGFILE_PLAN.md §17 Q3). The Stage 1 spike (§7 below; full report was in the now-removed `docs/spike-report.md`, summarised in `docs/STATUS.md` "Stage 1 spike") passed and the owner confirmed **go** on 2026-09-25; the Python fallback is no longer in play unless a later ADR reopens it.
 - **Date:** 2026-09-25
 - **Deciders:** the owner. Drafted by Claude Code.
 - **Options:** Go, Python, TypeScript
@@ -117,7 +117,7 @@ Adopt **Go** for the `rigfile` CLI, hooks, scanner and platform layer.
 - If, after the Stage-1 spike, the owner finds reviewing the Go code impractical, switch to **Python with a PyInstaller `--onedir` bundle** and move the hot-path hooks to a tiny separate native helper, accepting a two-language build. (Not `--onefile`, per the measurement.)
 - If a maintained, comment-preserving Go TOML editor appears, D5 stops being a Go weakness (it is only a mitigation today).
 
-### Stage-1 spike (2–3 days, before committing) — EXECUTED 2026-09-25, results in `docs/spike-report.md`; go/no-go pending the owner's review
+### Stage-1 spike (2–3 days, before committing) — EXECUTED 2026-09-25, full report was in the now-removed `docs/spike-report.md` (summary: `docs/STATUS.md` "Stage 1 spike"); go/no-go pending the owner's review
 Implement one vertical slice in Go: `plan` for a Claude Code `settings.json` permissions merge; keychain set/get on macOS + Linux (desktop keyring and headless age fallback); a `rigfile hook pre-tool-use` shim, with latency measured on macOS, Ubuntu and Windows; a marker-splice edit of a TOML file with comments. The owner reviews the diff. **Go/no-go on the ADR happens at the end of the spike.** *Outcome:* all four slices built and tested (hook ≈ 5 ms; binaries 4.7–5.8 MB on four targets; 12 linked modules); recommendation stays Go; owner review outstanding.
 
 ## 8. Open items

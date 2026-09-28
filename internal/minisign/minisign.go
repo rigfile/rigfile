@@ -1,7 +1,7 @@
 // Package minisign verifies (and, for tests and the release tooling, creates) minisign signatures: Ed25519 over the
 // file's BLAKE2b-512 hash ("ED", what minisign 0.6+ writes) or over the raw file ("Ed", legacy), plus the signed
 // trusted comment. Format as in https://jedisct1.github.io/minisign/ . UNVERIFIED against the real minisign binary
-// until the owner runs `rigfile verify-signature` on a file signed by it (docs/stage-4-owner-checks.md).
+// until the owner runs `rigfile verify-signature` on a file signed by it (docs/owner-checklist.md).
 package minisign
 
 import (

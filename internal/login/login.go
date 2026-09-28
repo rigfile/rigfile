@@ -34,7 +34,7 @@ type Provider struct {
 	OAuth *OAuth
 }
 
-// Providers is the built-in table. UNVERIFIED items are listed in docs/stage-3-owner-checks.md style live checks.
+// Providers is the built-in table. UNVERIFIED items are listed in docs/owner-checklist.md.
 var Providers = map[string]Provider{
 	"claude-code": {Default: VendorCLI, Manual: "run `claude`, then type /login (or configure an API key or gateway)"},
 	"codex":       {Default: VendorCLI, Login: []string{"codex", "login"}}, // documented: docs/targets/codex.md §10

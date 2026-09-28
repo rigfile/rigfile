@@ -14,7 +14,7 @@ var legalFS embed.FS
 
 var legalTitles = map[string]string{"terms": "Terms of Service", "acceptable-use": "Acceptable Use Policy", "takedown": "Takedown and abuse policy", "privacy": "Privacy notice"}
 
-// pageLegal serves the policy documents. They are DRAFTS that need a lawyer's review before launch (docs/stage-5-owner-checks.md),
+// pageLegal serves the policy documents. They are DRAFTS that need a lawyer's review before launch (docs/owner-checklist.md),
 // and every page says so.
 func (s *Server) pageLegal(w http.ResponseWriter, r *http.Request) {
 	doc := r.PathValue("doc")

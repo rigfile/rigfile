@@ -2,7 +2,7 @@
 // list (signed with minisign when a key is given), and every package-manager manifest rendered from those checksums:
 // Homebrew, Scoop, winget, a .deb, npm and pip wrappers. It is code rather than CI YAML so it can be run and tested
 // on a laptop. Publishing (uploading, pushing to a tap, submitting to winget) is deliberately not here: that needs
-// the owner's accounts (docs/stage-4-owner-checks.md).
+// the owner's accounts (docs/owner-checklist.md).
 //
 //	go run ./tools/release -version 1.0.0 -out dist -pubkey <minisign public key> [-sign-key key.sec]
 package main

@@ -586,7 +586,7 @@ type selection struct {
 	reason string
 }
 
-// selectTargets decides which targets a run configures (docs/stage-3-plan.md design call 2): Claude Code always;
+// selectTargets decides which targets a run configures (a Stage 3 design call): Claude Code always;
 // any other target when it is detected on this machine, named by the rig's targets.include or forced with
 // --target; never one the rig excludes or one that does not exist on this OS. targets.include is a whitelist.
 func selectTargets(m *manifest.Manifest, o Options, ctxFor func(string) targets.Ctx) ([]selection, []string, error) {

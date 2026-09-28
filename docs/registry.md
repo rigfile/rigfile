@@ -120,6 +120,16 @@ Web pages (server-rendered, no inline script): `/`, `/search`, `/u/{login}`, `/r
 
 Configuration is environment variables (`RIGFILE_REGISTRY_*`): listen address, public URL, database URL, blob backend (`fs:/path` or `s3://bucket` with endpoint and keys), GitHub OAuth client id and secret, session key, admin logins, rate-limit settings. Secrets are read from the environment or files, never from flags. Migrations run at start (`rigfile-registry migrate`). `docker compose up` runs the service, Postgres and (optionally) MinIO for local trials.
 
+**Deployed and torn down once (2026-09-27/28), for real**, at `rigfile.bytebuilderslab.app`: Fly.io (`fly launch --dockerfile Dockerfile.registry`, then `fly deploy`; secrets via `fly secrets set`, never in the image), Neon for Postgres (point-in-time restore; its branching feature is the safe way to rehearse a restore without touching the primary branch), Cloudflare R2 for the blob bucket (`RIGFILE_REGISTRY_BLOB=s3`, endpoint `https://<account-id>.r2.cloudflarestorage.com`). DNS: a CNAME at the registrar to the Fly `.fly.dev` hostname (Fly's own guidance for a subdomain, not an A/AAAA record). Real gotchas hit along the way:
+
+- A registrar's "create subdomain" wizard can be a different feature from its plain DNS-records editor and silently provision conflicting, individually-undeletable records (a webhosting A/AAAA and mail MX/SPF/DKIM) — delete the subdomain itself, or detach the product, rather than fighting individual records.
+- `fly certs add` needs an allocated IP first: `fly ips allocate-v4 --shared` (free) and `fly ips allocate-v6`, not the paid dedicated `fly ips allocate`.
+- Never run the real CLI or a real `rigfile apply` against a developer's own `$HOME` while testing a deployment; use a temp `$HOME` and `RIGFILE_SECRETS_BACKEND=file` even for host-side scripts, or a real OS Keychain prompt can appear.
+- Fly's free trial can end and then block every `flyctl` command, including `fly apps destroy`, until a card is added — deleting an app past that point needs the Fly dashboard (Settings → Delete app) instead of the CLI.
+- The `owner == u.Login` publish-authorization check (§6) is only exercised by a non-admin path; the configured admin bypasses it, so publishing as the admin account alone never proves the normal case works.
+
+No instance is running right now; the code and this section are what a redeploy would start from.
+
 ## 9. As built: differences from the sketch above
 
 - **Reports** need a signed-in user (GitHub identity), are rate limited per user and address, and cannot be used to probe private rigs (`TestReportFlowAndTakedown`). Admins act through the operator tools, not through web pages: `rigfile-registry admin reports|resolve-report|takedown|disable-user|audit`.

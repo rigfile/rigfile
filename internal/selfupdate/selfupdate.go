@@ -32,11 +32,11 @@ import (
 const Repo = "rigfile/rigfile"
 
 // PublicKey is the minisign public key releases are signed with. It is empty until the owner generates the release
-// key (docs/stage-4-owner-checks.md); a build without it refuses to self-update instead of trusting anything.
+// key (docs/owner-checklist.md); a build without it refuses to self-update instead of trusting anything.
 var PublicKey = ""
 
 // ErrNoKey means this build carries no release signing key.
-var ErrNoKey = errors.New("this build has no release signing key, so it cannot verify an update; releases are not signed yet (see docs/stage-4-owner-checks.md)")
+var ErrNoKey = errors.New("this build has no release signing key, so it cannot verify an update; releases are not signed yet (see docs/owner-checklist.md)")
 
 // Options describes one update attempt. The zero values of the URL fields mean the real GitHub endpoints.
 type Options struct {

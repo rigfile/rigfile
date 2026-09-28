@@ -1,6 +1,6 @@
 # Incident response runbook (S6-M6)
 
-Status: **draft written by the developer, never rehearsed.** It is only as good as the first table-top exercise; schedule one (`docs/stage-6-owner-checks.md` §4). Placeholders in [brackets] are yours to fill.
+Status: **draft written by the developer, never rehearsed.** It is only as good as the first table-top exercise; schedule one (`docs/owner-checklist.md`). Placeholders in [brackets] are yours to fill.
 
 ## 0. Principles
 
@@ -68,7 +68,7 @@ Signs: a new version nobody expected, a changed signer on `rigfile update` (user
 
 ### 3.5 A release-signing key leaked or was misused
 
-*The minisign key that signs Rigfile releases* (`docs/stage-4-owner-checks.md` §3):
+*The minisign key that signs Rigfile releases* (`docs/owner-checklist.md`):
 
 1. Stop the release workflow (disable it in GitHub; remove the secrets).
 2. Generate a new key. Every installed binary trusts the **old** public key (it is compiled in), so a new key can only reach users through a release those users install by another route (package manager, a new `install.sh` fetched over HTTPS from the repository, not through `self-update`, which will verify against the old key).

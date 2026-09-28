@@ -124,7 +124,7 @@ func PublisherIdentity(issuer, subject, publisherLogin string) bool {
 
 // TrustedRoot returns the Sigstore trusted root. With path set, that JSON file is used (offline and for pinning);
 // otherwise the public-good root is fetched through Sigstore's TUF root of trust and cached under cacheDir. The fetch needs
-// the network (docs/stage-6-owner-checks.md: not exercised by the automated tests).
+// the network (docs/owner-checklist.md: not exercised by the automated tests).
 func TrustedRoot(path, cacheDir string) (root.TrustedMaterial, error) {
 	if path != "" {
 		tr, err := root.NewTrustedRootFromPath(path)

@@ -143,7 +143,7 @@ type Advisory struct {
 }
 
 // Malicious reports whether the advisory says the package itself is malicious: OpenSSF's malicious-packages data appears in
-// OSV with ids starting "MAL-" (UNVERIFIED against the live API; see docs/stage-6-owner-checks.md).
+// OSV with ids starting "MAL-" (UNVERIFIED against the live API; see docs/owner-checklist.md).
 func (a Advisory) Malicious() bool { return strings.HasPrefix(a.ID, "MAL-") }
 
 // Client queries OSV.

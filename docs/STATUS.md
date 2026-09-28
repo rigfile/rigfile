@@ -1,7 +1,7 @@
 # Rigfile status
 
-**Current stage: Stage 8 (growth features, first slice): S8-M0 to S8-M7 BUILT on branch `stage-8` (not pushed); the owner gate is `docs/stage-8-owner-checks.md`. Stages 1-7 are merged to `main`. Open for the owner: push stage-8 and read CI, a database backup before the two new migrations, the Stage 5-8 external security review, the runbook rehearsal, the Stage 7 live checks, and the decisions in the Stage 8 owner checks. Windsurf, Zed and VS Code Copilot are researched but not built (conflicting or unverified vendor paths); private memory sync, a hosted rig and ARM/distro verification are deliberately not started.**
-Last updated: 2026-09-26 (Stage 8 first slice built)
+**Current state (2026-09-28): all build stages (1-8, plus 3b local models) are merged to `main`. Git-based sharing is now the primary, documented way to share a rig; the registry is a real, tested, optional feature that is currently not deployed (torn down 2026-09-28; see `docs/registry.md` §8 to redeploy it). The GitHub repository is still private, by owner choice. Everything genuinely still open — for the owner, not for further building — is in `docs/owner-checklist.md`, which replaced the old per-stage owner-check documents.**
+Last updated: 2026-09-28
 
 ## Stage 0 result (signed off)
 
@@ -17,7 +17,7 @@ Sign-off terms: the owner accepted the schema and the seven merge-semantics deci
 | 2026-09-25 | **Secret backend for Stage 1: OS keychain only** (macOS Keychain, Linux Secret Service, encrypted-file fallback for headless Linux). 1Password/Bitwarden later | plan §17 Q4 |
 | 2026-09-25 | **OS order: macOS + Linux in Stage 1, Windows in Stage 3** (platform layer built for all three from day one; Windows stubbed) | plan §17 Q8 |
 | 2026-09-25 | Merge-semantics decisions 1–7 accepted as written | `docs/merge-semantics.md` App. C |
-| 2026-09-25 | **Go confirmed** after the spike (go/no-go: go) | `docs/spike-report.md`, ADR 0001 |
+| 2026-09-25 | **Go confirmed** after the spike (go/no-go: go) | ADR 0001 |
 | 2026-09-25 | **User-scope MCP written via `claude mcp add-json --scope user`**, not by editing `~/.claude.json` | ADR 0002 |
 | 2026-09-25 | Owner allows a **read-only `rigfile init` capture of their real `~/.claude`** into a scratch dir to build the first sanitized fixture; nothing enters the repo before the owner reviews it | owner, 2026-09-25 |
 
@@ -30,12 +30,12 @@ Sign-off terms: the owner accepted the schema and the seven merge-semantics deci
 
 ## Stage 1 spike — result (branch `stage-1-spike`, not merged)
 
-Built and tested 2026-09-25: manifest validation, marker-splice editing, JSON layout-preserving edits, platform layer, Claude Code permissions adapter with backup-first writes, secrets (keychain + age fallback), exec shim, PreToolUse guard, CLI. 179 tests, race-clean, no skips on macOS. Hook ≈ 5 ms/call; release binaries 4.7–5.8 MB on darwin/arm64, linux/amd64, linux/arm64, windows/amd64. Details, findings and the not-verified list: `docs/spike-report.md`.
+Built and tested 2026-09-25: manifest validation, marker-splice editing, JSON layout-preserving edits, platform layer, Claude Code permissions adapter with backup-first writes, secrets (keychain + age fallback), exec shim, PreToolUse guard, CLI. 179 tests, race-clean, no skips on macOS. Hook ≈ 5 ms/call; release binaries 4.7–5.8 MB on darwin/arm64, linux/amd64, linux/arm64, windows/amd64 (the full spike report was in the now-removed `docs/spike-report.md`; ADR 0001 has the go/no-go decision).
 **Owner confirmed go.** Still open from the spike: real-Keychain and real-Linux checks, Linux/Windows latency, file-store lock.
 
 ## Stage 1 — build result (branch `stage-1`)
 
-Milestones M1–M9 in `docs/stage-1-plan.md` are all done: manifest/merge/layers, lock/state/rollback, Claude Code adapter (all seven categories), CLI (`init validate plan apply diff rollback lock doctor secrets exec hook`), tools installer, secrets completion, CI workflow, container E2E (Ubuntu + Fedora pass), and the owner's rig fixture (`testdata/fixtures/sample-rig/`). `go test -race ./...` is green on macOS; Windows cross-builds and vets.
+Milestones M1-M9 (plan §12) are all done: manifest/merge/layers, lock/state/rollback, Claude Code adapter (all seven categories), CLI (`init validate plan apply diff rollback lock doctor secrets exec hook`), tools installer, secrets completion, CI workflow, container E2E (Ubuntu + Fedora pass), and the owner's rig fixture (`testdata/fixtures/sample-rig/`). `go test -race ./...` is green on macOS; Windows cross-builds and vets.
 
 **Needs the owner before sign-off (I could not do these):**
 1. ~~Push `stage-1` and confirm the first CI run is green~~ **Done 2026-09-25:** pushed; CI run 36199282279 on `d616a15` passed all five jobs (test ubuntu, test macos, windows cross-build, e2e ubuntu+fedora containers, gitleaks). The macOS runner uses the encrypted-file secret backend, not the real Keychain (item 2).
@@ -58,6 +58,10 @@ Goal (plan §12): recreate the owner's setup on a fresh machine from a local fol
 2. Then the Stage 1 build per plan §12 (platform layer, `init/plan/apply/diff/rollback/doctor/secrets/exec`, Claude Code adapter, backups, state, lockfile, tools installer, CI matrix, E2E in clean VMs).
 
 Working rules for Stage 1 are in `CLAUDE.md` (small PRs, threat note for security-sensitive code, no real secrets, tests use a temp `$HOME`).
+
+## Pre-publish history audit (`main`, 2026-09-28)
+
+Before considering the repository public: `gitleaks git --log-opts="--all"` over every branch, 158 commits, no secrets found. All commit authors use the GitHub no-reply address (no real email exposed). Two remaining privacy items, owner-approved: test data used the owner's first name and machine user (`/Users/jia`, host `jias-mbp`) and two made-up gmail addresses that could belong to real strangers — replaced throughout with a made-up user, `ada`, and addresses on the owner's own domain (old commits keep the old values; history was not rewritten). `testdata/fixtures/jia-rig`, a sanitised capture of the owner's real Claude Code setup, was replaced with a synthetic equivalent, `testdata/fixtures/sample-rig` (same test coverage: a skill with a script, a command, an unpinned MCP server, `secret://` refs), and `TestJiaRigFixture` became `TestSampleRigFixture`. Also deleted: the pre-Stage-0 Python scaffold and a stray empty `main` file (see below).
 
 ## Notes
 
@@ -95,9 +99,9 @@ Deviations from the Stage 2 plan worth knowing: `doctor --fix` re-applies your r
 
 ## Stage 3: what the owner must do (S3-M10)
 
-Built (plan: `docs/stage-3-plan.md`): target registry with per-target merge/projection/plan/state/lock; Codex, Gemini CLI, Cursor and Claude Desktop adapters on a shared toolkit; per-target base-secure mapping with honest "enforced / partly / instructions only" wording on every plan screen; `rigfile init --from <target>` capture with round-trip tests; Windows platform (user-only ACLs, `LockFileEx`, `.cmd` shim launching, PowerShell rules, Git-for-Windows hook paths, reserved-name check, CRLF/LF handling); WSL detection with cross-boundary denies; CI matrix with `windows-latest`; multi-target container E2E (Ubuntu and Fedora both pass locally).
+Built: target registry with per-target merge/projection/plan/state/lock; Codex, Gemini CLI, Cursor and Claude Desktop adapters on a shared toolkit; per-target base-secure mapping with honest "enforced / partly / instructions only" wording on every plan screen; `rigfile init --from <target>` capture with round-trip tests; Windows platform (user-only ACLs, `LockFileEx`, `.cmd` shim launching, PowerShell rules, Git-for-Windows hook paths, reserved-name check, CRLF/LF handling); WSL detection with cross-boundary denies; CI matrix with `windows-latest`; multi-target container E2E (Ubuntu and Fedora both pass locally).
 
-**Not verified by anyone yet:** every line of Windows code has been compiled, vetted and unit-tested through injected environments, but not run on Windows; no adapter has been loaded by the real vendor tool. Both are the checklist in `docs/stage-3-owner-checks.md`:
+**Not verified by anyone yet:** every line of Windows code has been compiled, vetted and unit-tested through injected environments, but not run on Windows; no adapter has been loaded by the real vendor tool. Both are now in `docs/owner-checklist.md` §3 "Real-machine verification":
 
 1. Push (`git push -u origin stage-2 stage-3`), read the CI jobs, send me the `windows-latest` log if red.
 2. Windows 11 clean-VM procedure (section 2 there).
@@ -109,30 +113,30 @@ Deviations worth knowing: Windows CI runs without `-race` and without the scanne
 
 ## Stage 3 result (merged to `main`, 2026-09-26)
 
-Merge commit `10d820f`. CI: `stage-2` and `stage-3` green on all jobs. The first native Windows run found only test-side path assumptions plus one real bug (capture did not replace a forward-slash Windows home path in hook commands); all fixed. Evidence that Windows code runs natively: `internal/platform` (ACL `WritePrivate`/`IsPrivateFile`), `internal/execshim` (`.cmd` shim, argument-injection test) and `internal/secrets` (`LockFileEx`) tests pass on `windows-latest`. Still not run by anyone: real Credential Manager, real vendor tools loading the adapters' output, WSL, a clean Windows 11 VM (`docs/stage-3-owner-checks.md`).
+Merge commit `10d820f`. CI: `stage-2` and `stage-3` green on all jobs. The first native Windows run found only test-side path assumptions plus one real bug (capture did not replace a forward-slash Windows home path in hook commands); all fixed. Evidence that Windows code runs natively: `internal/platform` (ACL `WritePrivate`/`IsPrivateFile`), `internal/execshim` (`.cmd` shim, argument-injection test) and `internal/secrets` (`LockFileEx`) tests pass on `windows-latest`. Still not run by anyone: real Credential Manager, real vendor tools loading the adapters' output, WSL, a clean Windows 11 VM (`docs/owner-checklist.md` §3).
 
 Recorded in this session: the generated `docs/red-team.md` no longer prints per-OS rule counts (it made CI on Linux see the file as stale); the `redteam` doc and tests must stay OS-neutral. Local pushes by Claude are blocked by a user-level deny on `git push`, so pushes and merges to shared branches are the owner's.
 
 ## Stage 4: built, awaiting owner steps
 
-Plan of record: `docs/stage-4-plan.md`; spec and threat model: `docs/sharing.md`. New commands: `pull`, `update`, `publish`, `logins`, `self-update`, `verify-signature`. New packages: `internal/{source,publish,tui,login,minisign,selfupdate}`, `tools/release`, `scripts/install.{sh,ps1}`, `.github/workflows/release.yml`, `e2e/install*.sh`.
+Spec and threat model: `docs/sharing.md`. New commands: `pull`, `update`, `publish`, `logins`, `self-update`, `verify-signature`. New packages: `internal/{source,publish,tui,login,minisign,selfupdate}`, `tools/release`, `scripts/install.{sh,ps1}`, `.github/workflows/release.yml`, `e2e/install*.sh`.
 
 What is proven: unit and CLI tests for every step; container E2E (Ubuntu and Fedora) of publish, pull, update and rollback; an installer E2E in which the real `minisign` signs a release and `install.sh` and `rigfile verify-signature` both accept it and refuse tampering, a wrong key, a replayed signature and a missing signature; reproducible release builds; wheel installed offline with pip and run; `node --check` on the npm scripts.
 
-What is not: nothing here has run on real GitHub or GitLab, on Windows (PowerShell installer, native tests: first CI run), or with real people. No OAuth provider is registered. macOS notarization, Windows signing, rpm and an apt repository are not done. All of it, plus the LICENSE and package-name decisions and the signing key, is in `docs/stage-4-owner-checks.md`.
+What is not: nothing here has run on real GitHub or GitLab, on Windows (PowerShell installer, native tests: first CI run), or with real people. No OAuth provider is registered. macOS notarization, Windows signing, rpm and an apt repository are not done. All of it, plus the signing key, is in `docs/owner-checklist.md` §3.
 
 Say "go" for Stage 5 (registry website) only after the Stage 4 exit criteria (5+ external users) are met or you decide to defer them.
 
 
 ## Stage 5: built, awaiting owner steps
 
-Plan of record: `docs/stage-5-plan.md`; spec and threat model: `docs/registry.md`; my security self-review: `docs/registry-security.md`. New: `internal/registry` (+ `blob`, `dbtest`), `internal/regclient`, `cmd/rigfile-registry`, `Dockerfile.registry`, `deploy/docker-compose.yml`, `e2e/registry.sh`, CLI commands `login`, `logout`, `whoami`, `publish --to-registry`, `pull owner/name`, registry-backed `from:` layers.
+Spec and threat model: `docs/registry.md`; my security self-review: `docs/registry-security.md`. New: `internal/registry` (+ `blob`, `dbtest`), `internal/regclient`, `cmd/rigfile-registry`, `Dockerfile.registry`, `deploy/docker-compose.yml`, `e2e/registry.sh`, CLI commands `login`, `logout`, `whoami`, `publish --to-registry`, `pull owner/name`, registry-backed `from:` layers.
 
 Design call worth knowing: one Go service (same scanner and validation code as the CLI) rather than Next.js + a separate API; pages are server-rendered with no script at all (CSP `default-src 'none'`).
 
 Proven: store, API, auth flows, scan worker, pages (including hostile-content tests) and the CLI end to end against a real Postgres (`scripts/registry-test.sh`; CI job `registry (postgres)`); container E2E with the real image and two simulated machines; `govulncheck` clean.
 
-~~Not proven: real GitHub sign-in, a real S3/R2 bucket, a real deployment~~ — **done 2026-09-27**, see "Registry: live deployment" below. Still not proven: Windows/macOS runs of the new tests (they skip without a database), legal review, external security review, real users other than the owner. See `docs/stage-5-owner-checks.md`.
+~~Not proven: real GitHub sign-in, a real S3/R2 bucket, a real deployment~~ — **done 2026-09-27**, see "Registry: live deployment" below. Still not proven: Windows/macOS runs of the new tests (they skip without a database), legal review, external security review, real users other than the owner. See `docs/owner-checklist.md`.
 
 Incident during the build: my first host-side E2E script ran the real CLI and triggered a macOS Keychain dialog on the owner's Mac (nothing was stored). Fixed with `RIGFILE_SECRETS_BACKEND=file`, which every host script must set.
 
@@ -156,28 +160,28 @@ Deployed to production: **`https://rigfile.bytebuilderslab.app`** (Fly.io app `r
 
 Owner then ran the exit criterion end to end for real: `rigfile login`, `rigfile publish <dir> --to-registry` (private by default), the registry page. One real finding along the way: **the pin-check applies to every registry publish, private or public** — `publish.Prepared.Blocked()` runs before the `--public` branch in `cmd_publish.go`, so an unpinned `uvx`/`npx`/`pipx` package blocks even a private upload (rationale: a private rig can be flipped public later without a new upload, so the bar is enforced once, at upload time). Not a bug; documented here since the CLI's own message ("a public rig must pin what it runs") reads as public-only. Fixed by pinning the owner's own `alpaca-mcp-server` entry to the real current PyPI release. Publish → scan → registry page all confirmed working live.
 
-~~Not yet run: a restore drill from the Neon backup, and a second real GitHub account pulling a published rig from a different machine~~ — **both done 2026-09-27** (`docs/stage-5-owner-checks.md` §3 "Second account, live" and "Restore drill"). The first second-account pass used the operator tool (`admin create-user`/`admin token`) rather than a second real GitHub login, but it created a genuine non-admin account — the owner's own rig had only ever gone through the admin bypass in `internal/registry/api.go` (`owner != u.Login && !u.IsAdmin`), since they are the sole admin. From a third, fully anonymous machine: the public test rig pulled successfully; the owner's private rig was correctly refused. The owner then repeated it for real with an actual second GitHub account (`rigfile-bot`): signed in separately, a throwaway public rig published under the owner's real login was visible with its content; `local/my-rig` (private) correctly showed no published version. Both confirmed. The Neon restore drill (point-in-time branch, queried directly, real rows came back, branch deleted) proves the mechanism; a written incident procedure (which timestamp, how to cut over `RIGFILE_REGISTRY_DATABASE_URL`, who decides) still doesn't exist.
+~~Not yet run: a restore drill from the Neon backup, and a second real GitHub account pulling a published rig from a different machine~~ — **both done 2026-09-27.** The first second-account pass used the operator tool (`admin create-user`/`admin token`) rather than a second real GitHub login, but it created a genuine non-admin account — the owner's own rig had only ever gone through the admin bypass in `internal/registry/api.go` (`owner != u.Login && !u.IsAdmin`), since they are the sole admin. From a third, fully anonymous machine: the public test rig pulled successfully; the owner's private rig was correctly refused. The owner then repeated it for real with an actual second GitHub account (`rigfile-bot`): signed in separately, a throwaway public rig published under the owner's real login was visible with its content; `local/my-rig` (private) correctly showed no published version. Both confirmed. The Neon restore drill (point-in-time branch, queried directly, real rows came back, branch deleted) proves the mechanism; a written incident procedure (which timestamp, how to cut over `RIGFILE_REGISTRY_DATABASE_URL`, who decides) still doesn't exist.
 
 
 ## Stage 6: built, awaiting owner steps
 
-Plan of record: `docs/stage-6-plan.md`; spec: `docs/trust.md` (§10 lists differences as built); runbook: `docs/incident-response.md`; policy: `SECURITY.md`; metrics: `docs/analysis-metrics.md`. New: `internal/{analyze,similar,sigverify,pkgcheck}`, registry migration `0002_trust.sql`, held-version queue and `/admin`, verified publishers, trust facts API and pull-screen section, Sigstore signature verification (registry and CLI), popular-rig policy, OSV lookups, publishing pause and token revocation.
+Spec: `docs/trust.md` (§10 lists differences as built); runbook: `docs/incident-response.md`; policy: `SECURITY.md`; metrics: `docs/analysis-metrics.md`. New: `internal/{analyze,similar,sigverify,pkgcheck}`, registry migration `0002_trust.sql`, held-version queue and `/admin`, verified publishers, trust facts API and pull-screen section, Sigstore signature verification (registry and CLI), popular-rig policy, OSV lookups, publishing pause and token revocation.
 
 Proven: unit and CLI tests for every part; registry tests against a real Postgres; a real public-good Sigstore bundle verified through the JSON path; analysis measured at 100% recall / 0 false positives **on a self-written corpus** (which says little about real attackers).
 
-Not proven: the live Sigstore root fetch, OSV's live API, real signatures made in GitHub Actions, the rules against real-world rigs, the runbook under pressure, external review. See `docs/stage-6-owner-checks.md`.
+Not proven: the live Sigstore root fetch, OSV's live API, real signatures made in GitHub Actions, the rules against real-world rigs, the runbook under pressure, external review. See `docs/owner-checklist.md`.
 
 ## Stage 7: built, awaiting owner steps
 
-Plan of record: `docs/stage-7-plan.md`; spec: `docs/rigd.md` (§7 records what was built); results: `docs/red-team-broker.md`; owner steps: `docs/stage-7-owner-checks.md`. New: `internal/rigd` (in-memory CA, host patterns, surrogates and sessions, intercepting CONNECT proxy, audit log, broker API and client, service files per OS), `rigfile broker run|status|enable|disable|exclude|include|install|uninstall|start|stop`, `rigfile exec` Level 2 (`--server`, `--allow`, `--bind`), adapters that write those flags from `network.allow` and `secrets.<ref>.hosts`, a per-server level in `rigfile doctor`.
+Spec: `docs/rigd.md` (§7 records what was built); results: `docs/red-team-broker.md`; owner steps: `docs/owner-checklist.md`. New: `internal/rigd` (in-memory CA, host patterns, surrogates and sessions, intercepting CONNECT proxy, audit log, broker API and client, service files per OS), `rigfile broker run|status|enable|disable|exclude|include|install|uninstall|start|stop`, `rigfile exec` Level 2 (`--server`, `--allow`, `--bind`), adapters that write those flags from `network.allow` and `secrets.<ref>.hosts`, a per-server level in `rigfile doctor`.
 
 Proven: the proxy and broker against local TLS servers; a real malicious child process against the real broker (29 attempts: everything blocked or reduced to a surrogate, one documented exception); `exec` with real child processes; a detached background broker end to end; service files as goldens and installs through a fake activator with rollback.
 
-Not proven: a real launchd/systemd/scheduled-task install, real MCP servers and vendor APIs, Node/Python/Go clients against the CA variables, and one real gap: **a compromised child runs as you and can read the broker token** (`docs/red-team-broker.md`, last row). See `docs/stage-7-owner-checks.md`.
+Not proven: a real launchd/systemd/scheduled-task install, real MCP servers and vendor APIs, Node/Python/Go clients against the CA variables, and one real gap: **a compromised child runs as you and can read the broker token** (`docs/red-team-broker.md`, last row; narrowed since by `rigfile exec --confine`, see `docs/owner-checklist.md` §4). See `docs/owner-checklist.md`.
 
 ## Stage 8: first slice built, awaiting owner steps
 
-Plan of record: `docs/stage-8-plan.md`; owner steps: `docs/stage-8-owner-checks.md`. Built: **version diffs** (`internal/rigdiff`, `rigfile changes`, the review banner in `rigfile update`, registry API and page; `docs/diffs.md`), **forks and use-as-base** (`rigfile fork`, derived rigs on the registry; `docs/forks.md`), **collections** (`docs/collections.md`), **organisations** with membership as the access control (`docs/orgs.md`, migrations 0003 and 0004, `rigfile org`, admin `disable-org`), and **`rigfile ui`**, a guarded local checklist page (`docs/local-ui.md`). Researched, not built at the time: Windsurf, Zed, VS Code Copilot targets (`docs/targets/`). VS Code Copilot and (as of the addenda below) Devin and Zed have since been built.
+Owner steps: `docs/owner-checklist.md`. Built: **version diffs** (`internal/rigdiff`, `rigfile changes`, the review banner in `rigfile update`, registry API and page; `docs/diffs.md`), **forks and use-as-base** (`rigfile fork`, derived rigs on the registry; `docs/forks.md`), **collections** (`docs/collections.md`), **organisations** with membership as the access control (`docs/orgs.md`, migrations 0003 and 0004, `rigfile org`, admin `disable-org`), and **`rigfile ui`**, a guarded local checklist page (`docs/local-ui.md`). Researched, not built at the time: Windsurf, Zed, VS Code Copilot targets (`docs/targets/`). VS Code Copilot and (as of the addenda below) Devin and Zed have since been built.
 
 **Devin adapter (`main`, 2026-09-27, owner decision):** built. The product is Devin now, not Windsurf — the owner confirmed on their own machine (added a server through the app's UI, `~/.config/devin/mcp_config.json` with a top-level `mcpServers` key). `internal/adapters/devin`: stdio MCP servers only, user scope, `rigfile exec` wrapping; remote servers skipped (the vendor docs disagree on the field name), instructions/rules not covered by any documentation found. Target `devin`, capability file, goldens for all three OSes, round-trip capture test (`docs/targets/devin.md`).
 
@@ -196,7 +200,7 @@ Not proven: real browsers, a real registry deployment, real teams, the editors' 
 **Private sync (branch `stage-8c`, from `stage-8b`):** built (`docs/private-sync.md` §7): `internal/vault` and `rigfile sync`, end-to-end encrypted, signed roster chain, rollback protection, directory or git transport, red-teamed against a hostile storage. Also: a `private:` path that the rig ships is now a manifest error.
 ## Stage 3b: local models, built, awaiting owner steps
 
-Plan of record: `docs/stage-3b-plan.md`; spec as built: `docs/models.md`; owner steps: `docs/stage-3b-owner-checks.md`. Branch `stage-3b` (created from `stage-8`, so it contains Stage 8's commits: merge `stage-8` first; not pushed). Built: hardware detection, the model catalog (Ollama engine version and digest verified 2026-09-26), variant selection and safety validation, the MODELS plan section, pinned hash-verified Hugging Face downloads, Ollama pulls with digest check, a generic per-user service generator (`internal/svc`, also used by `rigd`), `rigfile models list|pull|status|serve|url|run|rm`, `apply --models now|later|skip`, `doctor` checks (server, loopback only, chat, tool-call smoke test), and capture of a running Ollama by `rigfile init`.
+Spec as built: `docs/models.md`; owner steps: `docs/owner-checklist.md`. Branch `stage-3b` (created from `stage-8`, so it contains Stage 8's commits: merge `stage-8` first; not pushed). Built: hardware detection, the model catalog (Ollama engine version and digest verified 2026-09-26), variant selection and safety validation, the MODELS plan section, pinned hash-verified Hugging Face downloads, Ollama pulls with digest check, a generic per-user service generator (`internal/svc`, also used by `rigd`), `rigfile models list|pull|status|serve|url|run|rm`, `apply --models now|later|skip`, `doctor` checks (server, loopback only, chat, tool-call smoke test), and capture of a running Ollama by `rigfile init`.
 
 **Deviation from the plan:** the exit criterion (Codex and Claude Code using the mlx-lm reference setup) is not reachable without a bridge nobody verified, so it is re-scoped: the reference setup is reproduced and served, and Codex and Claude Code (experimental) are wired only through Ollama. No gateway, no routing translation, no global agent configuration is written.
 
@@ -210,6 +214,6 @@ Stage 1's own exit criterion ("on a clean macOS VM... verified by doctor and a m
 
 Also broadened the container e2e: `internal/adapters/devin` and `internal/adapters/zed` (both built today) are now exercised in `e2e/scenario.sh`'s multi-target section; an Arch Linux (pacman) container was added (`e2e/Dockerfile.arch`), CI-only (`e2e/run.sh`'s own default stays `ubuntu fedora`) since archlinux has no arm64 image and running amd64-under-QEMU on this dev machine crashed non-deterministically (a QEMU bug, not Rigfile's — see `e2e/README.md`).
 
-**Local models, hardware detection (`main`, 2026-09-27):** `rigfile models list` on a real 4 GB Tart VM correctly read the real memory via `sysctl hw.memsize`, correctly excluded both mlx catalog variants (16 GB / 32 GB needed), and correctly fell back to the Ollama `qwen3:8b` entry — the documented cross-hardware behaviour, run for real for the first time (`docs/stage-3b-owner-checks.md` §3 item 1). The actual weight download and a loaded model answering a prompt are still not run: this dev host has only 16 GB of RAM total, so a VM meeting the mlx variant's own 16 GB+ requirement is not safe to allocate here.
+**Local models, hardware detection (`main`, 2026-09-27):** `rigfile models list` on a real 4 GB Tart VM correctly read the real memory via `sysctl hw.memsize`, correctly excluded both mlx catalog variants (16 GB / 32 GB needed), and correctly fell back to the Ollama `qwen3:8b` entry — the documented cross-hardware behaviour, run for real for the first time. The actual weight download and a loaded model answering a prompt are still not run: this dev host has only 16 GB of RAM total, so a VM meeting the mlx variant's own 16 GB+ requirement is not safe to allocate here.
 
 Still not run for real: Windows (needs a VM the owner has to provide — UTM/Parallels + a Windows ARM64 image, blocked on a licensing/account decision), WSL, a real launchd/systemd/Windows-task service install (Stage 7), and the local-models weight download/inference above (needs more host RAM, or the owner's own machine).

@@ -1,6 +1,6 @@
 # ADR 0003: Secret scanner: own matcher over embedded gitleaks rule data
 
-**Status:** Accepted 2026-09-25 (owner chose option 1, decision O1 in `docs/stage-2-plan.md`).
+**Status:** Accepted 2026-09-25 (owner chose option 1, plan decision O1).
 
 ## Context
 base-secure needs a fast, offline, self-contained scanner for: git pre-commit/pre-push (staged blobs), agent hooks (Bash commands and Write/Edit contents), `doctor --git` (history), and later `publish` (Stage 4+). It must never echo a matched value, run in well under 100 ms on a typical commit, and be reviewable by the owner (security-sensitive code).

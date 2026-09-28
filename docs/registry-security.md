@@ -1,6 +1,6 @@
 # Registry security self-review (S5-M6)
 
-**This is my review of my own work. It is not the external security review the Stage 5 exit criterion requires** (`docs/stage-5-owner-checks.md` §6). Its job is to hand a reviewer a map: what protects what, where the evidence is, and what is known to be weak. Date: 2026-09-26, branch `stage-5`.
+**This is my review of my own work. It is not the external security review the Stage 5 exit criterion requires** (`docs/owner-checklist.md`). Its job is to hand a reviewer a map: what protects what, where the evidence is, and what is known to be weak. Date: 2026-09-26, branch `stage-5`.
 
 Method: I walked `docs/registry.md` §7 row by row, wrote a test for every claim I could test, ran `go vet`, the race detector, `govulncheck ./...` (no reachable vulnerabilities; `golang.org/x/crypto` upgraded to v0.56.0 for the two fixable advisories in a module we require but do not call; GO-2026-5932 has no fix yet and is not called), and the container end-to-end run (`e2e/registry.sh`).
 
@@ -69,7 +69,7 @@ Known weak points:
 - The client address for limiting is the socket peer unless `RIGFILE_REGISTRY_TRUST_PROXY=1`, in which case the *last* `X-Forwarded-For` entry is used: correct only behind exactly one trusted proxy that appends the peer. Misconfigured, everyone shares one budget or a client can pick its own.
 - No email or paging on new reports or on scan failures: the operator must look (`rigfile-registry admin reports`).
 - No backup, restore or retention procedure is provided; the database and bucket hold the only copy.
-- Legal pages are drafts (`docs/stage-5-owner-checks.md` §4).
+- Legal pages are drafts (`docs/owner-checklist.md`).
 
 ## 5. What an external reviewer should attack first
 
