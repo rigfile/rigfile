@@ -79,10 +79,15 @@ func TestLandlockExecMainRejectsMalformedInvocation(t *testing.T) {
 // TestConfinementActuallyRestrictsNetwork is the Linux counterpart to the darwin test of the same name: on a
 // kernel that actually has ABI 4, prove the restriction (and the canary self-check in wrap/LandlockExecMain) is
 // for real, not just "the syscalls returned success". Skips everywhere this project's own machines run (no ABI 4
-// kernel has ever been available to it -- see TestABIVersionQuery); the one place this can run for real today is
-// CI's ubuntu-latest, whose kernel apparently now supports it (found live, 2026-09-28: TestExecConfineBlocksThe-
-// BrokerControlAPI in cmd/rigfile started taking the "launch confined" branch there for the first time).
+// kernel has ever been available to it -- see TestABIVersionQuery). It also skips while disableLandlockNetConfinement
+// is set (sandbox_linux.go): CI's ubuntu-latest does answer ABI >= 4, but Wrap now refuses unconditionally there
+// pending investigation of the per-port enforcement gap found live 2026-09-28 (docs/rigd.md §8) -- exercising this
+// test against that refusal isn't "no ABI 4 kernel", it's a different, already-known and already-asserted-elsewhere
+// condition, so it would just fail here with a misleading message instead of skipping cleanly.
 func TestConfinementActuallyRestrictsNetwork(t *testing.T) {
+	if disableLandlockNetConfinement {
+		t.Skip("Linux network confinement is disabled pending investigation (see disableLandlockNetConfinement in sandbox_linux.go); nothing to prove here until it's re-enabled")
+	}
 	abi, err := abiVersion()
 	if err != nil || abi < requiredABI {
 		t.Skip("no ABI 4 Landlock on this machine; see TestWrapFailsClosed* instead")
