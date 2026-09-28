@@ -25,7 +25,7 @@ open-sourcing the repo as it stands.
 | 4 | Make the repository public | **open — needs you**, a deliberate decision, not yet made |
 | 5 | Delete (or tag, then delete) the merged `stage-*`/`integration`/`fix-ci-integration` branches — all fully merged into `main` except `stage-2`, which has one commit `main` doesn't (a superseded doc/test tweak, safe to drop) | **open — needs you** |
 | 6 | Enable private vulnerability reporting on the repo (GitHub Settings → Security) once public | **open — needs you** |
-| 7 | First CI run since the repo went private — nothing has been pushed this whole build, so no workflow has run against the current code at all. Read the first real run once you push; expect at least one round of Windows-runner fixes, never having run natively there before | **open — needs you** |
+| 7 | First real CI run since the repo went private | **done** (2026-09-28): first pushes surfaced a gitleaks-license issue (org repos need a paid license for the Action wrapper — switched to running the real binary directly), a git-identity gap in the new publish-to-GitHub tests, a Windows path-separator mismatch in one test assertion, and a Linux Landlock confinement bug (below) — all fixed except the Landlock one, which is disabled rather than fixed. CI is green now. |
 
 ## 2. For me — I can keep going on these without you
 
