@@ -117,11 +117,25 @@ jobs:
       - run: go run ./cmd/rigfile doctor --git . --max-commits 5000
 
   secret-scan:
+    # gitleaks/gitleaks-action@v2 requires a paid GITLEAKS_LICENSE secret for organization-owned repos (this repo
+    # moved under the rigfile org). The underlying open-source binary needs no license, only the Action wrapper
+    # does, so this runs the real binary directly instead -- same tool, same default ruleset, no license required.
+    # Version tracks internal/scan/rules/VERSION (the ruleset this project embeds in its own scanner) so the two
+    # never drift apart; bump both together via scripts/update-gitleaks-rules.sh.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: install gitleaks
+        run: |
+          set -eu
+          v="$(cat internal/scan/rules/VERSION)"
+          vnum="${v#v}"
+          base="gitleaks_${vnum}_linux_x64.tar.gz"
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/${v}/${base}"
+          curl -fsSL -o checksums.txt "https://github.com/gitleaks/gitleaks/releases/download/${v}/gitleaks_${vnum}_checksums.txt"
+          grep " ${base}\$" checksums.txt | sha256sum -c -
+          tar xzf "${base}" gitleaks
+      - name: gitleaks detect
+        run: ./gitleaks detect --source . --redact --no-banner --log-opts="--all"

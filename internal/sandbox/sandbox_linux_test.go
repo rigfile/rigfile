@@ -4,6 +4,10 @@ package sandbox
 
 import (
 	"errors"
+	"fmt"
+	"net"
+	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -54,17 +58,79 @@ func TestWrapFailsClosedBelowRequiredABI(t *testing.T) {
 
 // TestLandlockExecMainRejectsMalformedInvocation covers the parsing main.go's hidden dispatch relies on, without
 // needing to actually apply a restriction (which would affect this test binary's own process for the rest of the
-// run).
+// run). args is [ports, canary port, "--", prog, progArgs...].
 func TestLandlockExecMainRejectsMalformedInvocation(t *testing.T) {
 	for _, args := range [][]string{
 		nil,
 		{"8081"},
-		{"8081", "not-the-separator", "/bin/true"},
-		{"not-a-number", "--", "/bin/true"},
-		{"99999999", "--", "/bin/true"},
+		{"8081", "9090"},
+		{"8081", "9090", "not-the-separator", "/bin/true"},
+		{"not-a-number", "9090", "--", "/bin/true"},
+		{"99999999", "9090", "--", "/bin/true"},
+		{"8081", "not-a-number", "--", "/bin/true"},
+		{"8081", "99999999", "--", "/bin/true"},
 	} {
 		if got := LandlockExecMain(args); got != 2 {
 			t.Errorf("LandlockExecMain(%v) = %d, want 2 (and no restriction applied)", args, got)
 		}
+	}
+}
+
+// TestConfinementActuallyRestrictsNetwork is the Linux counterpart to the darwin test of the same name: on a
+// kernel that actually has ABI 4, prove the restriction (and the canary self-check in wrap/LandlockExecMain) is
+// for real, not just "the syscalls returned success". Skips everywhere this project's own machines run (no ABI 4
+// kernel has ever been available to it -- see TestABIVersionQuery); the one place this can run for real today is
+// CI's ubuntu-latest, whose kernel apparently now supports it (found live, 2026-09-28: TestExecConfineBlocksThe-
+// BrokerControlAPI in cmd/rigfile started taking the "launch confined" branch there for the first time).
+func TestConfinementActuallyRestrictsNetwork(t *testing.T) {
+	abi, err := abiVersion()
+	if err != nil || abi < requiredABI {
+		t.Skip("no ABI 4 Landlock on this machine; see TestWrapFailsClosed* instead")
+	}
+	denied, derr := net.Listen("tcp", "127.0.0.1:0")
+	if derr != nil {
+		t.Fatal(derr)
+	}
+	defer denied.Close()
+	allowed, aerr := net.Listen("tcp", "127.0.0.1:0")
+	if aerr != nil {
+		t.Fatal(aerr)
+	}
+	defer allowed.Close()
+	go acceptAndClose(allowed)
+	deniedPort := denied.Addr().(*net.TCPAddr).Port
+	allowedPort := allowed.Addr().(*net.TCPAddr).Port
+
+	w, err := Wrap("/bin/sh", []string{"-c", fmt.Sprintf("(echo x >/dev/tcp/127.0.0.1/%d) 2>/dev/null && echo DENIED-PORT-REACHABLE", deniedPort)}, Policy{AllowLoopbackPorts: []int{allowedPort}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Cleanup()
+	out, err := exec.Command(w.Path, w.Args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("wrapped /bin/sh itself failed (want it to run, just unable to reach the denied port): %v: %s", err, out)
+	}
+	if strings.Contains(string(out), "DENIED-PORT-REACHABLE") {
+		t.Fatalf("a port outside the policy must not be reachable: %s", out)
+	}
+
+	w2, err := Wrap("/bin/sh", []string{"-c", fmt.Sprintf("echo x | timeout 3 sh -c 'exec 3<>/dev/tcp/127.0.0.1/%d' && echo ALLOWED-PORT-REACHED", allowedPort)}, Policy{AllowLoopbackPorts: []int{allowedPort}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w2.Cleanup()
+	out2, err := exec.Command(w2.Path, w2.Args...).CombinedOutput()
+	if err != nil || !strings.Contains(string(out2), "ALLOWED-PORT-REACHED") {
+		t.Fatalf("an allowed port must stay reachable (that is how Level 2 works at all): %v: %s", err, out2)
+	}
+}
+
+func acceptAndClose(l net.Listener) {
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		c.Close()
 	}
 }

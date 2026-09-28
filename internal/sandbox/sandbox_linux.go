@@ -4,10 +4,12 @@ package sandbox
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -51,6 +53,14 @@ func abiVersion() (int, error) {
 // wrap re-execs this same binary under the hidden landlock-exec subcommand, which applies the restriction to
 // itself and then execve()s into prog. The preflight ABI check here means a person sees a clear, immediate refusal
 // rather than a confusing failure from deep inside the helper.
+//
+// A successful Landlock syscall sequence is not, by itself, proof that anything is actually restricted: this
+// project has no machine with a real ABI 4 kernel to have ever exercised the enforcement path, only the "kernel
+// too old, refuse" one (see internal/sandbox/sandbox_linux_test.go). Rather than trust the syscalls' return codes
+// alone the first time this runs somewhere they succeed, wrap opens a canary TCP listener on a random loopback
+// port that is deliberately left OUT of the ruleset, and the restricted child dials it before ever exec-ing the
+// real target (LandlockExecMain below): if that dial succeeds, the restriction plainly is not taking effect, and
+// the child refuses to proceed rather than launch the real command believing itself confined when it is not.
 func wrap(prog string, args []string, policy Policy) (*Wrapped, error) {
 	abi, err := abiVersion()
 	if err != nil {
@@ -63,12 +73,26 @@ func wrap(prog string, args []string, policy Policy) (*Wrapped, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sandbox: %w", err)
 	}
+	canary, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("sandbox: could not open the self-check listener: %w", err)
+	}
+	go func() { // accept and drop connections for as long as the listener is open; canaryPort below is the point
+		for {
+			c, err := canary.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	canaryPort := canary.Addr().(*net.TCPAddr).Port
 	ports := make([]string, len(policy.AllowLoopbackPorts))
 	for i, p := range policy.AllowLoopbackPorts {
 		ports[i] = strconv.Itoa(p)
 	}
-	full := append([]string{LandlockExecSubcommand, strings.Join(ports, ","), "--", prog}, args...)
-	return &Wrapped{Path: self, Args: full, Cleanup: noCleanup}, nil
+	full := append([]string{LandlockExecSubcommand, strings.Join(ports, ","), strconv.Itoa(canaryPort), "--", prog}, args...)
+	return &Wrapped{Path: self, Args: full, Cleanup: func() { canary.Close() }}, nil
 }
 
 // createNetRuleset builds a Landlock ruleset that only permits outbound TCP connect to the given ports (all other
@@ -106,11 +130,12 @@ func restrictSelf(fd int) error {
 }
 
 // LandlockExecMain is the hidden subcommand's entry point (main.go routes landlockExecSubcommand here). args is
-// ["<comma-separated ports, may be empty>", "--", prog, progArgs...]. It never returns on success: unix.Exec
-// replaces this process image with prog, still carrying the Landlock restriction. It returns an exit code only on
-// failure, always before any restriction could have leaked into a process it did not intend to confine.
+// ["<comma-separated ports, may be empty>", "<canary port>", "--", prog, progArgs...]. It never returns on
+// success: unix.Exec replaces this process image with prog, still carrying the Landlock restriction. It returns
+// an exit code only on failure, always before any restriction could have leaked into a process it did not intend
+// to confine, and always before prog is exec'd.
 func LandlockExecMain(args []string) int {
-	if len(args) < 3 || args[1] != "--" {
+	if len(args) < 4 || args[2] != "--" {
 		fmt.Fprintln(os.Stderr, "rigfile: internal: malformed sandbox invocation")
 		return 2
 	}
@@ -125,6 +150,11 @@ func LandlockExecMain(args []string) int {
 			ports = append(ports, n)
 		}
 	}
+	canaryPort, err := strconv.Atoi(args[1])
+	if err != nil || canaryPort < 1 || canaryPort > 65535 {
+		fmt.Fprintln(os.Stderr, "rigfile: internal: bad sandbox canary port", args[1])
+		return 2
+	}
 	fd, err := createNetRuleset(ports)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rigfile: sandbox: could not create the network ruleset:", err)
@@ -136,7 +166,15 @@ func LandlockExecMain(args []string) int {
 		return 1
 	}
 	unix.Close(fd)
-	prog, progArgs := args[2], args[3:]
+	// Self-check before trusting the restriction: dial a port that is deliberately not in the ruleset. If this
+	// succeeds, the syscalls above returned success without actually restricting outbound connects on this
+	// kernel -- refuse rather than exec prog believing it is confined when it is not (see wrap, above).
+	if c, dialErr := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", canaryPort), 2*time.Second); dialErr == nil {
+		c.Close()
+		fmt.Fprintln(os.Stderr, "rigfile: sandbox: the restriction was applied but did not actually restrict outbound connections on this kernel; refusing to launch unconfined")
+		return 1
+	}
+	prog, progArgs := args[3], args[4:]
 	path := prog
 	if !strings.Contains(prog, "/") {
 		if p, err := exec.LookPath(prog); err == nil {
