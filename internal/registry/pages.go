@@ -24,6 +24,8 @@ func (s *Server) pageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /r/{owner}/{name}/star", s.pageStar)
 	mux.HandleFunc("POST /r/{owner}/{name}/visibility", s.pageVisibility)
 	mux.HandleFunc("GET /legal/{doc}", s.pageLegal)
+	mux.HandleFunc("GET /docs", s.pageDocsIndex)
+	mux.HandleFunc("GET /docs/{page}", s.pageDocs)
 	mux.HandleFunc("GET /admin", s.adminPage)
 	mux.HandleFunc("POST /admin/held/{id}", s.adminHeld)
 	mux.HandleFunc("POST /admin/approve/{owner}/{name}", s.adminApprove)
@@ -48,12 +50,13 @@ type listData struct {
 	Rigs        []RigSummary
 	Empty       string
 	RegistryURL string
+	Tools       []string // home: the supported tools, from the adapters' capability files
 }
 
 func (s *Server) pageHome(w http.ResponseWriter, r *http.Request) {
 	v, u, csrf := s.pageViewer(r)
 	rs, _ := s.Store.Search(r.Context(), "", 12, v)
-	s.render(w, r, http.StatusOK, "home.html", Page{Title: "", User: u, CSRF: csrf, Data: listData{Rigs: rs, Empty: "No public rigs yet."}})
+	s.render(w, r, http.StatusOK, "home.html", Page{Title: "", User: u, CSRF: csrf, Data: listData{Rigs: rs, Empty: "No public rigs yet.", Tools: supportedToolTitles()}})
 }
 
 func (s *Server) pageSearch(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +66,11 @@ func (s *Server) pageSearch(w http.ResponseWriter, r *http.Request) {
 	v, u, csrf := s.pageViewer(r)
 	q := trunc(strings.TrimSpace(r.URL.Query().Get("q")), 100)
 	rs, _ := s.Store.Search(r.Context(), q, 30, v)
-	s.render(w, r, http.StatusOK, "search.html", Page{Title: "Search", Query: q, User: u, CSRF: csrf, Data: listData{Rigs: rs, Empty: "Nothing matches. Try fewer words."}})
+	title, empty := "Search", "Nothing matches. Try fewer words."
+	if q == "" {
+		title, empty = "Explore rigs", "No public rigs yet. Publish the first one: see Getting started."
+	}
+	s.render(w, r, http.StatusOK, "search.html", Page{Title: title, Query: q, User: u, CSRF: csrf, Data: listData{Rigs: rs, Empty: empty}})
 }
 
 type profileData struct {
@@ -170,7 +177,7 @@ func (s *Server) pageRig(w http.ResponseWriter, r *http.Request) {
 	}
 	if page.Version != nil {
 		page.Files, _ = s.Store.VersionFiles(r.Context(), page.Version.ID)
-		page.Readme = renderMarkdown(page.Version.Readme)
+		page.Readme = renderMarkdown(withoutTitle(page.Version.Readme, page.Rig.Owner+"/"+page.Rig.Name))
 		page.Layers = page.Version.Layers
 		page.Install = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + " --registry " + s.Cfg.PublicURL
 		page.Trust, _ = s.Store.Trust(r.Context(), page.Rig, page.Version)
@@ -180,7 +187,7 @@ func (s *Server) pageRig(w http.ResponseWriter, r *http.Request) {
 		page.InstallPin = "rigfile pull " + page.Rig.Owner + "/" + page.Rig.Name + "@" + page.Version.Version + " --registry " + s.Cfg.PublicURL
 	}
 	title := page.Rig.Owner + "/" + page.Rig.Name
-	s.render(w, r, http.StatusOK, "rig.html", Page{Title: title, User: u, CSRF: csrf, Data: page})
+	s.render(w, r, http.StatusOK, "rig.html", Page{Title: title, Desc: trunc(page.Rig.Description, 200), User: u, CSRF: csrf, Data: page})
 }
 
 // fileFromTarball reads one file out of a stored version, refusing anything not in the index or not text.
@@ -296,6 +303,17 @@ func (s *Server) pageVisibility(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Redirect(w, r, "/r/"+url.PathEscape(r.PathValue("owner"))+"/"+url.PathEscape(r.PathValue("name")), http.StatusSeeOther)
 	}
+}
+
+// withoutTitle drops a README's leading "# owner/name" heading: the page header already shows it (publish generates
+// READMEs that start with one).
+func withoutTitle(readme, ref string) string {
+	t := strings.TrimLeft(readme, " \t\r\n")
+	first, rest, _ := strings.Cut(t, "\n")
+	if strings.TrimSpace(first) == "# "+ref {
+		return rest
+	}
+	return readme
 }
 
 // majorMinor turns 1.4.2 into 1.4 (the range a "use as base" snippet suggests: compatible with what the page shows).

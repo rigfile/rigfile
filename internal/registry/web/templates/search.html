@@ -1,4 +1,7 @@
 {{template "head" .}}
-<h1>{{if .Query}}Rigs matching “{{.Query}}”{{else}}All public rigs{{end}}</h1>
+<div class="page-head">
+<h1>{{if .Query}}Rigs matching “{{.Query}}”{{else}}Explore rigs{{end}}</h1>
+{{if not .Query}}<p class="muted">Public rigs, most starred first. Every rig is scanned before it is published, and pulling one always shows you the plan first. <a href="/docs/pulling">How pulling works</a>.</p>{{end}}
+</div>
 {{template "rigs" .Data}}
 {{template "foot" .}}

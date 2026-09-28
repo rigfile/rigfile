@@ -21,17 +21,26 @@ var staticFS embed.FS
 // staticVersion busts the browser cache when static assets change: the long Cache-Control on staticHandler is
 // only safe because callers append ?v=staticVersion, so the URL itself changes whenever the content does.
 var staticVersion = func() string {
-	b, err := staticFS.ReadFile("web/static/style.css")
-	if err != nil {
-		return "0"
-	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])[:10]
+	h := sha256.New()
+	_ = fs.WalkDir(staticFS, "web/static", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := staticFS.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		h.Write([]byte(p))
+		h.Write(b)
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))[:10]
 }()
 
 // Page is what every template receives. Dynamic text is only ever emitted through html/template's escaping.
 type Page struct {
 	Title    string
+	Desc     string // <meta name="description"> and link previews; a site-wide default when empty
 	Query    string
 	Path     string // url-escaped current path, for the sign-in link
 	User     *User

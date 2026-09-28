@@ -1,0 +1,43 @@
+{{template "head" .}}
+{{with .Data}}
+<div class="docs">
+<aside class="docs-nav" aria-label="Documentation">
+<details class="docs-toc" open><summary>Documentation</summary>
+<a class="docs-home{{if .Index}} current{{end}}" href="/docs">Overview</a>
+{{$cur := .Page.Slug}}{{range .Groups}}<div class="docs-group"><h4>{{.Name}}</h4>
+{{range .Pages}}<a href="/docs/{{.Slug}}"{{if eq .Slug $cur}} class="current" aria-current="page"{{end}}>{{.Title}}</a>{{end}}</div>{{end}}
+</details>
+</aside>
+<article class="docs-body">
+{{if .Index}}
+<h1>Documentation</h1>
+<p class="lead">Everything you need to capture, review, apply and share an AI-tool setup with Rigfile. New here? Start with <a href="/docs/getting-started">Getting started</a>.</p>
+{{range .Groups}}<h2>{{.Name}}</h2>
+<div class="doc-cards">{{range .Pages}}<a class="doc-card" href="/docs/{{.Slug}}"><strong>{{.Title}}</strong><span>{{.Summary}}</span></a>{{end}}</div>{{end}}
+{{else}}
+<p class="crumbs"><a href="/docs">Docs</a> <span class="sep">/</span> {{.Page.Group}}</p>
+<div class="readme">{{.Body}}</div>
+{{with .Tools}}
+<h2>At a glance</h2>
+<p class="muted">✔ supported · ◐ partial (see the notes below) · ✘ not supported. The plan screen always says what a tool cannot take; nothing is dropped silently.</p>
+<div class="table-scroll"><table class="matrix">
+<thead><tr><th>Category</th>{{range .Tools}}<th>{{.Title}}</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr><th>{{.Category}}</th>{{range .Cells}}<td class="mark-{{.Support}}" title="{{.Note}}">{{.Mark}}</td>{{end}}</tr>{{end}}</tbody>
+</table></div>
+<h2>Tool by tool</h2>
+{{range .Tools}}<div class="card tool-card">
+<div class="tool-head"><h3>{{.Title}}</h3><span class="tag {{.BaseSecureLevel}}">base-secure: {{.BaseSecure}}</span></div>
+<p class="muted small">Runs on {{join .OS ", "}}</p>
+<ul class="caps">{{range .Categories}}<li><span class="capmark mark-{{.Support}}">{{.Mark}}</span><strong>{{.Category}}</strong> <span class="muted">{{.Note}}</span></li>{{end}}</ul>
+{{if .Paths}}<p class="muted small">Where it writes:</p><ul class="paths">{{range .Paths}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
+</div>{{end}}
+{{end}}
+<nav class="pager" aria-label="Previous and next">
+{{with .Prev}}<a class="prev" href="/docs/{{.Slug}}"><span class="muted small">Previous</span><strong>{{.Title}}</strong></a>{{else}}<span></span>{{end}}
+{{with .Next}}<a class="next" href="/docs/{{.Slug}}"><span class="muted small">Next</span><strong>{{.Title}}</strong></a>{{end}}
+</nav>
+{{end}}
+</article>
+</div>
+{{end}}
+{{template "foot" .}}

@@ -1,23 +1,63 @@
 {{template "head" .}}
+<section class="hero">
+<p class="eyebrow">Open source · Claude Code, Codex, Gemini CLI, Cursor and more</p>
 <h1>Share how you set up your AI tools</h1>
-<p class="muted">Rigfile rigs bundle instructions, skills, MCP servers, hooks and permissions for Claude Code, Codex, Gemini CLI and Cursor. Pull one with a single command; secrets never travel with a rig.</p>
+<p class="lead">A rig bundles your instructions, skills, MCP servers, hooks and permissions into one reviewable file. Pull someone's rig with a single command, see exactly what it will change, and approve it. Secrets never travel with a rig.</p>
+<div class="cta">
+<a class="btn primary lg" href="/docs/getting-started">Get started</a>
+<a class="btn lg" href="/search">Explore rigs</a>
+</div>
 <div class="hero-cmd"><pre><code>rigfile pull owner/name --registry {{.Data.RegistryURL}}</code></pre></div>
+</section>
 
-<h2>Quickstart</h2>
-<p class="muted">No packaged builds yet &mdash; build the CLI from source (needs Go).</p>
+<section class="section">
+<h2 class="section-title">How it works</h2>
+<ol class="flow">
+<li><strong>Capture</strong><span>Turn the setup you already have into a rig: <code>rigfile init</code> reads it, changes nothing.</span></li>
+<li><strong>Review</strong><span><code>rigfile plan</code> shows every file, hook, server and permission a rig would change, before anything runs.</span></li>
+<li><strong>Apply</strong><span><code>rigfile apply</code> writes it with a backup first. <code>rigfile rollback</code> undoes any run.</span></li>
+<li><strong>Share</strong><span><code>rigfile publish --to-registry</code> scrubs personal paths, blocks secrets and scans before anyone can pull it.</span></li>
+</ol>
+</section>
+
+<section class="section">
+<h2 class="section-title">Built to be safe to share</h2>
+<div class="features">
+<div class="feature"><h3>Secrets never travel</h3><p>Rigs hold <code>secret://</code> references, never values. Values live in your OS keychain and are injected only into the process that needs them.</p><a href="/docs/secrets">Secrets →</a></div>
+<div class="feature"><h3>Nothing runs unreviewed</h3><p>Pulling a rig shows its hooks, scripts and MCP commands, trust facts and static-analysis findings, and stops until you approve.</p><a href="/docs/pulling">Pulling safely →</a></div>
+<div class="feature"><h3>A safety floor, always</h3><p><code>rigfile/base-secure</code> sits under every rig: deny rules for credentials, a command guard, secret redaction and git secret scanning.</p><a href="/docs/security">Security model →</a></div>
+<div class="feature"><h3>One rig, many tools</h3><p>Write it once; adapters write each tool's own format, and the plan says plainly what a tool cannot take.</p><a href="/docs/tools">Supported tools →</a></div>
+<div class="feature"><h3>Pinned and immutable</h3><p>Published versions never change, packages must be pinned to exact versions, and every update comes with a readable diff.</p><a href="/docs/publishing">Publishing →</a></div>
+<div class="feature"><h3>Undo anything</h3><p>Every apply is backed up and recorded. <code>rigfile diff</code> shows drift, <code>rigfile rollback</code> restores.</p><a href="/docs/cli">CLI reference →</a></div>
+</div>
+</section>
+
+{{if .Data.Tools}}<section class="section">
+<h2 class="section-title">Works with</h2>
+<div class="toolstrip">{{range .Data.Tools}}<span class="toolname">{{.}}</span>{{end}}</div>
+<p class="muted small">Support differs per tool; <a href="/docs/tools">see exactly what each one gets</a>.</p>
+</section>{{end}}
+
+<section class="section">
+<h2 class="section-title">Quickstart</h2>
 <ol class="steps">
-<li><p>Get the CLI.</p>
+<li><p>Build the CLI from source (needs Go; packaged releases are coming).</p>
 <pre><code>git clone https://github.com/rigfile/rigfile
 cd rigfile &amp;&amp; go build -o rigfile ./cmd/rigfile</code></pre></li>
-<li><p>Capture your current Claude Code setup into a rig (read-only &mdash; nothing changes yet).</p>
-<pre><code>./rigfile init</code></pre></li>
+<li><p>Capture your current Claude Code setup into a rig named after your GitHub login (the registry only accepts rigs under your own name). Read-only: nothing changes yet.</p>
+<pre><code>./rigfile init --name your-login/my-rig</code></pre></li>
 <li><p>Review the plan, then apply it. Nothing runs until you approve.</p>
 <pre><code>./rigfile plan rig
 ./rigfile apply rig</code></pre></li>
-<li><p>Share it &mdash; private by default, or add <code>--public</code>.</p>
-<pre><code>./rigfile publish rig --to-registry --registry {{.Data.RegistryURL}}</code></pre></li>
+<li><p>Share it: private by default, add <code>--public</code> to let anyone pull it.</p>
+<pre><code>./rigfile login --registry {{.Data.RegistryURL}}
+./rigfile publish rig --to-registry --registry {{.Data.RegistryURL}}</code></pre></li>
 </ol>
+<p><a href="/docs/getting-started">Full walkthrough →</a></p>
+</section>
 
-<h2>Popular rigs</h2>
+<section class="section">
+<div class="section-head"><h2 class="section-title">Popular rigs</h2><a href="/search">Explore all →</a></div>
 {{template "rigs" .Data}}
+</section>
 {{template "foot" .}}

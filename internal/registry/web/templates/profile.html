@@ -10,7 +10,7 @@
 <button type="submit">Save</button></form>
 <div class="muted">They must have signed in to this registry once.</div>{{end}}</div>{{end}}
 {{if .Data.Collections}}<h2>Collections</h2><ul>{{range .Data.Collections}}<li><a href="/c/{{.Owner}}/{{.Slug}}">{{.Title}}</a>{{if eq .Visibility "private"}} <span class="tag">private</span>{{end}}</li>{{end}}</ul>{{end}}
-{{if .Data.Own}}<div class="card"><strong>New collection</strong>
+{{if .Data.Own}}<h2>Create</h2><div class="form-grid"><div class="card"><strong>New collection</strong>
 <p class="muted">A curated, ordered list of rigs &mdash; yours, other people's, or a mix &mdash; grouped for discovery (like "starter rigs" or "rigs for data work"). Public by default, or keep it to yourself.</p>
 <form method="post" action="/manage/collections"><input type="hidden" name="csrf" value="{{.CSRF}}">
 <div><label>Title <input type="text" name="title" maxlength="80" required></label></div>
@@ -32,6 +32,8 @@ rigfile collection show {{.Data.Login}}/starter-rigs</code></pre></div>
 <p class="muted">Same thing from the CLI:</p>
 <pre><code>rigfile org create acme --title "Acme"
 rigfile org add acme their-login --role member
-rigfile publish my-rig --to-registry --name acme/my-rig</code></pre></div>{{end}}
+# then set  name: acme/my-rig  in the rig's rigfile.yaml, and
+rigfile publish my-rig --to-registry</code></pre>
+<p class="muted small"><a href="/docs/collaboration">More about collections and organisations</a></p></div></div>{{end}}
 {{if .Data.Rigs}}<h2>Rigs</h2>{{template "rigs" .Data}}{{else}}<p class="muted">No rigs to show.</p>{{end}}
 {{template "foot" .}}

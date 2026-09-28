@@ -1,5 +1,8 @@
 {{template "head" .}}
+<div class="message-card">
 <h1>{{.Title}}</h1>
 {{range .Lines}}<p>{{.}}</p>{{end}}
-{{if .Link}}<p><a href="{{.Link}}">{{.LinkText}}</a></p>{{end}}
+{{if .Link}}<p><a class="btn primary" href="{{.Link}}">{{.LinkText}}</a></p>{{end}}
+<p class="muted small">Go to the <a href="/">home page</a>, <a href="/search">explore rigs</a> or read the <a href="/docs">documentation</a>.</p>
+</div>
 {{template "foot" .}}

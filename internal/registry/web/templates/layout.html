@@ -1,14 +1,46 @@
 {{define "head"}}<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{if .Title}}{{.Title}} · {{end}}Rigfile registry</title>
+<title>{{if .Title}}{{.Title}} · {{end}}Rigfile</title>
+<meta name="description" content="{{if .Desc}}{{.Desc}}{{else}}Share and reuse AI coding-tool setups: instructions, skills, MCP servers, hooks and permissions for Claude Code, Codex, Gemini CLI, Cursor and more. Secrets never travel with a rig.{{end}}">
+<meta property="og:site_name" content="Rigfile">
+<meta property="og:title" content="{{if .Title}}{{.Title}} · {{end}}Rigfile">
+<meta property="og:description" content="{{if .Desc}}{{.Desc}}{{else}}Share and reuse AI coding-tool setups. Review before anything runs; secrets never travel with a rig.{{end}}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{staticVersion}}">
 <link rel="stylesheet" href="/static/style.css?v={{staticVersion}}"></head><body>
+<a class="skip" href="#content">Skip to content</a>
 <header class="top"><div class="wrap">
 <a class="brand" href="/"><span class="mark">R</span>Rigfile</a>
+<nav class="primary" aria-label="Main">
+<a href="/search">Explore</a>
+<a href="/docs">Docs</a>
+<a href="https://github.com/rigfile/rigfile" rel="noopener">GitHub</a>
+</nav>
 <form class="search" action="/search" method="get"><input type="search" name="q" placeholder="Search rigs" value="{{.Query}}" aria-label="Search rigs"><button type="submit">Search</button></form>
 <div class="navlinks">
-{{if .User}}<span class="who">{{if .User.AvatarURL}}<img class="avatar" src="{{.User.AvatarURL}}" alt="">{{end}}<a href="/u/{{.User.Login}}">{{.User.Login}}</a></span>
+{{if .User}}<span class="who">{{if .User.AvatarURL}}<img class="avatar" src="{{.User.AvatarURL}}" alt="" width="20" height="20">{{end}}<a href="/u/{{.User.Login}}">{{.User.Login}}</a></span>
 <form action="/logout" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link" type="submit">Sign out</button></form>
-{{else}}<a class="btn primary" href="/login?next={{.Path}}">Sign in with GitHub</a>{{end}}
+{{else}}<a class="btn primary" href="/login?next={{.Path}}">Sign in<span class="long"> with GitHub</span></a>{{end}}
 </div>
-</div></header><main class="wrap">{{end}}
-{{define "foot"}}</main><footer><div class="wrap"><a href="/legal/terms">Terms</a> · <a href="/legal/acceptable-use">Acceptable use</a> · <a href="/legal/takedown">Takedown and abuse</a> · <a href="/report">Report a rig</a></div></footer></body></html>{{end}}
+<details class="menu"><summary aria-label="Menu">Menu</summary>
+<div class="menu-panel">
+<a href="/search">Explore</a>
+<a href="/docs">Docs</a>
+<a href="https://github.com/rigfile/rigfile" rel="noopener">GitHub</a>
+<form action="/search" method="get"><input type="search" name="q" placeholder="Search rigs" value="{{.Query}}" aria-label="Search rigs"></form>
+</div>
+</details>
+</div></header><main class="wrap" id="content">{{end}}
+{{define "foot"}}</main><footer><div class="wrap">
+<div class="foot-grid">
+<div class="foot-brand"><a class="brand" href="/"><span class="mark">R</span>Rigfile</a>
+<p>Share how you set up your AI tools. Review before anything runs; secrets never travel with a rig.</p></div>
+<div><h4>Product</h4><a href="/search">Explore rigs</a><a href="/docs/getting-started">Getting started</a><a href="/docs/tools">Supported tools</a></div>
+<div><h4>Docs</h4><a href="/docs/manifest">Manifest reference</a><a href="/docs/cli">CLI reference</a><a href="/docs/security">Security model</a><a href="/docs/faq">FAQ</a></div>
+<div><h4>Project</h4><a href="https://github.com/rigfile/rigfile" rel="noopener">GitHub</a><a href="/report">Report a rig</a></div>
+<div><h4>Legal</h4><a href="/legal/terms">Terms</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/takedown">Takedown and abuse</a></div>
+</div>
+<p class="foot-note">Rigfile is open source under the Apache-2.0 licence.</p>
+</div></footer></body></html>{{end}}
