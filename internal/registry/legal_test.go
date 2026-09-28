@@ -11,7 +11,7 @@ import (
 
 func TestLegalPagesAreServedAndMarkedAsDrafts(t *testing.T) {
 	e := newEnv(t, nil)
-	for path, want := range map[string]string{"/legal/terms": "Terms of Service", "/legal/acceptable-use": "Acceptable Use Policy", "/legal/takedown": "Takedown and abuse policy"} {
+	for path, want := range map[string]string{"/legal/terms": "Terms of Service", "/legal/acceptable-use": "Acceptable Use Policy", "/legal/takedown": "Takedown and abuse policy", "/legal/privacy": "Privacy notice"} {
 		code, page := getPage(t, e, nil, path)
 		if code != 200 || !strings.Contains(page, want) || !strings.Contains(page, "has not been reviewed by a lawyer") {
 			t.Errorf("%s: %d\n%s", path, code, page)

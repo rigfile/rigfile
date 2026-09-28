@@ -122,6 +122,7 @@ details.menu summary::-webkit-details-marker { display: none; }
 @media (max-width: 560px) { .long { display: none; } }
 a.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 1.05em; color: var(--fg); flex-shrink: 0; }
 a.brand:hover { text-decoration: none; }
+.beta { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 6px; line-height: 16px; margin-left: 2px; }
 a.brand .mark {
   display: inline-flex; align-items: center; justify-content: center;
   width: 24px; height: 24px; border-radius: 6px;
@@ -135,6 +136,7 @@ form.search input[type=search] {
 form.search input[type=search]:focus { background: var(--bg); }
 .navlinks { display: flex; align-items: center; gap: 14px; margin-left: auto; font-size: 14px; }
 .navlinks form { margin: 0; }
+.navlinks .btn { gap: 0; }
 .who { display: inline-flex; align-items: center; gap: 6px; color: var(--fg); }
 
 /* ---------- buttons & form controls ---------- */

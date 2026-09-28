@@ -12,7 +12,7 @@ import (
 //go:embed web/legal/*.md
 var legalFS embed.FS
 
-var legalTitles = map[string]string{"terms": "Terms of Service", "acceptable-use": "Acceptable Use Policy", "takedown": "Takedown and abuse policy"}
+var legalTitles = map[string]string{"terms": "Terms of Service", "acceptable-use": "Acceptable Use Policy", "takedown": "Takedown and abuse policy", "privacy": "Privacy notice"}
 
 // pageLegal serves the policy documents. They are DRAFTS that need a lawyer's review before launch (docs/stage-5-owner-checks.md),
 // and every page says so.
