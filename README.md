@@ -51,7 +51,7 @@ rigfile pull owner/name --registry https://your-registry.example
 
 ## Documentation
 
-- User docs (getting started, writing a rig, secrets, publishing, pulling safely, manifest and CLI reference, supported tools, security model, FAQ): [**docs/guide**](docs/guide/README.md), plain Markdown, meant to be read here on GitHub. The same content also ships as a website a self-hosted registry serves at `/docs` (`internal/registry/web/docs/`); keep both in sync if you edit one.
+- User docs (getting started, writing a rig, secrets, publishing, pulling safely, manifest and CLI reference, supported tools, security model, FAQ): [**docs/guide**](docs/guide/README.md), plain Markdown, meant to be read here on GitHub. This is the maintained copy. A self-hosted registry also serves a `/docs` website from `internal/registry/web/docs/` — a frozen snapshot from when docs/guide was created; it is not kept in sync and should not be edited.
 - Design and specs: `docs/` (merge semantics, `base-secure`, trust and supply chain, the registry, the secret broker, private sync, per-tool research in `docs/targets/`) and the ADRs in `docs/adr/`.
 - Master plan: `RIGFILE_PLAN.md`; current state: `docs/STATUS.md`.
 

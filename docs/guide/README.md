@@ -27,4 +27,4 @@ Everything you need to capture, review, apply and share an AI-tool setup with Ri
 
 ---
 
-This guide is plain Markdown, meant to be read on GitHub. It also ships as a website (`internal/registry/web/docs/`) served by `rigfile-registry`, for anyone who runs one — same content, browsable with a sidebar and search. If you edit one, mirror the change in the other.
+This guide (`docs/guide/`) is the maintained copy, plain Markdown, meant to be read on GitHub. `internal/registry/web/docs/` is a **frozen** snapshot of the same content, from when this guide was created — it's what a self-hosted registry's `/docs` website serves, but it is not kept in sync with this guide and should not be edited going forward.

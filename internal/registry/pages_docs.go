@@ -10,6 +10,11 @@ import (
 	"github.com/rigfile/rigfile/internal/targets"
 )
 
+// web/docs/*.md is a FROZEN snapshot (2026-09-28) of docs/guide/ at the repo root, which is the maintained copy.
+// Do not edit the files under web/docs/ directly; edit docs/guide/ instead. They are allowed to drift: this frozen
+// copy is what a self-hosted registry's /docs website serves, and updating it is a deliberate, separate decision,
+// not something every docs/guide change should trigger.
+//
 //go:embed web/docs/*.md
 var docsFS embed.FS
 
