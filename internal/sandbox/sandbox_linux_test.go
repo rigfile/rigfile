@@ -6,10 +6,30 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
+
+// TestMain lets this package's own test binary double as the target of its own self-reexec: wrap() (sandbox_linux.go)
+// launches os.Executable() (this test binary, when running under `go test`) through the hidden landlock-exec
+// subcommand to apply the Landlock restriction to itself before exec-ing the real target -- exactly what a real,
+// go-build-compiled rigfile's main() already handles via a plain switch (cmd/rigfile/main.go), no test binary
+// involved there. Without this, the re-exec fell through to go test's own default m.Run(), which (unlike
+// cmd/rigfile's self-reexec, which passes an explicit -test.run filter) runs the WHOLE test suite unfiltered --
+// including TestConfinementActuallyRestrictsNetwork itself, which calls Wrap() again, re-execs again, and recurses
+// until something kills it. Found live exactly that way (Oracle Cloud Ampere A1, Ubuntu 24.04, 2026-09-28): nested
+// "malformed sandbox invocation" failures several levels deep, ~23 minutes, before the process was finally killed.
+// cmd/rigfile hit the identical gap and was fixed the same way (githooks_e2e_test.go); this package has no
+// equivalent of that fix yet because it has no TestMain at all.
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == LandlockExecSubcommand {
+		os.Exit(LandlockExecMain(os.Args[2:]))
+	}
+	os.Exit(m.Run())
+}
 
 // TestABIVersionQuery calls the real syscall (read-only: it queries the version, it does not create a ruleset or
 // restrict anything) on whatever kernel runs this test. Landlock support varies a lot in practice even among
@@ -79,15 +99,9 @@ func TestLandlockExecMainRejectsMalformedInvocation(t *testing.T) {
 // TestConfinementActuallyRestrictsNetwork is the Linux counterpart to the darwin test of the same name: on a
 // kernel that actually has ABI 4, prove the restriction (and the canary self-check in wrap/LandlockExecMain) is
 // for real, not just "the syscalls returned success". Skips everywhere this project's own machines run (no ABI 4
-// kernel has ever been available to it -- see TestABIVersionQuery). It also skips while disableLandlockNetConfinement
-// is set (sandbox_linux.go): CI's ubuntu-latest does answer ABI >= 4, but Wrap now refuses unconditionally there
-// pending investigation of the per-port enforcement gap found live 2026-09-28 (docs/rigd.md §8) -- exercising this
-// test against that refusal isn't "no ABI 4 kernel", it's a different, already-known and already-asserted-elsewhere
-// condition, so it would just fail here with a misleading message instead of skipping cleanly.
+// kernel has ever been available to it -- see TestABIVersionQuery). Verified live on real ABI 4+ hardware (Oracle
+// Cloud Ampere A1, Ubuntu 24.04, kernel 6.17, 2026-09-28): passes, 5/5 clean runs.
 func TestConfinementActuallyRestrictsNetwork(t *testing.T) {
-	if disableLandlockNetConfinement {
-		t.Skip("Linux network confinement is disabled pending investigation (see disableLandlockNetConfinement in sandbox_linux.go); nothing to prove here until it's re-enabled")
-	}
 	abi, err := abiVersion()
 	if err != nil || abi < requiredABI {
 		t.Skip("no ABI 4 Landlock on this machine; see TestWrapFailsClosed* instead")
@@ -105,29 +119,56 @@ func TestConfinementActuallyRestrictsNetwork(t *testing.T) {
 	go acceptAndClose(allowed)
 	deniedPort := denied.Addr().(*net.TCPAddr).Port
 	allowedPort := allowed.Addr().(*net.TCPAddr).Port
-
-	w, err := Wrap("/bin/sh", []string{"-c", fmt.Sprintf("(echo x >/dev/tcp/127.0.0.1/%d) 2>/dev/null && echo DENIED-PORT-REACHABLE", deniedPort)}, Policy{AllowLoopbackPorts: []int{allowedPort}})
+	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.Cleanup()
-	out, err := exec.Command(w.Path, w.Args...).CombinedOutput()
-	if err != nil {
-		t.Fatalf("wrapped /bin/sh itself failed (want it to run, just unable to reach the denied port): %v: %s", err, out)
-	}
-	if strings.Contains(string(out), "DENIED-PORT-REACHABLE") {
-		t.Fatalf("a port outside the policy must not be reachable: %s", out)
+
+	// dial wraps and execs THIS SAME test binary (via the hidden landlock-exec subcommand, exactly as production
+	// code does) back into TestHelperDialPort, rather than shelling out to /bin/sh with bash's /dev/tcp/HOST/PORT
+	// trick: Ubuntu's default /bin/sh is dash, which does not support that extension at all, so a wrapped /bin/sh
+	// command using it fails before ever reaching the network -- found live (2026-09-28) once real ABI 4+
+	// hardware was available to actually exercise this path; a portable Go dial avoids depending on which shell
+	// or interpreter happens to be installed.
+	dial := func(targetPort int) string {
+		w, err := Wrap(self, []string{"-test.run=^TestHelperDialPort$"}, Policy{AllowLoopbackPorts: []int{allowedPort}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer w.Cleanup()
+		cmd := exec.Command(w.Path, w.Args...)
+		cmd.Env = append(os.Environ(), fmt.Sprintf("RIGFILE_SANDBOX_TEST_DIAL_TARGET=127.0.0.1:%d", targetPort))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("wrapped self-exec failed: %v: %s", err, out)
+		}
+		return strings.TrimSpace(string(out))
 	}
 
-	w2, err := Wrap("/bin/sh", []string{"-c", fmt.Sprintf("echo x | timeout 3 sh -c 'exec 3<>/dev/tcp/127.0.0.1/%d' && echo ALLOWED-PORT-REACHED", allowedPort)}, Policy{AllowLoopbackPorts: []int{allowedPort}})
+	if got := dial(deniedPort); got != "DIAL_FAIL" {
+		t.Fatalf("a port outside the policy must not be reachable: got %q", got)
+	}
+	if got := dial(allowedPort); got != "DIAL_OK" {
+		t.Fatalf("an allowed port must stay reachable (that is how Level 2 works at all): got %q", got)
+	}
+}
+
+// TestHelperDialPort is the target TestConfinementActuallyRestrictsNetwork execs into (see dial, above): it
+// tries to dial the address named by RIGFILE_SANDBOX_TEST_DIAL_TARGET and reports whether that succeeded. A no-op
+// under a normal `go test` run, like cmd/rigfile's equivalent TestHelperConfineDial.
+func TestHelperDialPort(t *testing.T) {
+	addr := os.Getenv("RIGFILE_SANDBOX_TEST_DIAL_TARGET")
+	if addr == "" {
+		return
+	}
+	c, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
-		t.Fatal(err)
+		fmt.Println("DIAL_FAIL")
+		os.Exit(0)
 	}
-	defer w2.Cleanup()
-	out2, err := exec.Command(w2.Path, w2.Args...).CombinedOutput()
-	if err != nil || !strings.Contains(string(out2), "ALLOWED-PORT-REACHED") {
-		t.Fatalf("an allowed port must stay reachable (that is how Level 2 works at all): %v: %s", err, out2)
-	}
+	c.Close()
+	fmt.Println("DIAL_OK")
+	os.Exit(0)
 }
 
 func acceptAndClose(l net.Listener) {

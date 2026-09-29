@@ -38,14 +38,17 @@ func TestHelperConfineDial(t *testing.T) {
 // closing the "a same-user process can borrow another approved server's session" gap for a server Rigfile itself
 // launched (the threat model in docs/rigd.md §1: the attacker controls the MCP server process).
 //
-// Verified enforcement on macOS (sandbox-exec, tested live in internal/sandbox). On Linux this project's own dev
-// machines have no usable Landlock (even a 5.15 kernel answers ENOSYS: internal/sandbox_test.go), but CI's
-// ubuntu-latest apparently now has ABI 4 (found live, 2026-09-28) — so all three outcomes below are real,
-// reachable branches on some machine this project actually runs on, not hypothetical. The Landlock backend
-// self-checks before trusting itself (internal/sandbox/sandbox_linux.go: dial a canary port the ruleset
-// deliberately excludes; refuse to launch if that dial unexpectedly succeeds), which is what keeps outcome 2
-// possible at all: a kernel that answers the Landlock syscalls successfully without actually enforcing anything
-// is refused here rather than silently trusted.
+// Verified enforcement on macOS (sandbox-exec) and, live, on real Linux Landlock ABI 4+ hardware (Oracle Cloud
+// Ampere A1, Ubuntu 24.04, kernel 6.17, 2026-09-28, 5/5 clean runs) — so all three outcomes below are real,
+// reachable branches on some machine this project actually runs on, not hypothetical. This project's own dev
+// machines have no usable Landlock (even a 5.15 kernel answers ENOSYS: internal/sandbox_test.go), and CI's
+// ubuntu-latest does answer ABI >= 4, so both the fail-closed and the genuinely-confined branches are real. The
+// Landlock backend also self-checks before trusting itself regardless (internal/sandbox/sandbox_linux.go: dial a
+// canary port the ruleset deliberately excludes; refuse to launch if that dial unexpectedly succeeds) — a real CI
+// failure that briefly looked exactly like outcome 2 (self-check catching broken enforcement) turned out instead
+// to be a `go test` harness gap (TestMain in githooks_e2e_test.go not dispatching the re-exec'd hidden subcommand,
+// so LandlockExecMain, self-check included, never ran at all); fixed there, not here. Outcome 2 stays a real,
+// reachable branch for a kernel that does answer the Landlock syscalls without truly enforcing them.
 func TestExecConfineBlocksTheBrokerControlAPI(t *testing.T) {
 	r := newL2(t, true)
 	if x := r.m.run("", "broker", "enable"); x.code != 0 {

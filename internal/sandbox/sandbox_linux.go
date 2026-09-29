@@ -50,42 +50,25 @@ func abiVersion() (int, error) {
 	return int(r0), nil
 }
 
-// disableLandlockNetConfinement, when true, makes wrap refuse unconditionally regardless of the kernel's Landlock
-// ABI. Set 2026-09-28 after real evidence on GitHub Actions' ubuntu-latest (which does answer ABI >= 4) that the
-// per-port enforcement below is not trustworthy: a canary port deliberately left out of the ruleset was correctly
-// denied (proving *something* was being restricted), yet in the same run, on the same restricted process, the
-// broker's own control-API port -- also never added to the ruleset -- was NOT denied
-// (TestExecConfineBlocksTheBrokerControlAPI, cmd/rigfile/exec_confine_test.go, CI run 36479130018, job
-// "registry (postgres)", 2026-09-28T20:31Z). createNetRuleset/restrictSelf/the canary self-check below were
-// reviewed line by line against the kernel UAPI header (struct layout, flag values and the rule type all verified
-// live against torvalds/linux's include/uapi/linux/landlock.h) and found correct; the caller-side policy
-// (cmd/rigfile/cmd_secrets.go) was verified to pass only the proxy port, never the API port. No local machine or
-// container available to this project has a real ABI 4 kernel to debug this interactively (Docker Desktop's own
-// Linux VM is 5.15, ENOSYS for Landlock entirely), so the cause -- a kernel-specific Landlock limitation, or
-// something this review missed -- is unresolved. Until it is, on a machine that can actually reproduce it: fail
-// closed unconditionally rather than ship a control that appeared to work in testing but demonstrably didn't
-// enforce the one thing it exists for.
-const disableLandlockNetConfinement = true
-
 // wrap re-execs this same binary under the hidden landlock-exec subcommand, which applies the restriction to
 // itself and then execve()s into prog. The preflight ABI check here means a person sees a clear, immediate refusal
 // rather than a confusing failure from deep inside the helper.
 //
-// A successful Landlock syscall sequence is not, by itself, proof that anything is actually restricted: this
-// project has no machine with a real ABI 4 kernel to have ever exercised the enforcement path, only the "kernel
-// too old, refuse" one (see internal/sandbox/sandbox_linux_test.go). Rather than trust the syscalls' return codes
-// alone the first time this runs somewhere they succeed, wrap opens a canary TCP listener on a random loopback
-// port that is deliberately left OUT of the ruleset, and the restricted child dials it before ever exec-ing the
-// real target (LandlockExecMain below): if that dial succeeds, the restriction plainly is not taking effect, and
-// the child refuses to proceed rather than launch the real command believing itself confined when it is not.
+// A successful Landlock syscall sequence is not, by itself, proof that anything is actually restricted, so rather
+// than trust the syscalls' return codes alone, wrap opens a canary TCP listener on a random loopback port that is
+// deliberately left OUT of the ruleset, and the restricted child dials it before ever exec-ing the real target
+// (LandlockExecMain below): if that dial succeeds, the restriction plainly is not taking effect, and the child
+// refuses to proceed rather than launch the real command believing itself confined when it is not.
 //
-// That canary technique is necessary but, per disableLandlockNetConfinement above, not sufficient: it only proves
-// enforcement exists for the one port it tests, not for every port the caller actually needs denied. Kept in
-// place, reachable once disableLandlockNetConfinement is lifted, for whoever debugs this next on real hardware.
+// Verified live on real Landlock ABI 4+ hardware (Oracle Cloud Ampere A1, Ubuntu 24.04, kernel 6.17,
+// 2026-09-28): a real confined child correctly reaches the broker's proxy and correctly cannot reach its control
+// API (TestExecConfineBlocksTheBrokerControlAPI), 5/5 clean runs, same OS thread throughout restrict -> self-check
+// -> exec. An earlier real CI failure on GitHub Actions' ubuntu-latest that looked exactly like broken per-port
+// enforcement (a canary port correctly denied, the control-API port not) turned out to be a test-harness gap, not
+// a problem here: TestMain (cmd/rigfile/githooks_e2e_test.go) wasn't dispatching the re-exec'd hidden subcommand
+// to LandlockExecMain at all when running under `go test`, so the "confined" child in that failure was never
+// actually restricted in the first place. Fixed there; this file's own logic needed no change.
 func wrap(prog string, args []string, policy Policy) (*Wrapped, error) {
-	if disableLandlockNetConfinement {
-		return nil, fmt.Errorf("%w: Linux network confinement is disabled pending investigation of unreliable per-port enforcement found on real hardware (see disableLandlockNetConfinement in this file)", ErrUnsupported)
-	}
 	abi, err := abiVersion()
 	if err != nil {
 		return nil, fmt.Errorf("%w: Landlock is not available (%v)", ErrUnsupported, err)

@@ -11,12 +11,28 @@ import (
 	"time"
 
 	"github.com/rigfile/rigfile/internal/githook"
+	"github.com/rigfile/rigfile/internal/sandbox"
 )
 
-// TestMain lets the test binary double as the `rigfile` executable: the git hook shims below call it with
-// RIGFILE_TEST_AS_CLI=1, so these tests exercise real git invoking real hooks end to end.
+// TestMain lets the test binary double as the `rigfile` executable in two different ways:
+//   - the git hook shims below call it with RIGFILE_TEST_AS_CLI=1, so these tests exercise real git invoking
+//     real hooks end to end.
+//   - internal/sandbox's Linux backend re-execs os.Executable() (this test binary, when running under `go test`)
+//     through its own hidden landlock-exec subcommand to apply a Landlock restriction to itself before exec-ing
+//     the real target -- exactly what a real, go-build-compiled `rigfile` binary's own main() already does via
+//     the same switch in main.go. Without this second branch, that re-exec landed in go test's own flag parsing
+//     instead of main.go's dispatch, so LandlockExecMain (and everything after it: the restriction, the canary
+//     self-check, the real exec) never ran at all -- found live on a real Landlock ABI 4+ kernel (Oracle Cloud
+//     Ampere A1, Ubuntu 24.04, 2026-09-28) by instrumenting the real syscall path with thread-id tracing: the
+//     confined child that TestExecConfineBlocksTheBrokerControlAPI launches was never confined in the first
+//     place, not because of anything wrong with createNetRuleset/restrictSelf/LandlockExecMain (all three were
+//     re-verified correct against the live kernel UAPI header and behave correctly once actually reached -- 5/5
+//     clean runs, same OS thread throughout restrict -> self-check -> exec, api_denied:true both times just like
+//     macOS's sandbox-exec backend). This condition can't be folded into the RIGFILE_TEST_AS_CLI check above: an
+//     env var would also have to survive being inherited across the *second*, real exec into the target program,
+//     which would then wrongly hit this same branch instead of running as a normal go test binary.
 func TestMain(m *testing.M) {
-	if os.Getenv("RIGFILE_TEST_AS_CLI") == "1" {
+	if os.Getenv("RIGFILE_TEST_AS_CLI") == "1" || (len(os.Args) > 1 && os.Args[1] == sandbox.LandlockExecSubcommand) {
 		os.Exit(run(os.Args[1:], env{in: os.Stdin, out: os.Stdout, err: os.Stderr, getenv: os.Getenv}))
 	}
 	os.Exit(m.Run())
