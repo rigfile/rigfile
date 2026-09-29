@@ -1,10 +1,10 @@
 # Rigfile
 
-**Docker + GitHub for AI agent setups.** A *rig* bundles your instructions, skills, subagents, slash commands, MCP servers, hooks and permissions into one reviewable `rigfile.yaml`. Pull someone's rig with a single command, see exactly what it will change, and approve it — Rigfile applies it to Claude Code, Codex CLI, Gemini CLI, Cursor, Claude Desktop, GitHub Copilot in VS Code, Zed and Devin, each in that tool's own format.
+**Docker + GitHub for AI agent setups.** A *rig* bundles your instructions, skills, subagents, slash commands, MCP servers, hooks and permissions into one reviewable `rigfile.yaml`. Pull someone's rig with a single command, see exactly what it will change, and approve it.
 
 [![Go](https://img.shields.io/badge/Go-1.27%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](docs/guide/tools.md)
+[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#supported-platforms)
 [![CI](https://github.com/rigfile/rigfile/actions/workflows/ci.yml/badge.svg)](https://github.com/rigfile/rigfile/actions/workflows/ci.yml)
 
 > **Status: early.** macOS, Linux and Windows are all verified end to end on real machines. No packaged releases yet — build from source (one command, below). See [`docs/STATUS.md`](docs/STATUS.md) for exactly what's built and what's left.
@@ -15,6 +15,37 @@
 - **You want to share your setup, but not your API keys.** Rigs hold `secret://` references, never values. `rigfile publish` scans for anything that looks like a real secret and refuses to publish if it finds one.
 - **You don't want to run someone else's hooks and MCP servers blind.** `rigfile pull` shows every file, hook, server and permission a rig would add, *before* anything runs — plus who published it, how old it is, and what static analysis found.
 - **You use more than one AI tool.** Write a rig once; adapters translate it into each tool's own format, and the plan says plainly what a given tool can't take.
+
+## What's in a rig
+
+A `rigfile.yaml` plus the files it points to. Every category below is a real, distinct thing Rigfile captures, diffs and applies — not just prose:
+
+| Category | What it is |
+|---|---|
+| **Instructions** | The system-prompt-style text an agent always sees (`CLAUDE.md`, `AGENTS.md`, ...) — merged from layers into one file with named, individually-diffable sections |
+| **Skills** | Bundled instructions + scripts an agent loads on demand (the open Agent Skills format) |
+| **Subagents** | Named agent personas with their own instructions and tool access |
+| **Slash commands** | Reusable prompts invoked by name |
+| **MCP servers** | Tool-calling servers a rig declares, launched through `rigfile exec` so a secret is injected into *that process's* environment only — never written into a config file, never seen by the agent |
+| **Hooks** | Shell scripts that run on tool events (before a write, after a command, ...) — hash-pinned, reviewed before they run |
+| **Permissions** | Deny / ask / allow rules controlling what an agent can read, write or run |
+
+## Supported tools
+
+One rig, many tools — adapters write each tool's own real config format, to its own real location:
+
+| Tool | What it gets |
+|---|---|
+| **Claude Code** | Full: instructions, skills, subagents, commands, MCP servers, hooks, permissions. `base-secure` (below) is fully enforced — permission rules *and* hooks |
+| **Codex CLI** | Instructions, skills, subagents, MCP servers; hooks require the user's own review/trust step; `base-secure` partly enforced |
+| **Gemini CLI** | Instructions, slash commands, MCP servers |
+| **Cursor** | MCP servers, project rules; user-scope instructions are printed for you to paste in (Cursor keeps those in-app, not in a file) |
+| **Claude Desktop** | MCP servers (local + remote) |
+| **GitHub Copilot in VS Code** | Project-scoped instructions, MCP servers |
+| **Zed** | MCP servers (stdio and remote), with comments/formatting preserved in `settings.json` |
+| **Devin** | MCP servers (stdio) |
+
+Every category, every tool, generated straight from the same capability files `rigfile plan` actually reads — so it can't drift: **[full matrix](docs/targets/matrix.md)** · [supported tools guide](docs/guide/tools.md).
 
 ## Quick start
 
@@ -35,14 +66,12 @@ go build -o rigfile ./cmd/rigfile
 ✔ scanner          224 rules (gitleaks v8.30.1 + Rigfile additions)
 ⚠ applied rig      nothing applied yet: run `rigfile apply <rig-dir>`
 ✔ secret store     OS keychain (macos-keychain)
-
-OK with 2 warning(s)
 ```
 
-Then capture, review, and share your own setup:
+Then capture, review, and share your own setup — this defaults to Claude Code, but `--from codex`, `--from cursor` and friends capture any [supported tool](#supported-tools) instead:
 
 ```sh
-./rigfile init --name you/my-rig     # capture your current Claude Code setup — read-only, changes nothing
+./rigfile init --name you/my-rig     # capture your current AI tool setup — read-only, changes nothing
 ./rigfile plan rig                   # see exactly what applying would change — writes nothing
 ./rigfile apply rig                  # apply it, with a backup made first
 ./rigfile publish rig                # scrub it, then create + push github.com/<you>/my-rig
@@ -56,16 +85,34 @@ rigfile pull github.com/you/my-rig   # reviewed before anything runs; nothing ha
 
 Full walkthrough, five minutes, start to a published rig: **[Getting started](docs/guide/getting-started.md)**.
 
-## Features at a glance
+## Security & secrets
 
-| | |
+**Secrets never travel.** A rig holds a `secret://name` reference, never a value. Values live in your OS's own credential store — **macOS Keychain, Windows Credential Manager, or the Secret Service on Linux** (an encrypted file, passphrase-protected, is the fallback where none of those exist, e.g. a headless server) — and reach only the one process that declared it needs them, injected at launch, never written into a config file an agent can read.
+
+**`rigfile/base-secure` sits under every rig and can't be removed:**
+
+| Layer | What it does |
 |---|---|
-| **Review before anything runs** | `plan`/`apply`/`pull` all show the full diff first; nothing is written until you approve |
-| **Secrets never travel** | `secret://` references only; values live in your OS keychain and reach only the process that needs them |
-| **A safety floor, always** | [`rigfile/base-secure`](docs/guide/security.md) — credential deny rules, a command guard, secret redaction, git secret scanning — applies under every rig and can't be removed |
-| **One rig, many tools** | Claude Code, Codex CLI, Gemini CLI, Cursor, Claude Desktop, GitHub Copilot (VS Code), Zed, Devin — see [supported tools](docs/guide/tools.md) for exactly what each one gets |
-| **Pinned and scanned** | Published versions are immutable; packages must be pinned to an exact version; a static scanner and a gitleaks-based secret scan run before anything is shared |
-| **Undo anything** | Every `apply` is backed up and recorded; `rigfile diff` shows drift, `rigfile rollback` restores |
+| Deny rules | Blocks reading `.env` files, private keys, cloud credentials (`~/.ssh`, `~/.aws`, `~/.gcloud`, ...), and running `git ... --no-verify` or a force-push |
+| Ask rules | Requires confirmation before `git push`, `rm -rf`, `sudo`, publishing a package, or editing its own settings |
+| Guard hook | Unwraps `sh -c`, `eval`, `sudo`, `xargs` and similar before applying the rules above, so a simple wrapper can't slip past them |
+| Write guard | Scans what the agent writes for secrets, and refuses |
+| Redaction | Replaces secret-looking text in tool output with `[REDACTED:<rule>]` before the model ever reads it |
+| Git protection | Pre-commit and pre-push secret scanning in your own repositories, with a reference-transaction backstop so `git commit --no-verify` can't skip it (`git push --no-verify` does skip the redundant push-time re-scan, but the commit itself was already scanned when made) |
+
+**Before anything is shared:** `rigfile publish` scrubs personal paths, runs the same secret scanner, lists any personal information found for you to review, and checks every package is pinned to an exact version — before it ever creates or pushes anything.
+
+Full detail, including what's *not* covered (known limits, not just the sales pitch): **[Security model & limits](docs/guide/security.md)**. Report a vulnerability privately: **[SECURITY.md](SECURITY.md)**.
+
+## Supported platforms
+
+| OS | Status |
+|---|---|
+| macOS | ✔ Verified end to end on real Apple Silicon hardware |
+| Linux | ✔ Verified end to end on real hardware (multiple distros; ARM and x86) |
+| Windows | ✔ Verified end to end on a real Windows 11 machine |
+
+Every OS difference (paths, keychains, hooks, process launching) lives in one place in the code (`internal/platform`) and is tested that way — see [`docs/platforms.md`](docs/platforms.md) for exactly what's been verified live versus built-and-tested-only.
 
 ## Documentation
 
@@ -114,10 +161,6 @@ e2e/run.sh                  # the CLI end to end in Linux containers
 ```
 
 Tests never touch the real machine: they use a temporary `$HOME`, fakes for the keychain and package managers, and fake secrets only (a real credential anywhere in a commit is rejected by CI). Commits follow [Conventional Commits](https://www.conventionalcommits.org/). One platform rule worth knowing before you touch OS-specific code: every OS difference lives in `internal/platform` and only there — no hard-coded `/`, `~`, `C:\`, `brew` or `sh` anywhere else, so the same code path compiles and passes on macOS, Linux and Windows.
-
-## Security
-
-Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md). [Security model & limits](docs/guide/security.md) documents what Rigfile protects, how, and what it doesn't.
 
 ## License
 
