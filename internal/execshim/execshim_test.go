@@ -191,3 +191,75 @@ func TestBuildEnvIsDeterministicAndSorted(t *testing.T) {
 		t.Fatalf("a=%v b=%v", a, b)
 	}
 }
+
+func TestIsWindowsScriptShim(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{"npx.cmd", true}, {`C:\Program Files\nodejs\npx.cmd`, true}, {"NPX.CMD", true},
+		{"deploy.bat", true}, {"deploy.BAT", true},
+		{"npx", false}, {"npx.exe", false}, {"npx.cmd.exe", false}, {"", false},
+	} {
+		if got := isWindowsScriptShim(tc.path); got != tc.want {
+			t.Errorf("isWindowsScriptShim(%q) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}
+
+func TestFirstUnsafeCmdArg(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--version"}, ""},
+		{[]string{"-y", "some-pkg@1.2.3"}, ""},
+		{[]string{"a & calc"}, "a & calc"},
+		{[]string{"safe", "a|b"}, "a|b"},
+		{[]string{"1 < 2"}, "1 < 2"},
+		{[]string{"1 > 2"}, "1 > 2"},
+		{[]string{"^whoami"}, "^whoami"},
+		{[]string{"(x)"}, "(x)"},
+		{[]string{"%PATH%"}, "%PATH%"},
+		{[]string{`say "hi"`}, `say "hi"`},
+		{[]string{"line1\nline2"}, "line1\nline2"},
+	} {
+		if got := firstUnsafeCmdArg(tc.args); got != tc.want {
+			t.Errorf("firstUnsafeCmdArg(%v) = %q, want %q", tc.args, got, tc.want)
+		}
+	}
+}
+
+// TestScriptShimRefusesAnArgumentCmdExeWouldReinterpret is the direct regression test for a real vulnerability
+// found live on real Windows 11 hardware (2026-09-29): `rigfile exec -- npx --version "a & calc"` launched
+// Calculator. Go's own os/exec does not protect against this (its docs say cmd.exe, and therefore any .bat/.cmd
+// it must interpret, "have a different unquoting algorithm" than Go's own argument quoting, and that handling it
+// is the caller's job) -- this project's prior assumption that it did was never actually verified live before
+// now. Runs on every OS (LookPath on a literal "prog.cmd"/"prog.bat" name finds it by that exact name regardless
+// of platform; the refusal itself is a pure string check, not OS-gated), so this is exercised everywhere, not
+// just under GOOS=windows.
+func TestScriptShimRefusesAnArgumentCmdExeWouldReinterpret(t *testing.T) {
+	p := host(t)
+	for _, ext := range []string{".cmd", ".bat"} {
+		dir := t.TempDir()
+		shim := filepath.Join(dir, "prog"+ext)
+		if err := os.WriteFile(shim, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+		code, err := Run(context.Background(), Spec{Plat: p, Command: []string{"prog" + ext, "a & calc"}})
+		if err == nil || code != 2 {
+			t.Fatalf("%s: a cmd.exe-metacharacter argument must be refused, not run: code=%d err=%v", ext, code, err)
+		}
+		if !strings.Contains(err.Error(), "a & calc") {
+			t.Errorf("%s: error should name the offending argument: %v", ext, err)
+		}
+
+		// A safe argument to the same script shim must still run normally -- this is a refuse-if-unsafe check,
+		// not "never run a .cmd/.bat file".
+		if code, err := Run(context.Background(), Spec{Plat: p, Command: []string{"prog" + ext, "safe-arg"}}); err != nil {
+			t.Fatalf("%s: a safe argument must not be refused: code=%d err=%v", ext, code, err)
+		}
+	}
+}

@@ -22,8 +22,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"syscall"
 
 	"github.com/rigfile/rigfile/internal/platform"
@@ -36,6 +38,51 @@ import (
 var wrapSandbox = sandbox.Wrap
 
 var envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// cmdExeMetachars is deliberately a denylist, not an allowlist: an allowlist narrow enough to be safe would also
+// reject legitimate npm/npx/yarn/pnpm arguments (paths, flags). Sourced from Microsoft's own cmd.exe reference
+// (verified live 2026-09-29, https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd):
+// "&", "|" and "(" ")" are its command-separator/grouping/pipe characters, "<" ">" are redirection, "^" is its own
+// escape character (so also the character that could be used to smuggle another one of these past a naive filter),
+// and "%" triggers environment-variable expansion (an information-disclosure risk on top of injection, given this
+// package's whole job is keeping secrets out of a child's visible surface). "\"" is included defensively: cmd.exe's
+// own quote-handling for a /c string is a documented special case ("quotation marks are preserved only if... you
+// use exactly one set of quotation marks... no special characters within them"), so an embedded quote could change
+// how cmd.exe re-parses whatever else is in the argument, regardless of how Go itself quoted it for CreateProcess.
+const cmdExeMetachars = `&|<>^()%"`
+
+// isWindowsScriptShim reports whether prog is a .bat/.cmd file, i.e. Windows will launch it through cmd.exe as an
+// interpreter rather than running it directly. This is a real, previously-unverified gap: Go's own os/exec docs
+// say plainly that cmd.exe (and therefore any .bat/.cmd) "have a different unquoting algorithm" than the
+// CreateProcess-compatible quoting os/exec does for everything else, and that the CALLER is responsible for
+// handling that -- os/exec does not refuse a dangerous argument on its own. Found live on real Windows 11
+// hardware (2026-09-29): `rigfile exec -- npx --version "a & calc"` launched Calculator, proving this project's
+// own prior assumption ("Go runs .cmd through cmd.exe with its own argument escaping and refuses arguments it
+// cannot escape safely") was never actually true.
+func isWindowsScriptShim(prog string) bool {
+	switch strings.ToLower(filepath.Ext(prog)) {
+	case ".bat", ".cmd":
+		return true
+	}
+	return false
+}
+
+// firstUnsafeCmdArg returns the first argument (if any) that must not be handed to cmd.exe unescaped -- because
+// it contains one of cmdExeMetachars, or a control character (a stray CR/LF could inject an entirely separate
+// line for cmd.exe to parse; see isWindowsScriptShim). Returns "" if every argument is safe.
+func firstUnsafeCmdArg(args []string) string {
+	for _, a := range args {
+		if strings.ContainsAny(a, cmdExeMetachars) {
+			return a
+		}
+		for _, r := range a {
+			if r < 0x20 {
+				return a
+			}
+		}
+	}
+	return ""
+}
 
 // Spec describes one launch.
 type Spec struct {
@@ -109,11 +156,19 @@ func Run(ctx context.Context, s Spec) (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	// Resolve through PATH/PATHEXT so that on Windows `npx` finds npx.cmd; Go runs .cmd/.bat files through
-	// cmd.exe with its own argument escaping and refuses arguments it cannot escape safely (no shell injection).
+	// Resolve through PATH/PATHEXT so that on Windows `npx` finds npx.cmd. Go itself does NOT protect against
+	// what happens next: a .bat/.cmd file only runs through cmd.exe as an interpreter, and cmd.exe re-parses the
+	// command line with its own metacharacter rules, which Go's normal CreateProcess-style argument quoting does
+	// not account for (see isWindowsScriptShim). Refuse rather than silently risk it -- verified live that this
+	// is a real, not hypothetical, gap.
 	prog, err := exec.LookPath(s.Command[0])
 	if err != nil {
 		return 127, fmt.Errorf("%s was not found on PATH (install it, or fix the server's command): %w", s.Command[0], err)
+	}
+	if isWindowsScriptShim(prog) {
+		if bad := firstUnsafeCmdArg(s.Command[1:]); bad != "" {
+			return 2, fmt.Errorf("execshim: refusing to run %s: argument %q may be reinterpreted by cmd.exe (%s is a script cmd.exe must interpret, and it does its own separate command-line parsing that Go's own argument quoting does not protect against)", s.Command[0], bad, prog)
+		}
 	}
 	runPath, runArgs := prog, s.Command[1:]
 	if s.Confine != nil {
