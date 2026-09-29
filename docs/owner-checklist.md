@@ -46,35 +46,24 @@ open-sourcing the repo as it stands.
 - OAuth apps for vendor login flows (GitHub, GitLab, etc. — `internal/login`) aren't registered anywhere; each needs a public client id from that vendor.
 
 ### Real-machine verification (turns an UNVERIFIED into a fact)
-Confirmed live already: macOS/Apple Silicon (full core loop, real Keychain, real `claude` CLI — `docs/STATUS.md` "Real-machine verification"), Codex CLI and Gemini CLI (real binaries via npx), local-models hardware detection, ARM Linux distros (Ubuntu/Fedora/Alpine/Debian natively).
+Confirmed live already: macOS/Apple Silicon (full core loop, real Keychain, real `claude` CLI — `docs/STATUS.md` "Real-machine verification"), Codex CLI and Gemini CLI (real binaries via npx), local-models hardware detection, ARM Linux distros (Ubuntu/Fedora/Alpine/Debian natively), and **Windows 11 24H2 on ARM64** (2026-09-29, UTM/QEMU on Apple Silicon — this also covers most of the separate "Windows on ARM" gap below, not just the general Windows one): install from source, `validate`/`plan`, `secrets set` → confirmed in Windows Credential Manager (via `rigfile doctor`; the Credential Manager GUI itself wasn't separately cross-checked), `icacls` permissions correctly restricted to the user + SYSTEM/Administrators, `apply`, `doctor`, `diff` (no drift), `rollback --force`, and the full git-hook secret-blocking path (a real commit blocked, `--no-verify` separately blocked by the reference-transaction backstop) — all through Git for Windows. Full detail and two real bugs found (one fixed, one open) in `docs/platforms.md` §8.
 
 Still open:
-- **Windows 11**, clean VM (Hyper-V, UTM, or a cloud VM), standard (non-admin) user:
-
-  ```powershell
-  winget install GoLang.Go Git.Git          # Git for Windows: needed for the hook shims
-  git clone <repo> ; cd rigfile ; go build -o $env:LOCALAPPDATA\rigfile\rigfile.exe .\cmd\rigfile
-  $env:PATH += ";$env:LOCALAPPDATA\rigfile"
-  rigfile validate e2e\rig ; rigfile plan e2e\rig --no-git
-  rigfile secrets set demo/api_key          # check it appears under Control Panel > Credential Manager > Generic
-  icacls "$env:LOCALAPPDATA\rigfile" /T      # expect only your user (+ SYSTEM, Administrators); nothing for Users/Everyone
-  rigfile apply e2e\rig                     # review, approve
-  rigfile doctor                            # expect: secret store = windows-credential-manager, no warnings
-  rigfile diff                              # expect: no drift
-  git init t ; cd t ; "x" > f ; git add f ; git commit -m ok          # hooks run through Git for Windows sh
-  $tok = "gh" + "p_wJ4kP9xQm2Rt7VbN5cLd8HyZaE3sUfG6TiOo" ; "token = '$tok'" > leak.py ; git add leak.py ; git commit -m leak   # expect: blocked (fake value)
-  git commit --no-verify -m sneaky          # expect: blocked by the reference-transaction backstop
-  rigfile rollback --force
-  ```
-
-  Also settle, each recorded with a date in `docs/platforms.md` §8: two concurrent `rigfile secrets set` (PowerShell `Start-Job`) lose no update; `rigfile exec -- npx --version` runs the `.cmd` shim and an argument like `"a & calc"` never starts a second command; a hook that fails blocks the commit from every client (Git Bash, PowerShell, a GUI client); the Claude Code PowerShell tool's deny/ask rules fire on `Get-ChildItem env:`; `claude.exe`/`codex`/`cursor` present → `rigfile plan` says "configured" and applies to `%USERPROFILE%\.claude`, `.codex`, `.cursor`, and Claude Desktop's `%APPDATA%\Claude\claude_desktop_config.json` (or its Microsoft Store path). Also still needed: `install.ps1` (never run by anyone), the `rigd`/model-server scheduled-task XML (`schtasks /Create /XML` with the UTF-16 file as generated — unverified it's accepted), `rigfile ui`, `rigfile sync` with real paths, `rigfile broker install` (Task Scheduler: `schtasks /Query /TN rigfile-rigd /XML`, log off and on).
+- **Windows 11**, same or another clean VM, standard (non-admin) user — what the 2026-09-29 run above did NOT cover:
+  - Two concurrent `rigfile secrets set` (PowerShell `Start-Job`) losing no update.
+  - `rigfile exec -- npx --version` running the `.cmd` shim, and an argument like `"a & calc"` never starting a second command.
+  - A hook that fails blocking the commit from every client, not just PowerShell → git (Git Bash, a GUI git client).
+  - The actual Claude Code app's own PowerShell tool deny/ask rules firing on `Get-ChildItem env:` (not attempted in the 2026-09-29 run — only rigfile itself was installed, not Claude Code).
+  - `claude.exe`/`codex`/`cursor` present → `rigfile plan` says "configured" and applies to `%USERPROFILE%\.claude`, `.codex`, `.cursor`, and Claude Desktop's `%APPDATA%\Claude\claude_desktop_config.json` (or its Microsoft Store path).
+  - `install.ps1` (never run by anyone), the `rigd`/model-server scheduled-task XML (`schtasks /Create /XML` with the UTF-16 file as generated — unverified it's accepted), `rigfile ui`, `rigfile sync` with real paths, `rigfile broker install` (Task Scheduler: `schtasks /Query /TN rigfile-rigd /XML`, log off and on).
+  - **The interactive-TUI-prompt bug found 2026-09-29** (`docs/platforms.md` §8: `[a]pply` doesn't register keypresses under the legacy Console Host, only Windows Terminal) needs an actual root-cause and fix, not just the workaround of telling people to use Windows Terminal.
 - **Linux**: `systemd --user` broker/model-server install; a machine without user systemd (`rigfile broker start` background mode); WSL2 path rules and the cross-boundary deny globs; Ollama's real pull id for `qwen3:8b` (expected `500a1f067a9f`, unverified against the library page).
 - **Vendors, live**: Cursor and Claude Desktop (GUI apps, need more than a CLI check); `codex --oss --local-provider ollama -m ...`; Claude Code against Ollama (experimental); VS Code loading the generated `.vscode/mcp.json` and Copilot reading `copilot-instructions.md`; a GitHub source, a GitLab source, and a plain `ssh://` git URL end to end; any vendor login flow (`rigfile logins`) against a real account — none of this can be fabricated under this project's own rules.
 - **`rigfile broker install` actually working per OS**: macOS — `rigfile broker install`, then `launchctl print gui/$(id -u)/com.rigfile.rigd`, log out and in, `rigfile broker status`. Linux — same with `systemctl --user status rigfile-rigd`; also try a machine with no user systemd (WSL1, some containers) and `rigfile broker start` instead. Either way, the service must be able to read the secret store without a prompt (an encrypted-file backend can't prompt headlessly, so it has to be run by hand there).
 - **The broker, with a real MCP server** that uses a key (Alpaca, GitHub, Brave Search-style): Node's `fetch` honouring `NODE_USE_ENV_PROXY`, Python/curl/Go trusting the session CA, a streaming (SSE) response surviving interception, a real vendor API accepting the swapped key.
 - **`rigfile ui`** in a real browser on all three OSes: the macOS Keychain *prompt* specifically (a UI interaction, not exercised headlessly) — does it name "rigfile"?
 - **Private sync**, two real machines, a real private git repo: `init`, `join`, `approve`/`finish` (compare fingerprints), `track`, `push`, `pull`, `revoke`.
-- **Real hardware this project doesn't have**: actual Raspberry Pi OS (arm64 Debian is the closest proxy tested so far, and passed), Windows on ARM, and the mlx-lm reference setup on real Apple Silicon with 16 GB+ (needs `uv`, a ~4.6 GB download — the dev host here only has 16 GB total and can't safely spare it).
+- **Real hardware this project doesn't have**: actual Raspberry Pi OS (arm64 Debian is the closest proxy tested so far, and passed), and the mlx-lm reference setup on real Apple Silicon with 16 GB+ (needs `uv`, a ~4.6 GB download — the dev host here only has 16 GB total and can't safely spare it).
 - **Live third-party services**: the Sigstore trusted-root fetch over TUF from a real network; a real keyless signature made in GitHub Actions verifying as the publisher's; OSV lookups against real package names (including a known-malicious one); the static-analysis rules run against real-world rigs and scripts, not just the self-written fixture corpus.
 
 ### If the registry is redeployed

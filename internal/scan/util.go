@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"golang.org/x/text/encoding/unicode"
 )
 
 // lazyRe compiles its pattern on first use. The default rule set has ~230 rules plus ~60 allowlist patterns;
@@ -132,6 +134,32 @@ func isBinary(b []byte) bool {
 		b = b[:8000]
 	}
 	return bytes.IndexByte(b, 0) >= 0
+}
+
+// decodeIfUTF16 transcodes UTF-16 (with a byte-order-mark) to UTF-8, and returns b unchanged otherwise. Found
+// live (2026-09-29, real Windows 11 hardware): PowerShell's `>`/Out-File and several other native Windows APIs
+// default to writing UTF-16LE-with-BOM, and every ASCII character in that encoding has a null byte right next
+// to it -- which is exactly isBinary's own signal for "skip this file, do not scan it". A secret written by any
+// such tool was silently invisible to the scanner: it never reached ScanText at all. BOM detection costs one
+// two-byte comparison for the overwhelmingly common case (no BOM, not UTF-16) and only pays for a real decode
+// on files that actually are UTF-16, so this runs unconditionally in ScanFile rather than needing a separate
+// opt-in.
+func decodeIfUTF16(b []byte) []byte {
+	var dec = func(bo unicode.Endianness) []byte {
+		out, err := unicode.UTF16(bo, unicode.ExpectBOM).NewDecoder().Bytes(b)
+		if err != nil {
+			return b
+		}
+		return out
+	}
+	switch {
+	case len(b) >= 2 && b[0] == 0xFF && b[1] == 0xFE:
+		return dec(unicode.LittleEndian)
+	case len(b) >= 2 && b[0] == 0xFE && b[1] == 0xFF:
+		return dec(unicode.BigEndian)
+	default:
+		return b
+	}
 }
 
 // shannonEntropy is gitleaks' definition (detect/utils.go): frequency over runes, normalised by BYTE length.

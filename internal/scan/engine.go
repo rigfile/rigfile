@@ -70,10 +70,17 @@ func New(o Options) (*Scanner, error) {
 func (s *Scanner) ScanFile(path string, data []byte) []Finding {
 	path = strings.ReplaceAll(path, `\`, "/")
 	out := s.ScanName(path, len(data))
-	if len(data) > s.opts.MaxFileBytes || isBinary(data) {
+	if len(data) > s.opts.MaxFileBytes {
 		return out
 	}
-	return append(out, s.ScanText(path, string(data))...)
+	// Decode UTF-16 (PowerShell's `>`/Out-File default, among other native Windows APIs) to UTF-8 before the
+	// binary check: undecoded, its null bytes trip isBinary and the file is skipped, never reaching ScanText at
+	// all (see decodeIfUTF16). A no-op for the overwhelmingly common case of a file that isn't UTF-16.
+	text := decodeIfUTF16(data)
+	if isBinary(text) {
+		return out
+	}
+	return append(out, s.ScanText(path, string(text))...)
 }
 
 // ScanName checks only a file's name and size, for callers that decided not to read a huge blob.

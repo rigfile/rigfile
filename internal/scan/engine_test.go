@@ -150,6 +150,42 @@ func TestSensitiveNamesSizeAndBinary(t *testing.T) {
 	}
 }
 
+// TestUTF16WithBOMIsDecodedNotSkippedAsBinary is the direct regression test for a real gap found live on real
+// Windows 11 hardware (2026-09-29): PowerShell's `>`/Out-File default to UTF-16LE-with-BOM, and every ASCII
+// character in that encoding sits next to a null byte -- exactly isBinary's own signal to skip a file
+// entirely, so a secret written that way was never reaching ScanText at all. Genuinely binary content (no BOM,
+// null bytes scattered through actual binary data) must still be skipped: this is a decode-if-UTF-16 fix, not a
+// loosening of the binary check itself.
+func TestUTF16WithBOMIsDecodedNotSkippedAsBinary(t *testing.T) {
+	s := newScanner(t, Options{})
+	utf16le := func(text string) []byte {
+		out := []byte{0xFF, 0xFE} // BOM
+		for _, r := range text {
+			out = append(out, byte(r), 0)
+		}
+		return out
+	}
+	line := "token = '" + fakeGH + "'"
+	if f := s.ScanFile("leak.py", utf16le(line)); len(f) != 1 {
+		t.Fatalf("a UTF-16LE-with-BOM file must be decoded and scanned, not skipped as binary: %+v", f)
+	}
+	utf16be := func(text string) []byte {
+		out := []byte{0xFE, 0xFF} // BOM
+		for _, r := range text {
+			out = append(out, 0, byte(r))
+		}
+		return out
+	}
+	if f := s.ScanFile("leak.py", utf16be(line)); len(f) != 1 {
+		t.Fatalf("a UTF-16BE-with-BOM file must be decoded and scanned too: %+v", f)
+	}
+	// no BOM at all: genuinely binary content must still be skipped, not decoded as if it were UTF-16.
+	bin := append([]byte("token = "+fakeGH), 0)
+	if f := s.ScanFile("blob.dat", bin); len(f) != 0 {
+		t.Fatalf("content with no BOM must still go through the ordinary binary check: %+v", f)
+	}
+}
+
 func TestInlineAllowIsOffByDefault(t *testing.T) {
 	line := "token = " + fakeGH + "  # gitleaks:allow\n"
 	if f := newScanner(t, Options{}).ScanText("a.txt", line); len(f) != 1 {
