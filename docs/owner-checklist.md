@@ -10,7 +10,7 @@ Current shape of the project, in one paragraph: all 8 build stages (plus 3b, loc
 Sharing through GitHub (`publish`'s own default destination, `pull github.com/owner/repo`) is the primary, working way to share a rig,
 decided 2026-09-28. The registry is a real, tested, optional feature, currently **not deployed** (the Fly/Neon/R2
 setup from 2026-09-27 was torn down 2026-09-28 — see `docs/registry.md` §8 for what deploying it again would take).
-The GitHub repository is **private by owner choice**, not yet pushed past `stage-0-spec`-era history.
+The GitHub repository is **private by owner choice**; `main` is pushed, current, and the default branch.
 
 ## 1. Before making the repository public
 
@@ -19,11 +19,11 @@ open-sourcing the repo as it stands.
 
 | # | Step | Status |
 |---|---|---|
-| 1 | Git history audit (secrets, personal data) | **done**: gitleaks clean across all 158 commits on every branch; test data and the one fixture built from a real capture were replaced with made-up equivalents (`docs/STATUS.md` "Pre-publish history audit") |
+| 1 | Git history audit (secrets, personal data) | **secrets: done** (gitleaks clean across all 158 commits on every branch). **Personal data: corrected 2026-09-30** — a full re-audit found the earlier scrub only landed on `main`; `stage-1`…`stage-8d`, `integration` and `fix-ci-integration` had carried the owner's real first name, a real hostname, and the real captured fixture directory live at their branch tips (not just old history) — but a live check found those branches already deleted from `origin` (only `main` remains there now), so this specific risk is already closed, wherever/whenever they were deleted. `RIGFILE_PLAN.md` also still used the real first name throughout — scrubbed today. See `docs/STATUS.md` "Pre-publish history audit" correction |
 | 2 | A real `README.md`, working docs | **done**: `README.md`, `docs/guide/` |
-| 3 | Push `main` to `origin`, make it the default branch (currently `stage-0-spec`) | **open — needs you**: my pushes are denied by design |
+| 3 | Push `main` to `origin`, make it the default branch | **done**: confirmed directly (`origin`'s default branch is `main`, matching the latest commit) |
 | 4 | Make the repository public | **open — needs you**, a deliberate decision, not yet made |
-| 5 | Delete (or tag, then delete) the merged `stage-*`/`integration`/`fix-ci-integration` branches — all fully merged into `main` except `stage-2`, which has one commit `main` doesn't (a superseded doc/test tweak, safe to drop) | **open — needs you** |
+| 5 | Delete the merged `stage-*`/`integration`/`fix-ci-integration` branches from `origin` | **done** — confirmed via a live `git ls-remote`/`gh api` check (2026-09-30): only `main` exists on `origin`. Local-only copies of the old branches remain on this dev machine (never public); safe to delete locally at leisure with `git branch -D <name>`, no urgency |
 | 6 | Enable private vulnerability reporting on the repo (GitHub Settings → Security) once public | **open — needs you** |
 | 7 | First real CI run since the repo went private | **done** (2026-09-28): first pushes surfaced a gitleaks-license issue (org repos need a paid license for the Action wrapper — switched to running the real binary directly), a git-identity gap in the new publish-to-GitHub tests, a Windows path-separator mismatch in one test assertion, and what looked like a Linux Landlock confinement bug but turned out to be a test-harness gap (below) — all fixed, and Linux confinement is enabled and verified, not disabled. CI is green. |
 
