@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,6 +17,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rigfile/rigfile/internal/minisign"
 )
@@ -283,12 +285,32 @@ func checkWheel(t *testing.T, out, hostExe string, want int) {
 		t.Skip("python3 is not installed")
 	}
 	target := t.TempDir()
-	if o, err := exec.Command(py, "-m", "pip", "install", "--no-index", "--no-deps", "--target", target, host).CombinedOutput(); err != nil {
+	// --disable-pip-version-check: without it, pip makes its own network call
+	// to check for a newer pip release even with --no-index (which only
+	// covers *package* resolution). On a runner where that call hangs
+	// instead of failing fast, pip never exits and the whole test binary
+	// eventually dies to its timeout instead of this one subprocess call
+	// failing with a clear message — seen for real on GitHub's
+	// macos-latest runner (2026-09-30, tools/release, panic: test timed
+	// out after 10m0s, goroutine stuck in *exec.Cmd.Wait for this pip
+	// call). The explicit context timeout below is the actual fix for
+	// that failure mode; --disable-pip-version-check just removes the
+	// unnecessary network call that triggered it.
+	installCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	installCmd := exec.CommandContext(installCtx, py, "-m", "pip", "install", "--disable-pip-version-check", "--no-index", "--no-deps", "--target", target, host)
+	o, err := installCmd.CombinedOutput()
+	if installCtx.Err() == context.DeadlineExceeded {
+		t.Fatalf("pip install hung and was killed after 2m (this must fail fast, not eat the whole test timeout): %s", o)
+	}
+	if err != nil {
 		t.Skipf("pip cannot install offline here: %v\n%s", err, o)
 	}
-	c := exec.Command(py, "-c", "import rigfile, sys; sys.argv=['rigfile','version']; rigfile.main()")
+	runCtx, cancelRun := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelRun()
+	c := exec.CommandContext(runCtx, py, "-c", "import rigfile, sys; sys.argv=['rigfile','version']; rigfile.main()")
 	c.Env = append(os.Environ(), "PYTHONPATH="+target)
-	o, err := c.CombinedOutput()
+	o, err = c.CombinedOutput()
 	if err != nil || strings.TrimSpace(string(o)) != "rigfile 9.9.9" {
 		t.Fatalf("the wheel launcher: %q %v", o, err)
 	}
