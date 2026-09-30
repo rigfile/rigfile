@@ -150,7 +150,7 @@ rigfile pull owner/name --registry https://your-registry.example
 
 ## Contributing
 
-Issues and PRs are welcome. Before opening one:
+Issues and PRs are welcome. Please read our [Code of Conduct](CODE_OF_CONDUCT.md). Before opening one:
 
 ```sh
 gofmt -l .                  # must print nothing
